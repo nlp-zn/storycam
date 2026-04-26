@@ -940,13 +940,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] duplicate idempotency key 返回已有 job。
-- [ ] cancel_requested 可进入 canceled 或 tombstone。
-- [ ] late result 不会覆盖 tombstoned job。
+- [x] duplicate idempotency key 返回已有 job。
+- [x] cancel_requested 可进入 canceled 或 tombstone。
+- [x] late result 不会覆盖 tombstoned job。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run generation-job`
+- [x] `pnpm test -- --run generation-job`
 
 **Dependencies:** Task 8A, Task 10
 

@@ -19,11 +19,29 @@ export type CompleteGenerationJobInput = {
   outputArtifactId: string;
 };
 
+export type CancelGenerationJobInput = {
+  endedAt?: Date;
+};
+
+export type TombstoneGenerationJobInput = {
+  tombstonedAt?: Date;
+};
+
 const jobColumns =
   "id,user_id,session_id,type,status,idempotency_key_hash,generation_mode,provider_kind,provider_name,provider_request_id,attempts,max_attempts,input_artifact_versions_json,output_artifact_id,error_code,redacted_error,started_at,ended_at,created_at,updated_at,tombstoned_at" as const;
 
 export class StoryCamGenerationJobRepository {
   constructor(private readonly client: StoryCamDbClient) {}
+
+  async createOrFindActiveByIdempotencyKey(userId: string, input: CreateGenerationJobInput) {
+    const existingJob = await this.findActiveByIdempotencyKey(userId, input.idempotencyKeyHash);
+
+    if (existingJob) {
+      return existingJob;
+    }
+
+    return this.create(userId, input);
+  }
 
   async create(userId: string, input: CreateGenerationJobInput) {
     const { data, error } = await this.client
@@ -73,5 +91,53 @@ export class StoryCamGenerationJobRepository {
       .single();
 
     return unwrapRepositoryResult("mark_generation_job_succeeded", data, error);
+  }
+
+  async requestCancel(userId: string, jobId: string) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .update({
+        status: "cancel_requested"
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("tombstoned_at", null)
+      .select(jobColumns)
+      .single();
+
+    return unwrapRepositoryResult("request_generation_job_cancel", data, error);
+  }
+
+  async markCanceled(userId: string, jobId: string, input: CancelGenerationJobInput = {}) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .update({
+        ended_at: (input.endedAt ?? new Date()).toISOString(),
+        status: "canceled"
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("tombstoned_at", null)
+      .select(jobColumns)
+      .single();
+
+    return unwrapRepositoryResult("mark_generation_job_canceled", data, error);
+  }
+
+  async tombstone(userId: string, jobId: string, input: TombstoneGenerationJobInput = {}) {
+    const tombstonedAt = input.tombstonedAt ?? new Date();
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .update({
+        status: "canceled",
+        tombstoned_at: tombstonedAt.toISOString()
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("tombstoned_at", null)
+      .select(jobColumns)
+      .single();
+
+    return unwrapRepositoryResult("tombstone_generation_job", data, error);
   }
 }
