@@ -868,13 +868,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 未确认 story world 不能生成 storyboard。
-- [ ] 根据计划视频长度自动生成 1-3 组。
-- [ ] 返回 core groups 和 duration plan。
+- [x] 未确认 story world 不能生成 storyboard。
+- [x] 根据计划视频长度自动生成 1-3 组。
+- [x] 返回 core groups 和 duration plan。
 
 **Verification:**
 
-- [ ] `pnpm test:api -- --run storyboard`
+- [x] `pnpm test:api -- --run storyboard`
 
 **Dependencies:** Task 13, Task 16
 

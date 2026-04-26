@@ -150,8 +150,13 @@ Success:
 ```ts
 type StoryboardResponse = {
   ok: true;
+  sessionId: string;
   storyboardScript: VersionedArtifact;
   coreStoryboardGroups: VersionedArtifact[];
+  artifacts: {
+    storyboardScript: VersionedArtifact;
+    coreStoryboardGroups: VersionedArtifact[];
+  };
   durationPlan: {
     plannedDurationSeconds: number;
     coreGroupTargetCount: 1 | 2 | 3;
