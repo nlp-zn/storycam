@@ -27,6 +27,7 @@ pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
 STORYCAM_SEED_USER_ID=<auth.users.id> pnpm storycam:seed
+STORYCAM_RUN_SUPABASE_VERIFY=1 pnpm storycam:verify:supabase
 ```
 
 Planned but not implemented yet:
@@ -118,6 +119,26 @@ STORYCAM_SEED_USER_ID=<auth.users.id> pnpm storycam:seed
 ```
 
 The user id must come from `auth.users`. Seeded data should belong to that user and must not be used to bypass RLS or account-scoped storage checks.
+
+## Supabase Verification
+
+Use this against a local or dedicated test Supabase project after applying migrations.
+
+```bash
+STORYCAM_RUN_SUPABASE_VERIFY=1 pnpm storycam:verify:supabase
+```
+
+The verification command creates temporary auth users, seeds one user's StoryCam metadata, confirms the owner can read the seeded rows, confirms another user cannot read them, checks private Storage buckets, verifies cross-user Storage access is blocked, and then deletes the temporary users and test object.
+
+For migration idempotency, run the migration flow twice before the verification command:
+
+```bash
+supabase db reset
+supabase db reset
+STORYCAM_RUN_SUPABASE_VERIFY=1 pnpm storycam:verify:supabase
+```
+
+If you use a hosted test project instead of Supabase local, apply the migration through your normal Supabase migration workflow, then run the same verification command with that project's anon and service-role keys.
 
 ## Real Provider Smoke
 

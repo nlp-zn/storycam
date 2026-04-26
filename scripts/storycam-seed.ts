@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../src/server/db/types";
 import { StoryCamArtifactRepository } from "../src/server/storycam/artifactRepository";
@@ -238,7 +239,7 @@ function requireSeedRow<T>(row: T | null, label: string): T {
   return row;
 }
 
-if (process.env.VITEST !== "true") {
+if (process.env.VITEST !== "true" && resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : "StoryCam seed failed.");
     process.exit(1);

@@ -10,6 +10,7 @@
     "storycam:seed": "tsx scripts/storycam-seed.ts",
     "storycam:smoke:openrouter": "tsx scripts/storycam-smoke-openrouter.ts",
     "storycam:smoke:seedance": "tsx scripts/storycam-smoke-seedance.ts",
+    "storycam:verify:supabase": "tsx scripts/storycam-verify-supabase.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:api": "vitest run tests/api --passWithNoTests",

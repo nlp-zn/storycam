@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeedStoragePath, hashSeedKey, resolveSeedUserId } from "./storycam-seed";
+import { buildSeedStoragePath, hashSeedKey, resolveSeedUserId } from "../../scripts/storycam-seed";
 
 describe("storycam seed script helpers", () => {
   it("resolves the target user from args before env", () => {

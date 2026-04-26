@@ -565,13 +565,16 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 - [x] 建表：`storycam_sessions`、`storycam_artifacts`、`generation_jobs`、`media_assets`、`provider_requests`。
 - [x] 每张表包含 `user_id` 并启用 RLS。
 - [x] 创建私有 buckets：`storycam-uploads`、`storycam-generated`、`storycam-mock`。
-- [ ] migration 可重复运行且幂等，可在 Supabase local/test project 执行。
+- [x] migration 可重复运行且幂等，可在 Supabase local/test project 执行。
 
 **Verification:**
 
 - [x] `pnpm test -- --run supabase-db`
-- [ ] `pnpm storycam:seed` 能在 Supabase 中创建当前用户的 sample session。
-- [ ] RLS 测试证明用户不能读取其他用户 session/artifacts/media metadata。
+- [x] `pnpm storycam:verify:supabase` 默认安全跳过，`STORYCAM_RUN_SUPABASE_VERIFY=1` 时验证 seed、RLS 和 Storage policy。
+- [x] `pnpm storycam:seed` 能在 Supabase 中创建当前用户的 sample session。
+- [x] RLS 测试证明用户不能读取其他用户 session/artifacts/media metadata。
+
+Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset` twice, `pnpm storycam:seed` against a temporary auth user, and `STORYCAM_RUN_SUPABASE_VERIFY=1 pnpm storycam:verify:supabase`.
 
 **Dependencies:** Task 4A, Task 5, Task 7
 
@@ -601,7 +604,8 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 **Verification:**
 
 - [x] `pnpm test -- --run repository`
-- [ ] 手动运行 `pnpm storycam:seed` 后能在 Supabase 中看到 session/artifact/job/media metadata。
+- [x] `pnpm storycam:verify:supabase` 覆盖 seed 后 metadata 可见性。
+- [x] 手动运行 `pnpm storycam:seed` 后能在 Supabase 中看到 session/artifact/job/media metadata。
 
 **Dependencies:** Task 8
 
@@ -675,7 +679,7 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 - [ ] Artifact schemas、version、stale propagation 全部有 unit tests。
 - [ ] Supabase session/media store 能增删改查。
-- [ ] RLS 和 Storage policy 测试通过。
+- [x] RLS 和 Storage policy 测试通过。
 - [x] 隐私脱敏测试通过。
 - [ ] 不存在真实 provider 调用。
 
