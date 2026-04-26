@@ -515,14 +515,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 8-12 秒默认 1 组。
-- [ ] 10-14 秒默认 2 组。
-- [ ] 12-15 秒默认 3 组。
-- [ ] 支持根据故事密度下调数量，但不超过 3。
+- [x] 8-12 秒默认 1 组。
+- [x] 10-14 秒默认 2 组。
+- [x] 12-15 秒默认 3 组。
+- [x] 支持根据故事密度下调数量，但不超过 3。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run duration`
+- [x] `pnpm test -- --run duration`
 
 **Dependencies:** Task 5
 
