@@ -23,9 +23,9 @@ export function ClipReview({ clipArtifactId, durationSeconds = 4, isSubmittingFi
             ▶
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-xs text-[#b9cacb]">
-          <span>账号内片段</span>
-          <span className="truncate">{clipArtifactId}</span>
+        <div className="flex min-w-0 items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-xs text-[#b9cacb]">
+          <span className="shrink-0">账号内片段</span>
+          <span className="min-w-0 truncate text-right">{clipArtifactId}</span>
         </div>
       </div>
 

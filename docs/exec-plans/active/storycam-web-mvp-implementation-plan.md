@@ -1381,14 +1381,14 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 桌面 Web 主路径无重叠、无文本溢出。
-- [ ] 上传、生成、取消、失败、重拍、final work 状态都可见。
-- [ ] 视觉语气符合私人小剧场，不像工业生产后台。
+- [x] 桌面 Web 主路径无重叠、无文本溢出。
+- [x] 上传、生成、取消、失败、重拍、final work 状态都可见。
+- [x] 视觉语气符合私人小剧场，不像工业生产后台。
 
 **Verification:**
 
-- [ ] `pnpm qa:visual`
-- [ ] 手动截图对照 `docs/design-docs/storycam-ui-design.md`
+- [x] `pnpm qa:visual`
+- [x] 手动截图对照 `docs/design-docs/storycam-ui-design.md`
 
 **Dependencies:** Task 35
 

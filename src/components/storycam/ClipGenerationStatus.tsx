@@ -18,14 +18,18 @@ export function ClipGenerationStatus({ job, onCancel, onRetry }: ClipGenerationS
           <p className="text-xs font-bold uppercase text-[#00f0ff]">片段生成</p>
           <h3 className="mt-2 text-lg font-extrabold text-[#e2e2e2]">{statusLabel(job.status)}</h3>
         </div>
-        <span className="rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-[#b9cacb]">{job.status}</span>
+        <span className="max-w-36 truncate rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-[#b9cacb]">
+          {job.status}
+        </span>
       </div>
 
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full bg-gradient-to-r from-[#00f0ff] to-[#ff4b89]" style={{ width: progressForStatus(job.status) }} />
       </div>
 
-      <p className="mt-3 text-sm leading-6 text-[#b9cacb]">任务 {job.id}，仅保存账号内预览。{job.redactedError ? ` ${job.redactedError}` : ""}</p>
+      <p className="mt-3 break-words text-sm leading-6 text-[#b9cacb]">
+        任务 {job.id}，仅保存账号内预览。{job.redactedError ? ` ${job.redactedError}` : ""}
+      </p>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <button

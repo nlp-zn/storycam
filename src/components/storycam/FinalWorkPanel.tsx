@@ -15,9 +15,9 @@ export function FinalWorkPanel({ finalWork }: FinalWorkPanelProps) {
             播放账号内预览
           </div>
         </div>
-        <div className="grid gap-2 border-t border-white/10 px-4 py-3 text-xs text-[#b9cacb] sm:grid-cols-2">
-          <span>作品 {finalWork.finalWork.id}</span>
-          <span>媒体 {finalWork.media.id}</span>
+        <div className="grid min-w-0 gap-2 border-t border-white/10 px-4 py-3 text-xs text-[#b9cacb] sm:grid-cols-2">
+          <span className="min-w-0 break-words">作品 {finalWork.finalWork.id}</span>
+          <span className="min-w-0 break-words">媒体 {finalWork.media.id}</span>
         </div>
       </div>
       <p className="mt-3 text-sm leading-6 text-[#b9cacb]">已保存到你的账号空间。第一版只提供私密预览和保存。</p>

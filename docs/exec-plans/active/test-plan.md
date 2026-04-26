@@ -82,4 +82,4 @@ CI 默认使用 mock mode。真实 provider smoke test 必须 opt-in、secret-ga
 - E2E happy path 和 short path。
 - duplicate submit、resume、deletion、stale artifact 的 E2E/integration tests。
 - prompt injection 和隐私日志回归测试。
-- desktop/mobile visual QA，对照 Stitch 结构但不照搬 cyber tone。
+- desktop/mobile visual QA，对照 Stitch 结构但不照搬 cyber tone；默认 `pnpm qa:visual` 覆盖主页桌面/手机非空、横向溢出检查，以及上传、扩展画布、取消、失败、重试、clip review、final work 的可见状态。
