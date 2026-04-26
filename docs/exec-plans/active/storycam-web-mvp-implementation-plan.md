@@ -760,14 +760,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] mock mode 不调用外部服务。
-- [ ] 可配置 success、timeout、policy refusal、provider error。
-- [ ] 返回 playable Supabase Storage media URL。
-- [ ] mock media metadata 写入 `media_assets`。
+- [x] mock mode 不调用外部服务。
+- [x] 可配置 success、timeout、policy refusal、provider error。
+- [x] 返回 playable Supabase Storage media URL。
+- [x] mock media metadata 写入 `media_assets`。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run mock-video`
+- [x] `pnpm test -- --run mock-video`
 
 **Dependencies:** Task 9, Task 11
 

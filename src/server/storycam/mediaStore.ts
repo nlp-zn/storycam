@@ -50,6 +50,8 @@ export type UploadStorageClient = {
   };
 };
 
+export type StoryCamStorageClient = SignedUrlStorageClient & UploadStorageClient;
+
 export class StoryCamMediaStoreError extends Error {
   constructor(
     readonly code: "invalid_mime_type" | "invalid_size" | "invalid_bucket" | "signed_url_failed" | "upload_failed"
