@@ -916,13 +916,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] packet 记录 input artifact versions。
-- [ ] stale packet 不能提交视频 job。
-- [ ] response 不包含完整 prompt packet。
+- [x] packet 记录 input artifact versions。
+- [x] stale packet 不能提交视频 job。
+- [x] response 不包含完整 prompt packet。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run clip-packet`
+- [x] `pnpm test -- --run clip-packet`
 
 **Dependencies:** Task 7, Task 18, Task 19
 
