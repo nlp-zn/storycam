@@ -1101,13 +1101,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] UI 清楚表达“一个核心分镜组生成一个片段”。
-- [ ] 分组数量由计划视频长度自动决定。
-- [ ] 不暗示扩展卡会单独生成视频。
+- [x] UI 清楚表达“一个核心分镜组生成一个片段”。
+- [x] 分组数量由计划视频长度自动决定。
+- [x] 不暗示扩展卡会单独生成视频。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e -- --grep "core storyboard"`
+- [x] `pnpm test:e2e -- --grep "core storyboard"`
 
 **Dependencies:** Task 18, Task 26
 

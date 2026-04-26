@@ -184,6 +184,22 @@ type StoryboardResponse = {
     storyboardScript: VersionedArtifact;
     coreStoryboardGroups: VersionedArtifact[];
   };
+  storyboard: {
+    storyboardScript: {
+      planSummary: string;
+      tone: string;
+      rhythm: string;
+      plannedDurationSeconds: number;
+      version: number;
+    };
+    coreStoryboardGroups: Array<{
+      title: string;
+      storyPurpose: string;
+      emotionalTurn: string;
+      estimatedClipDurationSeconds: number;
+      version: number;
+    }>;
+  };
   durationPlan: {
     plannedDurationSeconds: number;
     coreGroupTargetCount: 1 | 2 | 3;

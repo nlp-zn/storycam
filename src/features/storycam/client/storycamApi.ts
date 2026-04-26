@@ -67,6 +67,22 @@ export type CreateStoryboardResponse = {
     plannedDurationSeconds: number;
   };
   sessionId: string;
+  storyboard: {
+    coreStoryboardGroups: Array<{
+      emotionalTurn: string;
+      estimatedClipDurationSeconds: number;
+      storyPurpose: string;
+      title: string;
+      version: number;
+    }>;
+    storyboardScript: {
+      planSummary: string;
+      plannedDurationSeconds: number;
+      rhythm: string;
+      tone: string;
+      version: number;
+    };
+  };
 };
 
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {

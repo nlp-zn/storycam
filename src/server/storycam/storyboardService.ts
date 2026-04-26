@@ -34,6 +34,7 @@ export type StoryboardServiceOutput = {
     plannedDurationSeconds: number;
   };
   sessionId: string;
+  storyboard: MockStoryboardOutput;
   storyboardScript: StoryboardArtifactRef;
 };
 
@@ -118,6 +119,7 @@ export async function createStoryboard(
       coreStoryboardGroups: coreStoryboardGroupRefs,
       durationPlan,
       sessionId: session.id,
+      storyboard: providerResult.value,
       storyboardScript: storyboardScriptRef
     }
   };

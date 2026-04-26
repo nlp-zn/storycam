@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { CoreStoryboardGroups } from "@/components/storycam/CoreStoryboardGroups";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
 import {
@@ -9,18 +10,20 @@ import {
   staleStoryboardAfterStoryWorldEdit,
   type StoryboardStatus
 } from "@/features/storycam/client/storycamState";
-import { createStoryboard, type CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
-import { coreStoryboardGroups, expansionCards, workflowStages } from "@/features/storycam/domain/shellContent";
+import { createStoryboard, type CreateStoryboardResponse, type CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
+import { expansionCards, workflowStages } from "@/features/storycam/domain/shellContent";
 
 export function StoryCamWorkspace() {
   const [storyWorld, setStoryWorld] = useState<CreateStoryWorldResponse | null>(null);
   const [storyWorldConfirmed, setStoryWorldConfirmed] = useState(false);
+  const [storyboard, setStoryboard] = useState<CreateStoryboardResponse | null>(null);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
 
   function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse) {
     setStoryWorld(nextStoryWorld);
     setStoryWorldConfirmed(false);
+    setStoryboard(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
   }
@@ -32,6 +35,7 @@ export function StoryCamWorkspace() {
 
   function handleStoryWorldEdit() {
     setStoryWorldConfirmed(false);
+    setStoryboard(null);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
   }
@@ -49,6 +53,7 @@ export function StoryCamWorkspace() {
         sessionId: storyWorld.sessionId
       });
 
+      setStoryboard(storyboard);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
     } catch {
@@ -113,19 +118,7 @@ export function StoryCamWorkspace() {
 
           <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
             <h2 className="text-lg font-semibold text-stone-50">片段时间线</h2>
-            <div className="mt-4 space-y-3">
-              {coreStoryboardGroups.map((group, index) => (
-                <article className="rounded-md border border-stone-700 bg-stone-900 p-3" key={group.title}>
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-stone-100">
-                      片段 {String.fromCharCode(65 + index)}：{group.title}
-                    </h3>
-                    <span className="shrink-0 text-xs text-rose-200">{group.duration}</span>
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-stone-400">{group.description}</p>
-                </article>
-              ))}
-            </div>
+            <CoreStoryboardGroups storyboard={storyboard} />
             <button
               className="mt-4 w-full rounded-md bg-stone-800 px-4 py-2 text-sm font-semibold text-stone-400"
               disabled

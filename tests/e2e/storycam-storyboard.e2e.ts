@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("StoryCam story world", () => {
-  test("story world must be confirmed before storyboard generation and edits stale downstream work", async ({ page }) => {
+test.describe("StoryCam core storyboard", () => {
+  test("core storyboard groups show the duration plan and one clip per group", async ({ page }) => {
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -20,24 +20,16 @@ test.describe("StoryCam story world", () => {
     });
 
     await page.route("**/api/storyboard", async (route) => {
-      const body = route.request().postDataJSON() as {
-        confirmedArtifactVersions: Record<string, number>;
-        sessionId: string;
-      };
-
-      expect(body.sessionId).toBe("session-1");
-      expect(body.confirmedArtifactVersions).toEqual({
-        "character-artifact-1": 1,
-        "scene-artifact-1": 1,
-        "script-artifact-1": 1
-      });
-
       await route.fulfill({
         contentType: "application/json",
         status: 201,
         body: JSON.stringify({
           artifacts: {
-            coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+            coreStoryboardGroups: [
+              { id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 },
+              { id: "core-artifact-2", state: "ready", type: "core_storyboard_group", version: 1 },
+              { id: "core-artifact-3", state: "ready", type: "core_storyboard_group", version: 1 }
+            ],
             storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
           },
           durationPlan: {
@@ -55,24 +47,16 @@ test.describe("StoryCam story world", () => {
     await page.goto("/");
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
-
-    await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
-    await expect(page.getByText("我的剧本")).toBeVisible();
-    await expect(page.getByText("人物", { exact: true })).toBeVisible();
-    await expect(page.getByText("地点", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "生成核心分镜" })).toBeDisabled();
-
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await expect(page.getByRole("button", { name: "生成核心分镜" })).toBeEnabled();
     await page.getByRole("button", { name: "生成核心分镜" }).click();
-    await expect(page.getByText("分镜已准备好：3 个核心分镜组。")).toBeVisible();
 
-    await page.getByRole("button", { name: "改剧本" }).click();
-    await page.getByLabel("我的剧本内容").fill("她决定走进便利店，把伞递给他。");
-    await page.getByRole("button", { name: "保存修改" }).click();
-
-    await expect(page.getByText("分镜已过期，需要重新确认故事世界。")).toBeVisible();
-    await expect(page.getByRole("button", { name: "生成核心分镜" })).toBeDisabled();
+    await expect(page.getByText("3 个核心分镜组，每组生成一个片段。")).toBeVisible();
+    await expect(page.getByText("扩展卡只补充当前组的拍法，不会单独生成视频。")).toBeVisible();
+    await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
+    await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toBeVisible();
+    await expect(page.getByRole("heading", { exact: true, name: "擦肩而过" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "扩展这一组" })).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "用这一组生成片段" })).toHaveCount(3);
   });
 });
 

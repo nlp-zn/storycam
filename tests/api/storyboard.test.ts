@@ -81,7 +81,15 @@ describe("POST /api/storyboard", () => {
         plannedDurationSeconds: 14
       },
       ok: true,
-      sessionId: "session-1"
+      sessionId: "session-1",
+      storyboard: {
+        coreStoryboardGroups: [
+          expect.objectContaining({ title: "未发送的短信" }),
+          expect.objectContaining({ title: "门铃响起" }),
+          expect.objectContaining({ title: "玻璃里的重叠" })
+        ],
+        storyboardScript: expect.objectContaining({ planSummary: expect.stringContaining("雨夜") })
+      }
     });
 
     const artifactInserts = client.queries
