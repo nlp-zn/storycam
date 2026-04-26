@@ -49,6 +49,7 @@ DATABASE_URL=
 
 SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=
 SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=
+STORYCAM_LOCAL_AUTH_BYPASS=0
 
 STORYCAM_GENERATION_MODE=mock
 STORYCAM_TEXT_PROVIDER=mock
@@ -58,7 +59,17 @@ STORYCAM_VIDEO_PROVIDER=mock
 STORYCAM_FINAL_WORK_PROVIDER=mock
 ```
 
-For local UI/E2E smoke without real credentials, the test harness uses mocked HTTP routes. For manual browser testing, use a Supabase local stack or a dedicated Supabase test project, then log in with Google before creating resources.
+For local UI/E2E smoke without real credentials, the test harness uses mocked HTTP routes.
+
+For manual browser testing without a Google account, use a Supabase local stack and set:
+
+```text
+STORYCAM_LOCAL_AUTH_BYPASS=1
+```
+
+This bypass only works outside production and only when `NEXT_PUBLIC_SUPABASE_URL` points to `localhost`, `127.0.0.1`, or `::1`. The server creates or reuses a local Supabase Auth user named `storycam-local-dev@example.test`, so StoryCam metadata still belongs to an `auth.users.id`.
+
+For manual browser testing against a dedicated Supabase test project, keep `STORYCAM_LOCAL_AUTH_BYPASS=0` and log in with Google before creating resources.
 
 ## Google OAuth Local Setup
 

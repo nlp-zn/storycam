@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requireUser, UnauthorizedError } from "./requireUser";
+import { isLocalAuthBypassEnabled, requireUser, UnauthorizedError } from "./requireUser";
 
 describe("requireUser", () => {
   it("returns the authenticated user from validated claims", async () => {
@@ -36,5 +36,31 @@ describe("requireUser", () => {
         }
       })
     ).rejects.toThrow("Authentication required.");
+  });
+
+  it("allows local auth bypass only for non-production local Supabase", () => {
+    expect(
+      isLocalAuthBypassEnabled({
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+        NODE_ENV: "development",
+        STORYCAM_LOCAL_AUTH_BYPASS: "1"
+      })
+    ).toBe(true);
+
+    expect(
+      isLocalAuthBypassEnabled({
+        NEXT_PUBLIC_SUPABASE_URL: "https://storycam.example.supabase.co",
+        NODE_ENV: "development",
+        STORYCAM_LOCAL_AUTH_BYPASS: "1"
+      })
+    ).toBe(false);
+
+    expect(
+      isLocalAuthBypassEnabled({
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+        NODE_ENV: "production",
+        STORYCAM_LOCAL_AUTH_BYPASS: "1"
+      })
+    ).toBe(false);
   });
 });
