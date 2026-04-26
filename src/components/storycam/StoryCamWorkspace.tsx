@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
 import { ClipReview } from "@/components/storycam/ClipReview";
+import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
 import { CoreStoryboardGroups } from "@/components/storycam/CoreStoryboardGroups";
 import { ExpansionCanvas } from "@/components/storycam/ExpansionCanvas";
 import { FinalWorkPanel } from "@/components/storycam/FinalWorkPanel";
@@ -47,6 +48,7 @@ export function StoryCamWorkspace() {
   const [finalWork, setFinalWork] = useState<FinalWorkResponse | null>(null);
   const [isFinalWorkSubmitting, setIsFinalWorkSubmitting] = useState(false);
   const [isDeletingStory, setIsDeletingStory] = useState(false);
+  const [isStoryWorldEditorOpen, setIsStoryWorldEditorOpen] = useState(false);
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
@@ -80,12 +82,14 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setIsStoryWorldEditorOpen(false);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
   }
 
   function confirmStoryWorld() {
     setStoryWorldConfirmed(true);
+    setIsStoryWorldEditorOpen(false);
     setStoryboardMessage("故事世界已确认，可以生成核心分镜。");
   }
 
@@ -97,6 +101,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setIsStoryWorldEditorOpen(false);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
   }
@@ -126,6 +131,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
+      setIsStoryWorldEditorOpen(false);
       setStoryboardStatus("idle");
       setStoryboardMessage("这个故事已删除，可以重新开始。");
       setWorkspaceNotice("这个故事已删除，可以重新开始。");
@@ -155,6 +161,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
+      setIsStoryWorldEditorOpen(false);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
     } catch {
@@ -196,15 +203,30 @@ export function StoryCamWorkspace() {
     }
   }
 
-  function prepareClipGeneration() {
-    if (!selectedGroup) {
+  function selectCoreGroup(index: number) {
+    if (clipJob || finalWork || isClipSubmitting) {
       return;
     }
 
+    setSelectedCoreGroupIndex(index);
+    setExpansion(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
+    setFinalWork(null);
+  }
+
+  function prepareClipGeneration(index = selectedCoreGroupIndex ?? 0) {
+    const group = storyboard?.storyboard.coreStoryboardGroups[index];
+
+    if (!group) {
+      return;
+    }
+
+    setSelectedCoreGroupIndex(index);
     setClipJob(null);
     setFinalWork(null);
     setClipConfirmationSummary(
-      `用「${selectedGroup.title}」生成一个约 ${selectedGroup.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
+      `用「${group.title}」生成一个约 ${group.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
     );
     setStoryboardMessage("请确认是否发送这一组生成片段。");
   }
@@ -296,40 +318,51 @@ export function StoryCamWorkspace() {
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
   const activeStepIndex = currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld });
+  const generationPanel = finalWork ? (
+    <FinalWorkPanel finalWork={finalWork} />
+  ) : clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
+    <ClipReview
+      clipArtifactId={clipJob.outputArtifactId}
+      isSubmittingFinalWork={isFinalWorkSubmitting}
+      onCreateFinalWork={createFinalWorkFromAcceptedClip}
+      onRetake={retryClipGeneration}
+    />
+  ) : clipJob ? (
+    <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
+  ) : clipConfirmationSummary ? (
+    <ProviderSendConfirm
+      confirmationSummary={clipConfirmationSummary}
+      isSubmitting={isClipSubmitting}
+      onCancel={() => setClipConfirmationSummary(null)}
+      onConfirm={confirmClipGeneration}
+    />
+  ) : null;
   const mainSurface = storyWorld ? (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-      {storyboard && selectedGroup && (expansion || isExpansionLoading) ? (
+      {storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
         <ExpansionCanvas
           expansion={expansion}
-          generationPanel={
-            finalWork ? (
-              <FinalWorkPanel finalWork={finalWork} />
-            ) : clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
-              <ClipReview
-                clipArtifactId={clipJob.outputArtifactId}
-                isSubmittingFinalWork={isFinalWorkSubmitting}
-                onCreateFinalWork={createFinalWorkFromAcceptedClip}
-                onRetake={retryClipGeneration}
-              />
-            ) : clipJob ? (
-              <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
-            ) : clipConfirmationSummary ? (
-              <ProviderSendConfirm
-                confirmationSummary={clipConfirmationSummary}
-                isSubmitting={isClipSubmitting}
-                onCancel={() => setClipConfirmationSummary(null)}
-                onConfirm={confirmClipGeneration}
-              />
-            ) : null
-          }
+          generationPanel={generationPanel}
           isLoading={isExpansionLoading}
           onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
-          onSkipExpansion={prepareClipGeneration}
+          onSkipExpansion={() => prepareClipGeneration(selectedCoreGroupIndex ?? 0)}
           selectedGroup={selectedGroup}
           selectedIndex={selectedCoreGroupIndex ?? 0}
         />
+      ) : storyboard && !isStoryWorldEditorOpen ? (
+        <CoreFramesStage
+          generationPanel={generationPanel}
+          isBusy={isExpansionLoading || isClipSubmitting}
+          onExpandGroup={(index) => expandCoreGroup(index)}
+          onGenerateClip={prepareClipGeneration}
+          onOpenStoryWorldEditor={() => setIsStoryWorldEditorOpen(true)}
+          onSelectGroup={selectCoreGroup}
+          selectedIndex={selectedCoreGroupIndex ?? 0}
+          storyboard={storyboard}
+        />
       ) : (
         <StoryWorldReview
+          initiallyEditing={isStoryWorldEditorOpen}
           isDeleting={isDeletingStory}
           isConfirmed={storyWorldConfirmed}
           key={storyWorld.artifacts.script.id}
@@ -346,7 +379,7 @@ export function StoryCamWorkspace() {
         isDeletingStory={isDeletingStory}
         deleteCurrentStory={deleteCurrentStory}
         selectedCoreGroupIndex={selectedCoreGroupIndex}
-        setSelectedCoreGroupIndex={setSelectedCoreGroupIndex}
+        selectCoreGroup={selectCoreGroup}
         storyboard={storyboard}
         storyboardMessage={storyboardMessage}
         storyboardStatus={storyboardStatus}
@@ -387,7 +420,7 @@ type StoryCamSidebarProps = {
   generateStoryboard: () => void;
   isDeletingStory: boolean;
   selectedCoreGroupIndex: number | null;
-  setSelectedCoreGroupIndex: (index: number) => void;
+  selectCoreGroup: (index: number) => void;
   storyboard: CreateStoryboardResponse | null;
   storyboardMessage: string;
   storyboardStatus: StoryboardStatus;
@@ -402,7 +435,7 @@ function StoryCamSidebar({
   generateStoryboard,
   isDeletingStory,
   selectedCoreGroupIndex,
-  setSelectedCoreGroupIndex,
+  selectCoreGroup,
   storyboard,
   storyboardMessage,
   storyboardStatus,
@@ -464,8 +497,9 @@ function StoryCamSidebar({
       <section className="storycam-panel p-5">
         <h2 className="text-lg font-extrabold text-[#e2e2e2]">片段时间线</h2>
         <CoreStoryboardGroups
+          isCompact
           onExpandGroup={(index) => expandCoreGroup(index)}
-          onSelectGroup={setSelectedCoreGroupIndex}
+          onSelectGroup={selectCoreGroup}
           selectedIndex={selectedCoreGroupIndex}
           storyboard={storyboard}
         />

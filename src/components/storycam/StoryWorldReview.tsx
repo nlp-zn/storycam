@@ -5,6 +5,7 @@ import { AssetCard } from "@/components/storycam/AssetCard";
 import type { CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
 
 type StoryWorldReviewProps = {
+  initiallyEditing?: boolean;
   isDeleting?: boolean;
   isConfirmed: boolean;
   onConfirm: () => void;
@@ -14,6 +15,7 @@ type StoryWorldReviewProps = {
 };
 
 export function StoryWorldReview({
+  initiallyEditing = false,
   isConfirmed,
   isDeleting = false,
   onConfirm,
@@ -21,7 +23,7 @@ export function StoryWorldReview({
   onEditSaved,
   storyWorld
 }: StoryWorldReviewProps) {
-  const [isEditingScript, setIsEditingScript] = useState(false);
+  const [isEditingScript, setIsEditingScript] = useState(initiallyEditing);
   const [scriptSummary, setScriptSummary] = useState(storyWorld.storyWorld.script.summary);
 
   function saveScriptEdit() {

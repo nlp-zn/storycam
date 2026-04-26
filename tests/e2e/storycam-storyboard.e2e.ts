@@ -50,6 +50,7 @@ test.describe("StoryCam core storyboard", () => {
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
     await page.getByRole("button", { name: "生成核心分镜" }).click();
 
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page.getByText("3 个核心分镜组，每组生成一个片段。")).toBeVisible();
     await expect(page.getByText("扩展卡只补充当前组的拍法，不会单独生成视频。")).toBeVisible();
     await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();

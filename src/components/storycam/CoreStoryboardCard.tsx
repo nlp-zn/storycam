@@ -5,10 +5,11 @@ type CoreStoryboardCardProps = {
   index: number;
   isSelected?: boolean;
   onExpand?: () => void;
+  onGenerateClip?: () => void;
   onSelect?: () => void;
 };
 
-export function CoreStoryboardCard({ group, index, isSelected = false, onExpand, onSelect }: CoreStoryboardCardProps) {
+export function CoreStoryboardCard({ group, index, isSelected = false, onExpand, onGenerateClip, onSelect }: CoreStoryboardCardProps) {
   return (
     <article
       className={`storycam-glass overflow-hidden rounded-[1.5rem] p-0 transition ${
@@ -38,7 +39,7 @@ export function CoreStoryboardCard({ group, index, isSelected = false, onExpand,
         </button>
         <button
           className="storycam-primary-button px-3 py-2 text-xs"
-          onClick={onSelect}
+          onClick={onGenerateClip ?? onSelect}
           type="button"
         >
           用这一组生成片段
