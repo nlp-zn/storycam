@@ -1,8 +1,8 @@
 # Generated DB Schema Summary
 
-Source: `docs/exec-plans/active/storycam-web-mvp-implementation-plan.md`
+Source: `supabase/migrations/20260426033600_storycam_phase1_schema.sql`
 
-Status: planning summary, not generated from a live database yet.
+Status: static migration summary, not introspected from a live database yet.
 
 ## Supabase Tables
 
@@ -93,6 +93,13 @@ Status: planning summary, not generated from a live database yet.
 - `storycam-generated`
 - `storycam-mock`
 
+## Security Baseline
+
+- All StoryCam metadata tables include `user_id uuid not null references auth.users(id) on delete cascade`.
+- Row-level security is enabled for every StoryCam metadata table.
+- Table policies scope select, insert, update, and delete to `auth.uid() = user_id`.
+- Storage buckets are private and object policies scope access to `users/{auth.uid()}/...` paths.
+
 ## Regeneration Rule
 
-Replace this file with generated output once Supabase migrations exist.
+Replace this file with introspected output once Supabase local or a test project is wired into CI.

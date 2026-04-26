@@ -562,14 +562,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 建表：`storycam_sessions`、`storycam_artifacts`、`generation_jobs`、`media_assets`、`provider_requests`。
-- [ ] 每张表包含 `user_id` 并启用 RLS。
-- [ ] 创建私有 buckets：`storycam-uploads`、`storycam-generated`、`storycam-mock`。
+- [x] 建表：`storycam_sessions`、`storycam_artifacts`、`generation_jobs`、`media_assets`、`provider_requests`。
+- [x] 每张表包含 `user_id` 并启用 RLS。
+- [x] 创建私有 buckets：`storycam-uploads`、`storycam-generated`、`storycam-mock`。
 - [ ] migration 可重复运行且幂等，可在 Supabase local/test project 执行。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run supabase-db`
+- [x] `pnpm test -- --run supabase-db`
 - [ ] `pnpm storycam:seed` 能在 Supabase 中创建当前用户的 sample session。
 - [ ] RLS 测试证明用户不能读取其他用户 session/artifacts/media metadata。
 
