@@ -2,8 +2,21 @@
 
 :root {
   color-scheme: dark;
-  background: #181612;
-  color: #f7efe2;
+  --storycam-background: #131313;
+  --storycam-surface: #1f1f1f;
+  --storycam-surface-low: #1b1b1b;
+  --storycam-surface-high: #2a2a2a;
+  --storycam-surface-highest: #353535;
+  --storycam-outline: #849495;
+  --storycam-outline-variant: #3b494b;
+  --storycam-on-surface: #e2e2e2;
+  --storycam-on-surface-variant: #b9cacb;
+  --storycam-primary: #00f0ff;
+  --storycam-primary-soft: #dbfcff;
+  --storycam-secondary: #ff4b89;
+  --storycam-tertiary: #ffcfbe;
+  background: var(--storycam-background);
+  color: var(--storycam-on-surface);
 }
 
 * {
@@ -14,13 +27,284 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    linear-gradient(120deg, rgba(21, 94, 117, 0.2), transparent 34%),
-    linear-gradient(170deg, transparent 42%, rgba(190, 76, 64, 0.18)),
-    #181612;
-  font-family: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+    radial-gradient(circle at 12% 8%, rgba(0, 240, 255, 0.12), transparent 34vw),
+    radial-gradient(circle at 88% 72%, rgba(255, 75, 137, 0.11), transparent 36vw),
+    linear-gradient(180deg, #070707, var(--storycam-background) 38%, #080808);
+  font-family: Manrope, Inter, "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+  overflow-x: hidden;
 }
 
 button,
 textarea {
   font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.storycam-page {
+  min-height: 100vh;
+  padding: 112px 24px 144px;
+  color: var(--storycam-on-surface);
+}
+
+.storycam-topbar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  display: flex;
+  height: 80px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.78);
+  padding: 0 40px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.12);
+}
+
+.storycam-brand {
+  color: var(--storycam-primary);
+  font-size: 24px;
+  font-style: italic;
+  font-weight: 900;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.72);
+}
+
+.storycam-shell {
+  margin: 0 auto;
+  width: 100%;
+  max-width: 1440px;
+}
+
+.storycam-stepper {
+  position: relative;
+  margin: 0 auto 64px;
+  max-width: 1120px;
+}
+
+.storycam-stepper-line,
+.storycam-stepper-line-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 24px;
+  height: 2px;
+}
+
+.storycam-stepper-line {
+  background: var(--storycam-surface-highest);
+}
+
+.storycam-stepper-line-active {
+  right: auto;
+  background: linear-gradient(90deg, #006970, var(--storycam-primary));
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+}
+
+.storycam-stepper-items {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+}
+
+.storycam-step {
+  display: flex;
+  width: 72px;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--storycam-outline);
+  font-size: 12px;
+  text-align: center;
+}
+
+.storycam-step-dot {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--storycam-surface-highest);
+  border-radius: 9999px;
+  background: var(--storycam-background);
+  font-weight: 800;
+}
+
+.storycam-step.is-active {
+  color: var(--storycam-primary);
+  font-weight: 800;
+}
+
+.storycam-step.is-active .storycam-step-dot {
+  border: 2px solid var(--storycam-primary);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
+  color: var(--storycam-primary);
+  font-size: 20px;
+}
+
+.storycam-glass {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(31, 31, 31, 0.46);
+  backdrop-filter: blur(20px);
+}
+
+.storycam-panel {
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(31, 31, 31, 0.46);
+  padding: 32px;
+  backdrop-filter: blur(20px);
+}
+
+.storycam-neon-panel {
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow:
+    inset 0 0 20px rgba(0, 240, 255, 0.05),
+    0 0 28px rgba(0, 240, 255, 0.12);
+}
+
+.storycam-eyebrow {
+  color: var(--storycam-primary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.storycam-heading-xl {
+  color: var(--storycam-on-surface);
+  font-size: clamp(42px, 6vw, 80px);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.storycam-heading-lg {
+  color: var(--storycam-on-surface);
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.storycam-primary-button,
+.storycam-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 9999px;
+  padding: 14px 28px;
+  font-size: 14px;
+  font-weight: 900;
+  transition:
+    filter 180ms ease,
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+}
+
+.storycam-primary-button {
+  border: 1px solid var(--storycam-primary);
+  background: linear-gradient(90deg, var(--storycam-primary), #2563eb);
+  color: #000;
+  box-shadow: 0 0 22px rgba(0, 240, 255, 0.34);
+}
+
+.storycam-primary-button:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 32px rgba(0, 240, 255, 0.5);
+}
+
+.storycam-secondary-button {
+  border: 1px solid var(--storycam-outline-variant);
+  background: rgba(31, 31, 31, 0.5);
+  color: var(--storycam-on-surface-variant);
+}
+
+.storycam-secondary-button:hover {
+  border-color: rgba(0, 240, 255, 0.55);
+  color: var(--storycam-primary-soft);
+}
+
+.storycam-danger-button:hover {
+  border-color: rgba(255, 75, 137, 0.72);
+  color: #ffd9e0;
+}
+
+.storycam-cinematic-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(135deg, rgba(0, 240, 255, 0.18), transparent 45%),
+    linear-gradient(315deg, rgba(255, 75, 137, 0.2), transparent 42%),
+    var(--storycam-surface-low);
+}
+
+.storycam-cinematic-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.82)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 8px);
+  pointer-events: none;
+}
+
+.storycam-bottom-dock {
+  position: fixed;
+  z-index: 50;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 32px 32px 0 0;
+  background: rgba(0, 0, 0, 0.9);
+  padding: 24px 40px;
+  backdrop-filter: blur(24px);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 720px) {
+  .storycam-page {
+    padding: 96px 16px 128px;
+  }
+
+  .storycam-topbar {
+    height: 72px;
+    padding: 0 20px;
+  }
+
+  .storycam-brand {
+    font-size: 18px;
+  }
+
+  .storycam-stepper {
+    margin-bottom: 44px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .storycam-stepper-items {
+    min-width: 760px;
+  }
+
+  .storycam-stepper-line,
+  .storycam-stepper-line-active {
+    min-width: 760px;
+  }
+
+  .storycam-panel {
+    border-radius: 24px;
+    padding: 20px;
+  }
 }

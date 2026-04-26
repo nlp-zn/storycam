@@ -10,33 +10,40 @@ type CoreStoryboardCardProps = {
 
 export function CoreStoryboardCard({ group, index, isSelected = false, onExpand, onSelect }: CoreStoryboardCardProps) {
   return (
-    <article className={`rounded-md border bg-stone-900 p-3 ${isSelected ? "border-cyan-300" : "border-stone-700"}`}>
-      <div className="flex items-start justify-between gap-3">
+    <article
+      className={`storycam-glass overflow-hidden rounded-[1.5rem] p-0 transition ${
+        isSelected ? "border-[#00f0ff] shadow-[0_0_24px_rgba(0,240,255,0.16)]" : "border-white/10"
+      }`}
+    >
+      <div className="storycam-cinematic-frame aspect-[4/3] rounded-none" />
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold text-rose-200">片段 {String.fromCharCode(65 + index)}</p>
-          <h3 className="mt-1 text-sm font-semibold text-stone-100">{group.title}</h3>
+          <p className="storycam-eyebrow">镜头 {String(index + 1).padStart(2, "0")}</p>
+          <h3 className="mt-2 text-lg font-extrabold text-[#e2e2e2]">{group.title}</h3>
         </div>
-        <span className="shrink-0 rounded border border-stone-700 px-2 py-1 text-xs text-stone-300">
+        <span className="shrink-0 rounded-full border border-[#3b494b] px-3 py-1 text-xs font-bold text-[#dbfcff]">
           {formatDuration(group.estimatedClipDurationSeconds)}
         </span>
       </div>
-      <p className="mt-3 text-sm leading-6 text-stone-400">{group.storyPurpose}</p>
-      <p className="mt-2 text-sm leading-6 text-teal-100">{group.emotionalTurn}</p>
+      <p className="mt-3 text-sm leading-6 text-[#b9cacb]">{group.storyPurpose}</p>
+      <p className="mt-2 text-sm leading-6 text-[#dbfcff]">{group.emotionalTurn}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
-          className="rounded-md border border-stone-600 px-3 py-2 text-xs font-semibold text-stone-200 transition hover:border-amber-300 hover:text-amber-100"
+          className="storycam-secondary-button px-3 py-2 text-xs"
           onClick={onExpand ?? onSelect}
           type="button"
         >
           扩展这一组
         </button>
         <button
-          className="rounded-md bg-amber-300 px-3 py-2 text-xs font-semibold text-stone-950 transition hover:bg-amber-200"
+          className="storycam-primary-button px-3 py-2 text-xs"
           onClick={onSelect}
           type="button"
         >
           用这一组生成片段
         </button>
+      </div>
       </div>
     </article>
   );

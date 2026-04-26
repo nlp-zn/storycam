@@ -98,34 +98,38 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
   }
 
   return (
-    <section className="rounded-lg border border-stone-700/70 bg-stone-950/75 p-4 shadow-2xl shadow-black/20">
-      <div className="mb-4">
-        <p className="text-xs font-semibold uppercase text-amber-300">StoryCam</p>
-        <h1 className="mt-2 text-2xl font-semibold text-stone-50">私人小剧场相机</h1>
-        <p className="mt-2 text-sm leading-6 text-stone-400">从一句私人念头开始，先确认故事世界，再生成分镜和片段。</p>
+    <section className="storycam-panel storycam-neon-panel">
+      <div className="mb-8">
+        <p className="storycam-eyebrow">StoryCam</p>
+        <h1 className="mt-3 text-3xl font-black leading-tight text-[#e2e2e2]">私人小剧场相机</h1>
+        <p className="mt-3 text-sm leading-6 text-[#b9cacb]">从一句私人念头开始，先确认故事世界，再生成分镜和片段。</p>
       </div>
 
-      <label className="text-sm font-medium text-stone-200" htmlFor="story-idea">
+      <label className="text-sm font-bold text-[#e2e2e2]" htmlFor="story-idea">
         你的这一幕
       </label>
-      <textarea
-        className="mt-2 min-h-36 w-full resize-none rounded-md border border-stone-700 bg-stone-900/80 p-3 text-sm leading-6 text-stone-100 outline-none transition focus:border-rose-300"
-        id="story-idea"
-        onChange={(event) => setIdea(event.target.value)}
-        value={idea}
-      />
+      <div className="relative mt-3">
+        <div className="absolute -inset-0.5 rounded-[2rem] bg-gradient-to-r from-[#00f0ff]/35 to-[#ff4b89]/20 opacity-40 blur transition group-focus-within:opacity-100" />
+        <textarea
+          className="relative min-h-44 w-full resize-none rounded-[2rem] border border-[#3b494b] bg-[#1b1b1b]/80 p-5 text-lg font-extrabold leading-8 text-[#e2e2e2] outline-none transition placeholder:text-[#849495] focus:border-[#00f0ff]"
+          id="story-idea"
+          onChange={(event) => setIdea(event.target.value)}
+          placeholder="描述电影般的瞬间..."
+          value={idea}
+        />
+      </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-5 flex flex-wrap gap-3">
         {directorChoices.map((choice) => {
           const isSelected = selectedChoiceSet.has(choice);
 
           return (
             <button
               aria-pressed={isSelected}
-              className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+              className={`rounded-full border px-5 py-3 text-left text-sm font-bold transition ${
                 isSelected
-                  ? "border-amber-300 bg-amber-300 text-stone-950"
-                  : "border-stone-700 bg-stone-900 text-stone-200 hover:border-amber-300 hover:text-amber-100"
+                  ? "border-[#00f0ff] bg-[#00f0ff] text-black shadow-[0_0_18px_rgba(0,240,255,0.35)]"
+                  : "border-[#3b494b] bg-[#2a2a2a]/50 text-[#e2e2e2] hover:border-[#00f0ff]/60 hover:bg-[#353535]"
               }`}
               key={choice}
               onClick={() => toggleChoice(choice)}
@@ -137,9 +141,9 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
         })}
       </div>
 
-      <label className="mt-4 block rounded-md border border-dashed border-stone-700 bg-stone-900/70 p-3 transition hover:border-teal-300">
-        <span className="text-sm font-semibold text-stone-100">上传一张参考照片</span>
-        <span className="mt-1 block text-xs leading-5 text-stone-500">人物、宠物、地点或一段记忆都可以，默认只保存在你的账号内。</span>
+      <label className="mt-6 block rounded-[1.5rem] border border-dashed border-[#3b494b] bg-[#1b1b1b]/70 p-5 transition hover:border-[#00f0ff]">
+        <span className="text-sm font-extrabold text-[#e2e2e2]">上传一张参考照片</span>
+        <span className="mt-2 block text-xs leading-5 text-[#849495]">人物、宠物、地点或一段记忆都可以，默认只保存在你的账号内。</span>
         <input
           accept="image/jpeg,image/png,image/webp"
           className="sr-only"
@@ -150,12 +154,12 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
       </label>
 
       {photoPreviewUrl ? (
-        <div className="mt-3 overflow-hidden rounded-md border border-stone-700 bg-stone-900">
+        <div className="mt-4 overflow-hidden rounded-[1.5rem] border border-[#3b494b] bg-[#1b1b1b]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt="上传照片预览" className="h-36 w-full object-cover" src={photoPreviewUrl} />
-          <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-stone-400">
+          <img alt="上传照片预览" className="h-40 w-full object-cover opacity-90" src={photoPreviewUrl} />
+          <div className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-[#b9cacb]">
             <span className="truncate">{photo?.name}</span>
-            <button className="text-rose-200 hover:text-rose-100" onClick={() => selectPhoto(null)} type="button">
+            <button className="text-[#ffb1c3] hover:text-white" onClick={() => selectPhoto(null)} type="button">
               移除
             </button>
           </div>
@@ -163,7 +167,7 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
       ) : null}
 
       <button
-        className="mt-5 w-full rounded-md bg-rose-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-rose-950/30 transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400"
+        className="storycam-primary-button mt-7 w-full py-5 text-base disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
         disabled={!canSubmit}
         onClick={submitStoryWorld}
         type="button"
@@ -173,8 +177,8 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
 
       {submitState.kind === "success" || submitState.kind === "error" ? (
         <p
-          className={`mt-3 rounded-md border px-3 py-2 text-sm ${
-            submitState.kind === "success" ? "border-teal-700 text-teal-100" : "border-rose-800 text-rose-100"
+          className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+            submitState.kind === "success" ? "border-[#00f0ff]/50 text-[#dbfcff]" : "border-[#ff4b89]/60 text-[#ffd9e0]"
           }`}
           role="status"
         >
@@ -184,21 +188,21 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
 
       <div className="mt-5 space-y-2">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-stone-100">创作入口</h2>
-          <span className="text-xs text-stone-500">Web first</span>
+          <h2 className="text-sm font-extrabold text-[#e2e2e2]">创作入口</h2>
+          <span className="text-xs text-[#849495]">Web first</span>
         </div>
         <div className="grid gap-2">
           {storyModeEntries.map((entry) => (
             <button
-              className="rounded-md border border-stone-800 bg-stone-900/70 p-3 text-left transition hover:border-amber-300"
+              className="rounded-[1.25rem] border border-[#353535] bg-[#1b1b1b]/70 p-4 text-left transition hover:border-[#00f0ff]/60"
               key={entry.label}
               type="button"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-stone-100">{entry.label}</span>
-                <span className="shrink-0 rounded border border-stone-700 px-2 py-1 text-xs text-stone-400">{entry.status}</span>
+                <span className="text-sm font-extrabold text-[#e2e2e2]">{entry.label}</span>
+                <span className="shrink-0 rounded-full border border-[#3b494b] px-3 py-1 text-xs text-[#b9cacb]">{entry.status}</span>
               </div>
-              <p className="mt-2 text-xs leading-5 text-stone-500">{entry.text}</p>
+              <p className="mt-2 text-xs leading-5 text-[#849495]">{entry.text}</p>
             </button>
           ))}
         </div>

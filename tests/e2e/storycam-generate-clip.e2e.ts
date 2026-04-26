@@ -296,7 +296,7 @@ test.describe("StoryCam generate clip", () => {
     expect(deleteCalls).toBe(1);
 
     releaseLateResult?.();
-    await expect(page.getByRole("heading", { name: "先写下这一幕" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
     await expect(page.getByText("clip-artifact-late")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "片段已生成" })).toHaveCount(0);
   });

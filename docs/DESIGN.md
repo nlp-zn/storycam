@@ -13,5 +13,6 @@ StoryCam's first UI should feel like a private mini-theater camera.
 
 ## References
 
+- `design-docs/stitch_storycam_cinematic_workstation/` — final UI direction for Phase 1 front-end implementation. Treat its `DESIGN.md`, step screens, and step code as the source of truth for visual system, layout rhythm, progress chrome, and state-specific surfaces.
 - `design-docs/core-beliefs.md`
 - `design-docs/storycam-ui-design.md`

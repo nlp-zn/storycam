@@ -72,7 +72,8 @@ test.describe("StoryCam story input", () => {
 
     await page.getByRole("button", { name: "生成故事雏形" }).click();
 
-    await expect(page.getByText("故事雏形已生成，剧本版本 1。")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+    await expect(page.getByText("确认故事世界", { exact: true })).toBeVisible();
     expect(uploadCalled).toBe(true);
     expect(storyWorldCalled).toBe(true);
   });

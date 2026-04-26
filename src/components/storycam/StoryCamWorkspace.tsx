@@ -32,7 +32,7 @@ import {
   type ExpandStoryboardGroupResponse
 } from "@/features/storycam/client/storycamApi";
 import { shouldPollGenerationJob } from "@/features/storycam/client/jobPolling";
-import { expansionCards, workflowStages } from "@/features/storycam/domain/shellContent";
+import { workflowStages } from "@/features/storycam/domain/shellContent";
 
 export function StoryCamWorkspace() {
   const [storyWorld, setStoryWorld] = useState<CreateStoryWorldResponse | null>(null);
@@ -47,6 +47,7 @@ export function StoryCamWorkspace() {
   const [finalWork, setFinalWork] = useState<FinalWorkResponse | null>(null);
   const [isFinalWorkSubmitting, setIsFinalWorkSubmitting] = useState(false);
   const [isDeletingStory, setIsDeletingStory] = useState(false);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
 
@@ -70,6 +71,7 @@ export function StoryCamWorkspace() {
   }, [clipJob]);
 
   function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse) {
+    setWorkspaceNotice(null);
     setStoryWorld(nextStoryWorld);
     setStoryWorldConfirmed(false);
     setStoryboard(null);
@@ -126,6 +128,7 @@ export function StoryCamWorkspace() {
       setFinalWork(null);
       setStoryboardStatus("idle");
       setStoryboardMessage("这个故事已删除，可以重新开始。");
+      setWorkspaceNotice("这个故事已删除，可以重新开始。");
     } catch {
       setStoryboardMessage("删除失败，请稍后再试。");
     } finally {
@@ -292,156 +295,251 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
+  const activeStepIndex = currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld });
+  const mainSurface = storyWorld ? (
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {storyboard && selectedGroup && (expansion || isExpansionLoading) ? (
+        <ExpansionCanvas
+          expansion={expansion}
+          generationPanel={
+            finalWork ? (
+              <FinalWorkPanel finalWork={finalWork} />
+            ) : clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
+              <ClipReview
+                clipArtifactId={clipJob.outputArtifactId}
+                isSubmittingFinalWork={isFinalWorkSubmitting}
+                onCreateFinalWork={createFinalWorkFromAcceptedClip}
+                onRetake={retryClipGeneration}
+              />
+            ) : clipJob ? (
+              <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
+            ) : clipConfirmationSummary ? (
+              <ProviderSendConfirm
+                confirmationSummary={clipConfirmationSummary}
+                isSubmitting={isClipSubmitting}
+                onCancel={() => setClipConfirmationSummary(null)}
+                onConfirm={confirmClipGeneration}
+              />
+            ) : null
+          }
+          isLoading={isExpansionLoading}
+          onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
+          onSkipExpansion={prepareClipGeneration}
+          selectedGroup={selectedGroup}
+          selectedIndex={selectedCoreGroupIndex ?? 0}
+        />
+      ) : (
+        <StoryWorldReview
+          isDeleting={isDeletingStory}
+          isConfirmed={storyWorldConfirmed}
+          key={storyWorld.artifacts.script.id}
+          onConfirm={confirmStoryWorld}
+          onDeleteStory={deleteCurrentStory}
+          onEditSaved={handleStoryWorldEdit}
+          storyWorld={storyWorld}
+        />
+      )}
+
+      <StoryCamSidebar
+        activeStepIndex={activeStepIndex}
+        generateStoryboard={generateStoryboard}
+        isDeletingStory={isDeletingStory}
+        deleteCurrentStory={deleteCurrentStory}
+        selectedCoreGroupIndex={selectedCoreGroupIndex}
+        setSelectedCoreGroupIndex={setSelectedCoreGroupIndex}
+        storyboard={storyboard}
+        storyboardMessage={storyboardMessage}
+        storyboardStatus={storyboardStatus}
+        storyWorld={storyWorld}
+        storyWorldConfirmed={storyWorldConfirmed}
+        expandCoreGroup={expandCoreGroup}
+      />
+    </div>
+  ) : (
+    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+      {workspaceNotice ? (
+        <p className="rounded-[1.5rem] border border-[#00f0ff]/40 bg-[#00f0ff]/10 px-5 py-4 text-sm font-bold text-[#dbfcff]" role="status">
+          {workspaceNotice}
+        </p>
+      ) : null}
+      <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
+      <div className="mx-auto w-full max-w-md">
+        <GoogleSignInButton />
+      </div>
+    </div>
+  );
 
   return (
-    <main className="min-h-screen px-5 py-5 text-stone-100 sm:px-8 lg:px-10">
-      <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[310px_minmax(0,1fr)_330px]">
-        <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
-
-        {storyboard && selectedGroup && (expansion || isExpansionLoading) ? (
-          <ExpansionCanvas
-            expansion={expansion}
-            generationPanel={
-              finalWork ? (
-                <FinalWorkPanel finalWork={finalWork} />
-              ) : clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
-                <ClipReview
-                  clipArtifactId={clipJob.outputArtifactId}
-                  isSubmittingFinalWork={isFinalWorkSubmitting}
-                  onCreateFinalWork={createFinalWorkFromAcceptedClip}
-                  onRetake={retryClipGeneration}
-                />
-              ) : clipJob ? (
-                <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
-              ) : clipConfirmationSummary ? (
-                <ProviderSendConfirm
-                  confirmationSummary={clipConfirmationSummary}
-                  isSubmitting={isClipSubmitting}
-                  onCancel={() => setClipConfirmationSummary(null)}
-                  onConfirm={confirmClipGeneration}
-                />
-              ) : null
-            }
-            isLoading={isExpansionLoading}
-            onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
-            onSkipExpansion={prepareClipGeneration}
-            selectedGroup={selectedGroup}
-            selectedIndex={selectedCoreGroupIndex ?? 0}
-          />
-        ) : storyWorld ? (
-          <StoryWorldReview
-            isDeleting={isDeletingStory}
-            isConfirmed={storyWorldConfirmed}
-            key={storyWorld.artifacts.script.id}
-            onConfirm={confirmStoryWorld}
-            onDeleteStory={deleteCurrentStory}
-            onEditSaved={handleStoryWorldEdit}
-            storyWorld={storyWorld}
-          />
-        ) : (
-          <EmptyStoryWorldStage />
-        )}
-
-        <aside className="space-y-5">
-          <GoogleSignInButton />
-
-          <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
-            <h2 className="text-lg font-semibold text-stone-50">当前流程</h2>
-            <ol className="mt-4 space-y-2">
-              {workflowStages.map((stage, index) => (
-                <li className="flex items-center gap-3 text-sm text-stone-300" key={stage}>
-                  <span className="flex size-6 items-center justify-center rounded-full border border-stone-700 text-xs text-amber-200">
-                    {index + 1}
-                  </span>
-                  <span>{stage}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
-            <h2 className="text-lg font-semibold text-stone-50">故事世界</h2>
-            <p
-              className={`mt-3 rounded-md border px-3 py-2 text-sm leading-6 ${
-                storyboardStatus === "stale" ? "border-amber-500/80 text-amber-100" : "border-stone-700 text-stone-300"
-              }`}
-              role="status"
-            >
-              {storyboardMessage}
-            </p>
-            <button
-              className="mt-4 w-full rounded-md bg-teal-500 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400"
-              disabled={!storyWorld || !storyWorldConfirmed || storyboardStatus === "generating" || isDeletingStory}
-              onClick={generateStoryboard}
-              type="button"
-            >
-              {storyboardStatus === "generating" ? "正在生成核心分镜" : "生成核心分镜"}
-            </button>
-            {storyWorld ? (
-              <button
-                className="mt-2 w-full rounded-md border border-stone-700 px-4 py-2 text-sm font-semibold text-stone-400 transition hover:border-rose-300 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-stone-800 disabled:text-stone-600"
-                disabled={isDeletingStory}
-                onClick={deleteCurrentStory}
-                type="button"
-              >
-                {isDeletingStory ? "正在删除" : "删除这个故事"}
-              </button>
-            ) : null}
-          </section>
-
-          <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
-            <h2 className="text-lg font-semibold text-stone-50">片段时间线</h2>
-            <CoreStoryboardGroups
-              onExpandGroup={(index) => expandCoreGroup(index)}
-              onSelectGroup={setSelectedCoreGroupIndex}
-              selectedIndex={selectedCoreGroupIndex}
-              storyboard={storyboard}
-            />
-            <button
-              className="mt-4 w-full rounded-md bg-stone-800 px-4 py-2 text-sm font-semibold text-stone-400"
-              disabled
-              type="button"
-            >
-              生成最终作品
-            </button>
-          </section>
-        </aside>
+    <main className="storycam-page">
+      <StoryCamTopBar />
+      <div className="storycam-shell">
+        <StoryCamProgress activeIndex={activeStepIndex} />
+        {mainSurface}
       </div>
     </main>
   );
 }
 
-function EmptyStoryWorldStage() {
+type StoryCamSidebarProps = {
+  activeStepIndex: number;
+  deleteCurrentStory: () => void;
+  expandCoreGroup: (index: number) => void;
+  generateStoryboard: () => void;
+  isDeletingStory: boolean;
+  selectedCoreGroupIndex: number | null;
+  setSelectedCoreGroupIndex: (index: number) => void;
+  storyboard: CreateStoryboardResponse | null;
+  storyboardMessage: string;
+  storyboardStatus: StoryboardStatus;
+  storyWorld: CreateStoryWorldResponse;
+  storyWorldConfirmed: boolean;
+};
+
+function StoryCamSidebar({
+  activeStepIndex,
+  deleteCurrentStory,
+  expandCoreGroup,
+  generateStoryboard,
+  isDeletingStory,
+  selectedCoreGroupIndex,
+  setSelectedCoreGroupIndex,
+  storyboard,
+  storyboardMessage,
+  storyboardStatus,
+  storyWorld,
+  storyWorldConfirmed
+}: StoryCamSidebarProps) {
   return (
-    <section className="rounded-lg border border-stone-700/70 bg-[#201d18]/85 p-4 shadow-2xl shadow-black/20">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-sm text-teal-200">等待故事雏形</p>
-          <h2 className="mt-1 text-2xl font-semibold text-stone-50">先写下这一幕</h2>
-        </div>
-        <p className="rounded-md border border-stone-700 px-3 py-2 text-sm text-stone-400">未确认</p>
-      </div>
+    <aside className="space-y-5">
+      <GoogleSignInButton />
 
-      <div className="grid min-h-[520px] gap-3 md:grid-cols-3 md:grid-rows-3">
-        {expansionCards.map((card, index) => (
-          <div
-            className="flex min-h-32 flex-col justify-between rounded-lg border border-stone-700 bg-stone-900/70 p-3 opacity-75"
-            key={card}
-          >
-            <span className="text-xs text-stone-500">稍后扩展 {index + 1}</span>
-            <p className="text-lg font-medium text-stone-300">{card}</p>
-            <div className="h-16 rounded-md bg-[linear-gradient(135deg,#534438,#12485a_54%,#853d3a)] opacity-60" />
-          </div>
+      <section className="storycam-panel p-5">
+        <h2 className="text-lg font-extrabold text-[#e2e2e2]">当前流程</h2>
+        <ol className="mt-4 space-y-2">
+          {workflowStages.map((stage, index) => (
+            <li className="flex items-center gap-3 text-sm text-[#b9cacb]" key={stage}>
+              <span
+                className={`flex size-7 items-center justify-center rounded-full border text-xs font-bold ${
+                  index === activeStepIndex
+                    ? "border-[#00f0ff] text-[#00f0ff] shadow-[0_0_16px_rgba(0,240,255,0.25)]"
+                    : "border-[#3b494b] text-[#849495]"
+                }`}
+              >
+                {index + 1}
+              </span>
+              <span>{stage}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="storycam-panel p-5">
+        <h2 className="text-lg font-extrabold text-[#e2e2e2]">故事世界</h2>
+        <p
+          className={`mt-3 rounded-2xl border px-4 py-3 text-sm leading-6 ${
+            storyboardStatus === "stale" ? "border-[#ffcfbe]/80 text-[#ffcfbe]" : "border-[#3b494b] text-[#b9cacb]"
+          }`}
+          role="status"
+        >
+          {storyboardMessage}
+        </p>
+        <button
+          className="storycam-primary-button mt-4 w-full disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
+          disabled={!storyWorld || !storyWorldConfirmed || storyboardStatus === "generating" || isDeletingStory}
+          onClick={generateStoryboard}
+          type="button"
+        >
+          {storyboardStatus === "generating" ? "正在生成核心分镜" : "生成核心分镜"}
+        </button>
+        <button
+          className="storycam-secondary-button storycam-danger-button mt-2 w-full disabled:opacity-50"
+          disabled={isDeletingStory}
+          onClick={deleteCurrentStory}
+          type="button"
+        >
+          {isDeletingStory ? "正在删除" : "删除这个故事"}
+        </button>
+      </section>
+
+      <section className="storycam-panel p-5">
+        <h2 className="text-lg font-extrabold text-[#e2e2e2]">片段时间线</h2>
+        <CoreStoryboardGroups
+          onExpandGroup={(index) => expandCoreGroup(index)}
+          onSelectGroup={setSelectedCoreGroupIndex}
+          selectedIndex={selectedCoreGroupIndex}
+          storyboard={storyboard}
+        />
+        <button className="mt-4 w-full rounded-full bg-[#353535] px-4 py-3 text-sm font-bold text-[#849495]" disabled type="button">
+          生成最终作品
+        </button>
+      </section>
+    </aside>
+  );
+}
+
+type CurrentStepInput = {
+  clipJob: GenerationJobSummary | null;
+  expansion: ExpandStoryboardGroupResponse | null;
+  finalWork: FinalWorkResponse | null;
+  storyboard: CreateStoryboardResponse | null;
+  storyWorld: CreateStoryWorldResponse | null;
+};
+
+function currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld }: CurrentStepInput) {
+  if (finalWork) {
+    return 6;
+  }
+
+  if (clipJob?.status === "succeeded") {
+    return 5;
+  }
+
+  if (clipJob) {
+    return 4;
+  }
+
+  if (expansion) {
+    return 3;
+  }
+
+  if (storyboard) {
+    return 2;
+  }
+
+  if (storyWorld) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function StoryCamTopBar() {
+  return (
+    <header className="storycam-topbar">
+      <div className="storycam-brand">StoryCam 导演工作台</div>
+      <div className="flex items-center gap-4 text-[#00f0ff]">
+        <span className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] bg-[#1f1f1f]">●</span>
+        <span className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] bg-[#1f1f1f]">人</span>
+      </div>
+    </header>
+  );
+}
+
+function StoryCamProgress({ activeIndex }: { activeIndex: number }) {
+  const activeWidth = workflowStages.length > 1 ? `${(activeIndex / (workflowStages.length - 1)) * 100}%` : "0%";
+
+  return (
+    <nav aria-label="StoryCam steps" className="storycam-stepper">
+      <div className="storycam-stepper-line" />
+      <div className="storycam-stepper-line-active" style={{ width: activeWidth }} />
+      <ol className="storycam-stepper-items">
+        {workflowStages.map((stage, index) => (
+          <li className={`storycam-step ${index === activeIndex ? "is-active" : ""}`} key={stage}>
+            <span className="storycam-step-dot">{index + 1}</span>
+            <span>{stage}</span>
+          </li>
         ))}
-
-        <div className="order-first flex min-h-56 flex-col justify-between rounded-lg border border-amber-300/70 bg-[#2c2419] p-4 shadow-lg shadow-amber-950/40 md:order-none md:col-start-2 md:row-start-2">
-          <div>
-            <p className="text-xs text-amber-200">下一步</p>
-            <h3 className="mt-2 text-xl font-semibold text-stone-50">确认我的剧本</h3>
-          </div>
-          <p className="text-sm leading-6 text-stone-300">生成后会先看到短剧本、人物和地点。确认像你的故事，再进入核心分镜。</p>
-        </div>
-      </div>
-    </section>
+      </ol>
+    </nav>
   );
 }

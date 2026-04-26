@@ -6,8 +6,8 @@ test.describe("StoryCam app shell", () => {
 
     await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
     await expect(page.getByRole("button", { name: "生成故事雏形" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "故事世界" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "片段时间线" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "StoryCam steps" })).toBeVisible();
+    await expect(page.getByText("剧本导入")).toBeVisible();
   });
 
   test("exposes robots and sitemap routes", async ({ page }) => {
