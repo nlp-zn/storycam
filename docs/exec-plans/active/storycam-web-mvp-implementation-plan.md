@@ -476,10 +476,10 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 ### Checkpoint：Foundation 0
 
-- [ ] 工程文档与产品规格一致。
-- [ ] App 能启动。
-- [ ] 基本 lint/typecheck/test 入口存在。
-- [ ] 默认 mock mode 不会调用外部服务。
+- [x] 工程文档与产品规格一致。
+- [x] App 能启动。
+- [x] 基本 lint/typecheck/test 入口存在。
+- [x] 默认 mock mode 不会调用外部服务。
 - [ ] Supabase Auth 配置完成，Google 登录可用。
 
 ## Phase 1：领域模型、持久化和隐私基础
@@ -677,11 +677,11 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 ### Checkpoint：Domain Foundation
 
-- [ ] Artifact schemas、version、stale propagation 全部有 unit tests。
-- [ ] Supabase session/media store 能增删改查。
+- [x] Artifact schemas、version、stale propagation 全部有 unit tests。
+- [x] Supabase session/media store 能增删改查。
 - [x] RLS 和 Storage policy 测试通过。
 - [x] 隐私脱敏测试通过。
-- [ ] 不存在真实 provider 调用。
+- [x] 不存在真实 provider 调用。
 
 ## Phase 2：Provider contract 和 mock 全链路
 
@@ -812,9 +812,9 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 ### Checkpoint：Mock Generation
 
-- [ ] mock mode 能生成 story world、storyboard、expansion、mock clip、final work。
-- [ ] final work 是真实视频文件并已上传 Supabase Storage，不是文案。
-- [ ] 无外部 provider 调用。
+- [x] mock mode 能生成 story world、storyboard、expansion、mock clip、final work。
+- [x] final work 是真实视频文件并已上传 Supabase Storage，不是文案。
+- [x] 无外部 provider 调用。
 
 ## Phase 3：API routes 和 job lifecycle
 
@@ -1015,9 +1015,9 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 ### Checkpoint：API Mock E2E
 
-- [ ] API happy path 可从 story-world 跑到 final-work。
-- [ ] Duplicate submit、cancel、timeout、stale packet 有测试。
-- [ ] final work 是云端可预览视频文件。
+- [x] API happy path 可从 story-world 跑到 final-work。
+- [x] Duplicate submit、cancel、timeout、stale packet 有测试。
+- [x] final work 是云端可预览视频文件。
 
 ## Phase 4：UI 纵向切片
 
@@ -1325,10 +1325,10 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 ### Checkpoint：Real Magic
 
-- [ ] mock mode 默认全通过。
+- [x] mock mode 默认全通过。
 - [ ] secret-gated real video smoke 能生成 clip。
 - [ ] real clip 能合成 final work。
-- [ ] provider errors/logs 脱敏。
+- [x] provider errors/logs 脱敏。
 
 ## Phase 6：测试、QA 和收口
 
@@ -1419,6 +1419,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 **Verification:**
 
+- [x] `pnpm storycam:verify:mock`
 - [ ] 按 `docs/references/local-dev.md` 从 clean env 跑通 mock flow。
 - [x] `rg -n "分享链接|私密分享|Shanyin-style shot data" docs` 不出现错误产品承诺。
 

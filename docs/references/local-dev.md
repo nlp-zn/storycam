@@ -26,6 +26,7 @@ pnpm test
 pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
+pnpm storycam:verify:mock
 STORYCAM_SEED_USER_ID=<auth.users.id> pnpm storycam:seed
 STORYCAM_RUN_SUPABASE_VERIFY=1 pnpm storycam:verify:supabase
 ```
@@ -102,13 +103,10 @@ For local UI/E2E smoke without real credentials, the test harness uses mocked HT
 6. Before committing, run the same default checks used by agents.
 
    ```bash
-   pnpm lint
-   pnpm typecheck
-   pnpm test
-   pnpm test:api
-   pnpm test:e2e
-   pnpm qa:visual
+   pnpm storycam:verify:mock
    ```
+
+   This command runs lint, typecheck, unit tests, API tests, E2E, visual QA, and a production build with mock provider defaults.
 
 ## Optional Seed Data
 
