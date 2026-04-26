@@ -78,33 +78,39 @@ button:disabled {
 }
 
 .storycam-shell {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 32px;
   margin: 0 auto;
   width: 100%;
   max-width: 1440px;
+  align-items: start;
 }
 
 .storycam-stepper {
   position: relative;
-  margin: 0 auto 64px;
-  max-width: 1120px;
+  position: sticky;
+  top: 112px;
+  min-height: min(720px, calc(100vh - 160px));
+  padding: 10px 0;
 }
 
 .storycam-stepper-line,
 .storycam-stepper-line-active {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 24px;
-  height: 2px;
+  bottom: 34px;
+  left: 24px;
+  top: 34px;
+  width: 2px;
 }
 
 .storycam-stepper-line {
-  background: var(--storycam-surface-highest);
+  background: linear-gradient(180deg, rgba(53, 53, 53, 0.1), var(--storycam-surface-highest) 12%, var(--storycam-surface-highest) 88%, rgba(53, 53, 53, 0.1));
 }
 
 .storycam-stepper-line-active {
-  right: auto;
-  background: linear-gradient(90deg, #006970, var(--storycam-primary));
+  bottom: auto;
+  background: linear-gradient(180deg, #006970, var(--storycam-primary));
   box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
 }
 
@@ -112,18 +118,21 @@ button:disabled {
   position: relative;
   z-index: 1;
   display: flex;
+  min-height: inherit;
+  flex-direction: column;
   justify-content: space-between;
 }
 
 .storycam-step {
   display: flex;
-  width: 72px;
-  flex-direction: column;
+  min-height: 54px;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   color: var(--storycam-outline);
   font-size: 12px;
-  text-align: center;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: left;
 }
 
 .storycam-step-dot {
@@ -136,6 +145,7 @@ button:disabled {
   border-radius: 9999px;
   background: var(--storycam-background);
   font-weight: 800;
+  flex: 0 0 auto;
 }
 
 .storycam-step.is-active {
@@ -288,19 +298,48 @@ button:disabled {
     font-size: 18px;
   }
 
+  .storycam-shell {
+    display: block;
+  }
+
   .storycam-stepper {
+    position: relative;
+    top: auto;
     margin-bottom: 44px;
+    min-height: 0;
     overflow-x: auto;
     padding-bottom: 8px;
   }
 
   .storycam-stepper-items {
+    min-height: 0;
     min-width: 760px;
+    flex-direction: row;
   }
 
   .storycam-stepper-line,
   .storycam-stepper-line-active {
+    bottom: auto;
+    left: 0;
+    right: 0;
+    top: 24px;
+    height: 2px;
     min-width: 760px;
+    width: auto;
+  }
+
+  .storycam-stepper-line-active {
+    width: var(--storycam-mobile-progress, 0%);
+    height: 2px !important;
+    background: linear-gradient(90deg, #006970, var(--storycam-primary));
+  }
+
+  .storycam-step {
+    width: 72px;
+    min-height: 0;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
   }
 
   .storycam-panel {

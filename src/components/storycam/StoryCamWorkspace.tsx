@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
@@ -389,7 +390,7 @@ export function StoryCamWorkspace() {
       />
     </div>
   ) : (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6">
+    <div className="flex max-w-4xl flex-col gap-6">
       {workspaceNotice ? (
         <p className="rounded-[1.5rem] border border-[#00f0ff]/40 bg-[#00f0ff]/10 px-5 py-4 text-sm font-bold text-[#dbfcff]" role="status">
           {workspaceNotice}
@@ -407,7 +408,7 @@ export function StoryCamWorkspace() {
       <StoryCamTopBar />
       <div className="storycam-shell">
         <StoryCamProgress activeIndex={activeStepIndex} />
-        {mainSurface}
+        <div className="storycam-workspace-surface">{mainSurface}</div>
       </div>
     </main>
   );
@@ -560,12 +561,16 @@ function StoryCamTopBar() {
 }
 
 function StoryCamProgress({ activeIndex }: { activeIndex: number }) {
-  const activeWidth = workflowStages.length > 1 ? `${(activeIndex / (workflowStages.length - 1)) * 100}%` : "0%";
+  const activeHeight = workflowStages.length > 1 ? `${(activeIndex / (workflowStages.length - 1)) * 100}%` : "0%";
+  const activeStyle = {
+    "--storycam-mobile-progress": activeHeight,
+    height: activeHeight
+  } as CSSProperties;
 
   return (
     <nav aria-label="StoryCam steps" className="storycam-stepper">
       <div className="storycam-stepper-line" />
-      <div className="storycam-stepper-line-active" style={{ width: activeWidth }} />
+      <div className="storycam-stepper-line-active" style={activeStyle} />
       <ol className="storycam-stepper-items">
         {workflowStages.map((stage, index) => (
           <li className={`storycam-step ${index === activeIndex ? "is-active" : ""}`} key={stage}>
