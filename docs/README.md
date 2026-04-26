@@ -1,53 +1,48 @@
-# StoryCam Docs
+# StoryCam Docs Index
 
-This folder is the persistent project memory for StoryCam. Product, design, engineering, deployment, research, and operating decisions should be written here instead of tool-local folders.
+This directory is the source of truth for StoryCam. The repo knowledge structure follows an agent-readable pattern: short maps, indexed docs, active execution plans, generated references, and clear boundaries.
 
-## Product
+## Read Order
 
-- [Product Vision](./product-vision.md)  
-  Original positioning: StoryCam as an AI private story theater for ordinary users, not an industrial AI short-drama platform.
+1. `../AGENTS.md` for the agent map.
+2. `../ARCHITECTURE.md` for system boundaries.
+3. `product-specs/index.md` for product source of truth.
+4. `exec-plans/active/` for current implementation work.
+5. `SECURITY.md`, `RELIABILITY.md`, `FRONTEND.md`, and `DESIGN.md` for domain-specific rules.
 
-- [StoryCam Film Machine Design](./product/storycam-film-machine-design.md)  
-  Current office-hours design: Web-first private mini-theater camera. The MVP flow is input -> script, character assets, and scene assets -> confirmation -> storyboard script and 1-3 core storyboard images -> storyboard expansion -> one Seedance 2.0 clip per core storyboard group -> clip confirmation -> suggested final stitch.
+## Top-Level Guides
 
-## Research
+- `DESIGN.md` — product/design principles and UI tone.
+- `FRONTEND.md` — frontend implementation rules.
+- `PLANS.md` — how to create, update, and retire plans.
+- `PRODUCT_SENSE.md` — product judgment and positioning.
+- `QUALITY_SCORE.md` — how to score readiness and quality.
+- `RELIABILITY.md` — jobs, provider failures, recovery, observability.
+- `SECURITY.md` — auth, Supabase RLS, storage, secrets, privacy.
 
-- [Shanyin Director Master Source](./research/shanyin-director-master-source.md)  
-  Source, snapshot, and integration rules for the director methodology reference.
+## Directories
 
-- [Shanyin Director Master Snapshot](./research/shanyin-director-master/)  
-  Local copy of the reference project. Use this when designing StoryCam's director brain, prompt pipeline, storyboard structure, and quality checks.
+- `product-specs/` — product specs and product index.
+- `exec-plans/` — active and completed implementation plans plus tech debt tracker.
+- `design-docs/` — design briefs, design references, and core beliefs.
+- `generated/` — generated schemas and machine-readable summaries.
+- `references/` — external/internal references copied or summarized for local agent use.
 
-## Engineering
+## Current Canonical Docs
 
-No engineering plan yet.
+- Product spec: `product-specs/storycam-film-machine-design.md`
+- Product vision: `product-specs/product-vision.md`
+- Active implementation plan: `exec-plans/active/storycam-web-mvp-implementation-plan.md`
+- Active test plan: `exec-plans/active/test-plan.md`
+- UI design brief: `design-docs/storycam-ui-design.md`
+- Shanyin director reference: `references/shanyin-director-master/`
+- Harness engineering reference: `references/openai-harness-engineering.md`
 
-Expected future docs:
+## Documentation Rules
 
-- MVP architecture
-- Video generation pipeline
-- Storage and privacy model
-- Deployment plan
-
-## Design
-
-No polished visual design yet. The current design handoff is intentionally minimal: one practical UI design brief plus one generated UI reference image in the active discussion.
-
-Current design direction is captured in [StoryCam Film Machine Design](./product/storycam-film-machine-design.md). The first version should be Web-first, not mobile-only.
-
-- [StoryCam UI Design Brief](./design/storycam-ui-design.md)  
-  The single practical design document for the first Web UI: flow, required interactions, visual direction, copy, and constraints.
-
-- [StoryCam UI Flow Board](./design/assets/storycam-ui-flow-board.png)  
-  Generated visual reference showing the ordered multi-step interaction board.
-
-## Deployment
-
-No deployment plan yet.
-
-Expected future docs:
-
-- Web hosting target
-- Background job infrastructure
-- Video asset storage
-- Environment variables and secret handling
+- Keep durable context in `docs/`.
+- Keep `AGENTS.md` short and navigational.
+- Update indexes when moving or adding docs.
+- Plans are first-class artifacts. Active plans live in `exec-plans/active/`; completed plans move to `exec-plans/completed/`.
+- Generated docs must say how they were generated or what source they summarize.
+- Do not treat `~/.gstack/` output as canonical project documentation.

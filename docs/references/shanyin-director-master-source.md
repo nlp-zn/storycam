@@ -4,7 +4,7 @@ External reference:
 
 - Repository: https://github.com/Shanyin-ai/shanyin-director-master
 - Snapshot commit inspected: `c808b2d9ddcfba152c5ee17c914c6451f1a27a02`
-- Local snapshot: `docs/research/shanyin-director-master/`
+- Local snapshot: `docs/references/shanyin-director-master/`
 
 ## Why This Exists
 

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>StoryCam - 核心分镜</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@400;700;800;900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "outline": "#849495",
+                            "secondary": "#ffb1c3",
+                            "surface-bright": "#393939",
+                            "primary": "#dbfcff",
+                            "on-primary-container": "#006970",
+                            "primary-container": "#00f0ff",
+                            "surface-variant": "#353535",
+                            "secondary-container": "#ff4b89",
+                            "inverse-on-surface": "#303030",
+                            "background": "#131313",
+                            "primary-fixed-dim": "#00dbe9",
+                            "on-primary-fixed-variant": "#004f54",
+                            "inverse-surface": "#e2e2e2",
+                            "on-tertiary-fixed": "#370e00",
+                            "on-error-container": "#ffdad6",
+                            "error": "#ffb4ab",
+                            "on-primary": "#00363a",
+                            "inverse-primary": "#006970",
+                            "on-surface": "#e2e2e2",
+                            "secondary-fixed": "#ffd9e0",
+                            "outline-variant": "#3b494b",
+                            "on-tertiary": "#5a1b00",
+                            "tertiary-container": "#ffcfbe",
+                            "on-background": "#e2e2e2",
+                            "on-secondary-container": "#590026",
+                            "on-error": "#690005",
+                            "surface-container-low": "#1b1b1b",
+                            "surface-container-highest": "#353535",
+                            "tertiary": "#fff3f0",
+                            "on-secondary": "#66002c",
+                            "surface-container-high": "#2a2a2a",
+                            "surface-container": "#1f1f1f",
+                            "secondary-fixed-dim": "#ffb1c3",
+                            "on-secondary-fixed": "#3f0019",
+                            "surface": "#131313",
+                            "on-tertiary-container": "#a83a00",
+                            "tertiary-fixed": "#ffdbce",
+                            "on-secondary-fixed-variant": "#8f0041",
+                            "tertiary-fixed-dim": "#ffb59a",
+                            "on-primary-fixed": "#002022",
+                            "surface-container-lowest": "#0e0e0e",
+                            "error-container": "#93000a",
+                            "surface-tint": "#00dbe9",
+                            "surface-dim": "#131313",
+                            "primary-fixed": "#7df4ff",
+                            "on-surface-variant": "#b9cacb",
+                            "on-tertiary-fixed-variant": "#802a00"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "1rem",
+                            "lg": "2rem",
+                            "xl": "3rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "pill-padding-x": "32px",
+                            "pill-padding-y": "16px",
+                            "base": "8px",
+                            "container-max": "1440px",
+                            "gutter": "24px",
+                            "margin": "40px"
+                    },
+                    "fontFamily": {
+                            "headline-lg": ["Manrope", "sans-serif"],
+                            "headline-md": ["Manrope", "sans-serif"],
+                            "body-md": ["Inter", "sans-serif"],
+                            "display-xl": ["Manrope", "sans-serif"],
+                            "body-lg": ["Inter", "sans-serif"],
+                            "label-caps": ["Manrope", "sans-serif"]
+                    },
+                    "fontSize": {
+                            "headline-lg": ["48px", {"lineHeight": "110%", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                            "headline-md": ["32px", {"lineHeight": "120%", "letterSpacing": "0em", "fontWeight": "700"}],
+                            "body-md": ["16px", {"lineHeight": "160%", "letterSpacing": "0em", "fontWeight": "400"}],
+                            "display-xl": ["80px", {"lineHeight": "100%", "letterSpacing": "-0.04em", "fontWeight": "800"}],
+                            "body-lg": ["18px", {"lineHeight": "160%", "letterSpacing": "0em", "fontWeight": "400"}],
+                            "label-caps": ["12px", {"lineHeight": "100%", "letterSpacing": "0.1em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .neon-glow-primary {
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+        }
+        .neon-glow-primary:hover {
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen relative overflow-x-hidden antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar Shared Component -->
+<nav class="fixed top-0 w-full z-50 flex items-center justify-between px-10 h-20 bg-black/80 backdrop-blur-xl border-b border-white/10 shadow-[0_0_20px_rgba(0,240,255,0.15)]">
+<!-- Brand Identity -->
+<div class="flex items-baseline gap-4">
+<div class="text-2xl font-bold italic tracking-tighter text-cyan-400 uppercase drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]">StoryCam 导演工作台</div>
+</div>
+<!-- Trailing Actions -->
+<div class="flex items-center">
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-cyan-400" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden ml-4 border border-outline-variant">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7zb3A5tB3XcJw1rVrmWnXiDEc9_HbWY379b5heJQFVBZ04xIdUdsLuGdNAFqc90zOfnMJvg58cdXu6sYnXOXV1jDcF2H8b7I-7a33FVFLHkoPz6afBlfGPhindLHg2hE_hRnhstgm1jNk13mb__42bfZ-qwiZD0iquSH_cN7z9RuNLBCsILYSYIUYC8D19aNC65IU3X4D9PnSOYzNFIgTgkDg8CCYRsWVaj1VOtqt1gzg8quSBtyZtbrSOcoPubKBzr_i5D7jWyo"/>
+</div>
+</div>
+</nav>
+<!-- Main Canvas -->
+<main class="pt-32 pb-40 px-6 md:px-margin max-w-container-max mx-auto">
+<!-- Progress Indicator -->
+<div class="w-full max-w-6xl mx-auto mb-20 relative">
+<div class="absolute top-6 left-0 w-full h-[2px] bg-surface-variant z-0"></div>
+<div class="absolute top-6 left-0 w-1/3 h-[2px] bg-gradient-to-r from-cyan-900 to-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.6)] z-0"></div>
+<div class="relative z-10 flex justify-between items-start">
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border border-surface-variant bg-background flex items-center justify-center text-sm font-manrope text-on-surface-variant">1</div>
+<div class="absolute top-16 whitespace-nowrap text-sm font-body-md text-on-surface-variant font-medium">剧本导入</div>
+</div>
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border border-surface-variant bg-background flex items-center justify-center text-sm font-manrope text-on-surface-variant">2</div>
+<div class="absolute top-16 whitespace-nowrap text-sm font-body-md text-on-surface-variant font-medium">故事世界</div>
+</div>
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border-2 border-cyan-400 bg-background shadow-[0_0_25px_rgba(0,240,255,0.3)] flex items-center justify-center text-xl font-bold font-manrope text-cyan-400">3</div>
+<div class="absolute top-16 whitespace-nowrap text-sm font-body-md text-cyan-400 font-bold tracking-wide">核心分镜</div>
+</div>
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border border-surface-variant bg-background flex items-center justify-center text-sm font-manrope text-on-surface-variant">4</div>
+</div>
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border border-surface-variant bg-background flex items-center justify-center text-sm font-manrope text-on-surface-variant">5</div>
+</div>
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border border-surface-variant bg-background flex items-center justify-center text-sm font-manrope text-on-surface-variant">6</div>
+</div>
+<div class="relative flex flex-col items-center">
+<div class="w-12 h-12 rounded-full border border-surface-variant bg-background flex items-center justify-center text-sm font-manrope text-on-surface-variant">7</div>
+<div class="absolute top-16 whitespace-nowrap text-sm font-body-md text-on-surface-variant font-medium">导出</div>
+</div>
+</div>
+</div>
+<!-- Header Section -->
+<header class="mb-16 max-w-3xl">
+<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-container/10 border border-primary-container/20 mb-6">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+<span class="font-label-caps text-label-caps text-primary-container uppercase">步骤 3</span>
+</div>
+<h1 class="font-display-xl text-display-xl text-on-background mb-6">核心分镜</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">锁定序列的视觉锚点。这三个电影般的构图将决定整个生成的照明模型、大气深度和情感节奏。</p>
+</header>
+<!-- Frames Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-gutter">
+<!-- Frame 1 -->
+<article class="group relative rounded-xl overflow-hidden glass-panel neon-glow-primary transition-all duration-500 aspect-[4/5] flex flex-col justify-end">
+<img alt="Unsent Text Scene" class="absolute inset-0 w-full h-full object-cover z-0 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="Close-up cinematic shot of a glowing smartphone screen displaying an unsent text message in a dimly lit, moody interior with deep shadows and soft cyan neon rim lighting, high contrast, dramatic mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmpwYBa93ykzdy77luge22pUZsB7ajNn0fjfg3uW0t-TUoJBRxzQ9WWGKfZ1oEiYwxEqK8yQMSd22SPLnpZIqjVu_TQQjZBs2RJOw4UssAi3idrAE8YmThySe-h6OsTVO5gBVt1KHry9_LHDry08XcK0lMOVqZ7dtRZqR9JaQIr7TXG6FaAugkOh2mGRyjB3TN40ev4e-ECZSD2W66yDKFcpeZW_7yvxyWOmdDSyVTnPjxAsyY_J3IRdhaGx7fYA1LKn2UE2BLzj8"/>
+<!-- Gradient Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10 opacity-80"></div>
+<div class="relative z-20 p-8">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-caps text-label-caps text-primary-container uppercase tracking-widest">镜头 01</span>
+<span class="material-symbols-outlined text-on-background opacity-50 group-hover:opacity-100 transition-opacity">photo_camera</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-2">未发送的短信</h2>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">建立极写实特写。设备上的高对比度霓虹轮廓光。</p>
+</div>
+</article>
+<!-- Frame 2 -->
+<article class="group relative rounded-xl overflow-hidden glass-panel neon-glow-primary transition-all duration-500 aspect-[4/5] flex flex-col justify-end lg:-translate-y-8">
+<img alt="Glass Reflection Scene" class="absolute inset-0 w-full h-full object-cover z-0 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="Cinematic portrait of a person's face reflected in a rain-streaked window at night, city lights blurred in the background, neon pink and cyan color palette, melancholic and atmospheric vibe." src="https://lh3.googleusercontent.com/aida-public/AB6AXuACIt36oqICyNdiIeqhnFTDVBzWbwyyebWXbTXsnCR9HhjwoTWWxqOWua7baZnO2AwaAOzpGWqRdyig5ui6qi24JwPHtCMjZoFwzERGRzmEztJBo_Xc-IN0fPDZfHD2pQOIOo1ayjSDBSeY7Q5SrK7N3CkkjRFJjrQvXKcmzrAJ8hhIWfSo-wiwQEXqoQaOizpcwQ36p1UQwE2clZCJo6E6gU0hZJO-Xfn8hN7c9lHLDWKmsnR1F8DYgsyo-klxz-rCX9c5r8l7Zvk"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10 opacity-80"></div>
+<div class="relative z-20 p-8">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-caps text-label-caps text-primary-container uppercase tracking-widest">镜头 02</span>
+<span class="material-symbols-outlined text-on-background opacity-50 group-hover:opacity-100 transition-opacity">photo_camera</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-2">玻璃倒影</h2>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">中景。通过屏障表现复杂的折射和情感上的疏离。</p>
+</div>
+</article>
+<!-- Frame 3 -->
+<article class="group relative rounded-xl overflow-hidden glass-panel neon-glow-primary transition-all duration-500 aspect-[4/5] flex flex-col justify-end">
+<img alt="Passing By Scene" class="absolute inset-0 w-full h-full object-cover z-0 group-hover:scale-105 transition-transform duration-700 ease-out" data-alt="Dynamic motion blur shot of a train rushing past a neon-lit station platform at night, dark and gritty cyberpunk aesthetic, high energy, sharp focus on a solitary figure in the foreground." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYa4kIF3KLBZHIiTxk7PK4rkyyJues9whxG4rHkukDVbFxRA0aDq-qXvGR7Nw7p0HZZBfVaojyMubiAO7wMl577_Ku9p-ixg9VIZMpitP3Yvxah9rJHsHUgwBVTqSkHAYRVwsXNhVNB08HGhXJEG64jrFDJ4d9n1yVJCe0k8ULT9vpZHjF4dmWDqNIwuK_SxdGzLLqlpXYJ0vFJYRFmNORcIN2jdH13EwgqVyHk7B66Ucw14nppX-G2tjeR_JCcfJs-nwZA86ESrc"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent z-10 opacity-80"></div>
+<div class="relative z-20 p-8">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-caps text-label-caps text-primary-container uppercase tracking-widest">镜头 03</span>
+<span class="material-symbols-outlined text-on-background opacity-50 group-hover:opacity-100 transition-opacity">photo_camera</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-background mb-2">擦肩而过</h2>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">宽广的动作板块。强烈的运动模糊与静态的焦点主体形成对比。</p>
+</div>
+</article>
+</div>
+</main>
+<!-- BottomNavBar Shared Component -->
+<div class="fixed bottom-0 w-full z-50 flex justify-center items-center py-6 px-10 bg-black/90 backdrop-blur-2xl rounded-t-3xl border-t border-cyan-500/20 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+<button class="bg-gradient-to-r from-cyan-500 to-blue-600 text-black rounded-full px-8 py-3 shadow-[0_0_15px_rgba(0,240,255,0.4)] hover:brightness-110 hover:shadow-[0_0_25px_rgba(0,240,255,0.6)] active:scale-98 transition-all flex items-center gap-3">
+<span class="font-manrope font-extrabold uppercase tracking-widest text-sm">确认并继续</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 700;">arrow_forward</span>
+</button>
+</div>
+</body></html>
