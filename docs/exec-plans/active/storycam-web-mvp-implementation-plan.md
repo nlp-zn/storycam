@@ -1269,13 +1269,13 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 只在 `STORYCAM_GENERATION_MODE=real` 且 provider 配置正确时启用。
-- [ ] 支持 provider request id、polling 或回调结果归一化。
-- [ ] 支持 timeout、quota、policy refusal、provider error 的 redacted mapping。
+- [x] 只在 `STORYCAM_GENERATION_MODE=real` 且 provider 配置正确时启用。
+- [x] 支持 provider request id、polling 或回调结果归一化。
+- [x] 支持 timeout、quota、policy refusal、provider error 的 redacted mapping。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run seedance`
+- [x] `pnpm test -- --run seedance`
 - [ ] secret-gated smoke：生成一个短 clip。
 
 **Dependencies:** Task 20, Task 21, Task 22, Task 9

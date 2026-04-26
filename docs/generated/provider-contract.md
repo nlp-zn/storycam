@@ -124,6 +124,10 @@ Requirements:
 - timeout,
 - cancellation/tombstone,
 - late-result discard,
+- model name from `SEEDANCE_MODEL`,
+- create tasks with `POST /contents/generations/tasks`,
+- poll or normalize webhook payloads from `GET /contents/generations/tasks/{id}`,
+- terminal success returns `content.video_url`, which must be downloaded before the provider URL expires,
 - output stored in Supabase Storage.
 
 ## Final Work Composer
@@ -160,4 +164,5 @@ OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 
 SEEDANCE_API_KEY=
+SEEDANCE_MODEL=doubao-seedance-2-0-260128
 ```

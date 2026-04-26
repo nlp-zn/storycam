@@ -49,6 +49,7 @@ export type StoryCamConfig = {
   };
   seedance?: {
     apiKey: string;
+    model: string;
   };
 };
 
@@ -153,8 +154,9 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     ? required(env, "OPENROUTER_IMAGE_MODEL", issues)
     : undefined;
 
-  const seedanceApiKey =
-    videoProvider === "seedance_2_0" ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
+  const needsSeedance = videoProvider === "seedance_2_0";
+  const seedanceApiKey = needsSeedance ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
+  const seedanceModel = needsSeedance ? required(env, "SEEDANCE_MODEL", issues) : undefined;
 
   if (issues.length > 0) {
     throw new StoryCamConfigError(issues);
@@ -168,7 +170,7 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
         imageModel: openrouterImageModel ?? ""
       }
     : undefined;
-  const seedance = seedanceApiKey ? { apiKey: seedanceApiKey } : undefined;
+  const seedance = seedanceApiKey && seedanceModel ? { apiKey: seedanceApiKey, model: seedanceModel } : undefined;
 
   return {
     supabase: {

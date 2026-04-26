@@ -46,9 +46,33 @@ describe("loadStoryCamConfig", () => {
         OPENROUTER_API_KEY: "openrouter-key",
         OPENROUTER_TEXT_MODEL: "text-model",
         OPENROUTER_MULTIMODAL_MODEL: "multimodal-model",
-        OPENROUTER_IMAGE_MODEL: "image-model"
+        OPENROUTER_IMAGE_MODEL: "image-model",
+        SEEDANCE_MODEL: "doubao-seedance-2-0-260128"
       })
     ).toThrow(/MISSING_ENV:SEEDANCE_API_KEY/);
+  });
+
+  it("loads Seedance credentials and model in real video mode", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      STORYCAM_GENERATION_MODE: "real",
+      STORYCAM_TEXT_PROVIDER: "openrouter",
+      STORYCAM_MULTIMODAL_PROVIDER: "openrouter",
+      STORYCAM_IMAGE_PROVIDER: "openrouter",
+      STORYCAM_VIDEO_PROVIDER: "seedance_2_0",
+      STORYCAM_FINAL_WORK_PROVIDER: "ffmpeg",
+      OPENROUTER_API_KEY: "openrouter-key",
+      OPENROUTER_TEXT_MODEL: "text-model",
+      OPENROUTER_MULTIMODAL_MODEL: "multimodal-model",
+      OPENROUTER_IMAGE_MODEL: "image-model",
+      SEEDANCE_API_KEY: "seedance-key",
+      SEEDANCE_MODEL: "doubao-seedance-2-0-260128"
+    });
+
+    expect(config.seedance).toEqual({
+      apiKey: "seedance-key",
+      model: "doubao-seedance-2-0-260128"
+    });
   });
 
   it("requires OpenRouter credentials and model names in real mode", () => {
