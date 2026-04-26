@@ -39,6 +39,7 @@ export const characterAssetSchema = artifactIdentitySchema.extend({
   emotionalBaseline: z.string().min(1),
   wardrobe: z.string().optional(),
   props: z.array(z.string().min(1)).default([]),
+  referenceMediaIds: z.array(idSchema).default([]),
   consistencyNotes: z.array(z.string().min(1)).default([])
 });
 
@@ -49,6 +50,7 @@ export const sceneAssetSchema = artifactIdentitySchema.extend({
   light: z.string().min(1),
   atmosphere: z.string().min(1),
   keyObjects: z.array(z.string().min(1)).default([]),
+  referenceMediaIds: z.array(idSchema).default([]),
   spatialLogic: z.string().min(1)
 });
 

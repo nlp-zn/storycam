@@ -712,13 +712,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `暗恋韩剧雨夜` 返回稳定样例。
-- [ ] 上传照片引用会出现在资产 reference 中，但不泄露原始路径到 logs。
-- [ ] malformed mock fixture 会被 schema 拒绝。
+- [x] `暗恋韩剧雨夜` 返回稳定样例。
+- [x] 上传照片引用会出现在资产 reference 中，但不泄露原始路径到 logs。
+- [x] malformed mock fixture 会被 schema 拒绝。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run mock-story-world`
+- [x] `pnpm test -- --run mock-story-world`
 
 **Dependencies:** Task 11
 

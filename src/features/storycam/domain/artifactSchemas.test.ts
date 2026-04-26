@@ -36,6 +36,7 @@ const character = {
   stableVisualDescription: "湿发、浅色风衣、握紧伞柄",
   emotionalBaseline: "克制、犹豫",
   props: ["手机", "透明伞"],
+  referenceMediaIds: ["photo-1"],
   consistencyNotes: ["始终避免夸张表演"]
 };
 
@@ -48,6 +49,7 @@ const scene = {
   light: "冷白便利店灯和暖色路灯",
   atmosphere: "潮湿、安静、私人回忆感",
   keyObjects: ["玻璃门", "伞", "手机屏幕"],
+  referenceMediaIds: ["photo-2"],
   spatialLogic: "她在门外，他从店里走出，倒影短暂重叠"
 };
 
