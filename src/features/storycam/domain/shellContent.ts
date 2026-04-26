@@ -59,11 +59,11 @@ export const coreStoryboardGroups = [
 export const expansionCards = ["进入", "动作", "反应", "空镜", "转场", "续写"] as const;
 
 export const workflowStages = [
-  "剧本导入",
+  "输入创意",
   "故事世界",
   "核心分镜",
   "分镜扩展",
   "片段生成",
   "片段确认",
-  "最终拼接"
+  "导出"
 ] as const;
