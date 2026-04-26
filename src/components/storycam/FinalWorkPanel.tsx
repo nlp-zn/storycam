@@ -18,7 +18,7 @@ export function FinalWorkPanel({ finalWork }: FinalWorkPanelProps) {
             </button>
           </div>
           <div className="border-t border-white/10 p-5">
-            <p className="storycam-eyebrow">最终拼接</p>
+            <p className="storycam-eyebrow">导出</p>
             <h3 className="mt-2 text-3xl font-black text-[#e2e2e2]">账号内预览已保存</h3>
             <p className="mt-3 text-sm leading-6 text-[#b9cacb]">已保存到你的账号空间。第一版只提供私密预览和保存。</p>
           </div>
