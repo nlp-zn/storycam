@@ -632,7 +632,7 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 **Verification:**
 
 - [x] `pnpm test -- --run media-store`
-- [ ] `pnpm test -- --run storage-policy`
+- [x] `pnpm test -- --run storage-policy`
 
 **Dependencies:** Task 8A
 
