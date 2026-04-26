@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
+import { ClipReview } from "@/components/storycam/ClipReview";
 import { CoreStoryboardGroups } from "@/components/storycam/CoreStoryboardGroups";
 import { ExpansionCanvas } from "@/components/storycam/ExpansionCanvas";
+import { FinalWorkPanel } from "@/components/storycam/FinalWorkPanel";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import { ProviderSendConfirm } from "@/components/storycam/ProviderSendConfirm";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
@@ -16,12 +18,15 @@ import {
 } from "@/features/storycam/client/storycamState";
 import {
   cancelGenerationJob,
+  createFinalWork,
+  createStitchSuggestion,
   createStoryboard,
   expandStoryboardGroup,
   generateClipJob,
   getGenerationJob,
   type CreateStoryboardResponse,
   type CreateStoryWorldResponse,
+  type FinalWorkResponse,
   type GenerationJobSummary,
   type ExpandStoryboardGroupResponse
 } from "@/features/storycam/client/storycamApi";
@@ -38,6 +43,8 @@ export function StoryCamWorkspace() {
   const [clipConfirmationSummary, setClipConfirmationSummary] = useState<string | null>(null);
   const [clipJob, setClipJob] = useState<GenerationJobSummary | null>(null);
   const [isClipSubmitting, setIsClipSubmitting] = useState(false);
+  const [finalWork, setFinalWork] = useState<FinalWorkResponse | null>(null);
+  const [isFinalWorkSubmitting, setIsFinalWorkSubmitting] = useState(false);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
 
@@ -66,6 +73,7 @@ export function StoryCamWorkspace() {
     setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
+    setFinalWork(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
   }
@@ -82,6 +90,7 @@ export function StoryCamWorkspace() {
     setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
+    setFinalWork(null);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
   }
@@ -104,6 +113,7 @@ export function StoryCamWorkspace() {
       setExpansion(null);
       setClipConfirmationSummary(null);
       setClipJob(null);
+      setFinalWork(null);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
     } catch {
@@ -136,6 +146,7 @@ export function StoryCamWorkspace() {
       setExpansion(nextExpansion);
       setClipConfirmationSummary(null);
       setClipJob(null);
+      setFinalWork(null);
       setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展卡。`);
     } catch {
       setStoryboardMessage("扩展卡生成失败，可以跳过扩展直接生成片段。");
@@ -150,6 +161,7 @@ export function StoryCamWorkspace() {
     }
 
     setClipJob(null);
+    setFinalWork(null);
     setClipConfirmationSummary(
       `用「${selectedGroup.title}」生成一个约 ${selectedGroup.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
     );
@@ -210,7 +222,34 @@ export function StoryCamWorkspace() {
 
   function retryClipGeneration() {
     setClipJob(null);
+    setFinalWork(null);
     void confirmClipGeneration();
+  }
+
+  async function createFinalWorkFromAcceptedClip() {
+    if (!clipJob?.outputArtifactId || !storyboard) {
+      return;
+    }
+
+    try {
+      setIsFinalWorkSubmitting(true);
+      const suggestion = await createStitchSuggestion({
+        generatedClipArtifactIds: [clipJob.outputArtifactId],
+        sessionId: storyboard.sessionId
+      });
+      const nextFinalWork = await createFinalWork({
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${clipJob.outputArtifactId}-${Date.now()}`,
+        sessionId: storyboard.sessionId,
+        stitchSuggestionArtifactId: suggestion.stitchSuggestion.id
+      });
+
+      setFinalWork(nextFinalWork);
+      setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
+    } catch {
+      setStoryboardMessage("最终作品生成失败，请稍后再试。");
+    } finally {
+      setIsFinalWorkSubmitting(false);
+    }
   }
 
   const selectedGroup =
@@ -225,7 +264,16 @@ export function StoryCamWorkspace() {
           <ExpansionCanvas
             expansion={expansion}
             generationPanel={
-              clipJob ? (
+              finalWork ? (
+                <FinalWorkPanel finalWork={finalWork} />
+              ) : clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
+                <ClipReview
+                  clipArtifactId={clipJob.outputArtifactId}
+                  isSubmittingFinalWork={isFinalWorkSubmitting}
+                  onCreateFinalWork={createFinalWorkFromAcceptedClip}
+                  onRetake={retryClipGeneration}
+                />
+              ) : clipJob ? (
                 <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
               ) : clipConfirmationSummary ? (
                 <ProviderSendConfirm

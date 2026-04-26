@@ -131,6 +131,22 @@ export type CancelGenerationJobResponse = {
   status: "cancel_requested" | "canceled";
 };
 
+export type StitchSuggestionResponse = {
+  ok: true;
+  stitchSuggestion: ArtifactRef;
+};
+
+export type FinalWorkResponse = {
+  finalWork: ArtifactRef;
+  media: {
+    byteSize: number;
+    id: string;
+    kind: "final_work";
+    mimeType: string;
+  };
+  ok: true;
+};
+
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {
   const formData = new FormData();
   formData.set("file", input.file);
@@ -266,6 +282,38 @@ export async function cancelGenerationJob(jobId: string) {
   }
 
   return (await response.json()) as CancelGenerationJobResponse;
+}
+
+export async function createStitchSuggestion(input: { generatedClipArtifactIds: string[]; sessionId: string }) {
+  const response = await fetch("/api/stitch-suggestion", {
+    body: JSON.stringify(input),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "stitch_suggestion_failed"));
+  }
+
+  return (await response.json()) as StitchSuggestionResponse;
+}
+
+export async function createFinalWork(input: { idempotencyKey: string; sessionId: string; stitchSuggestionArtifactId: string }) {
+  const response = await fetch("/api/final-work", {
+    body: JSON.stringify(input),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "final_work_failed"));
+  }
+
+  return (await response.json()) as FinalWorkResponse;
 }
 
 function errorCode(value: unknown, fallback: string) {

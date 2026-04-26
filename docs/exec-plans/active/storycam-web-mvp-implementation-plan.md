@@ -1177,13 +1177,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 用户能重拍不满意片段。
-- [ ] 点击生成最终作品会调用 final-work route。
-- [ ] 结果页只提供账号内预览/保存，不出现分享入口。
+- [x] 用户能重拍不满意片段。
+- [x] 点击生成最终作品会调用 final-work route。
+- [x] 结果页只提供账号内预览/保存，不出现分享入口。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e -- --grep "final work"`
+- [x] `pnpm test:e2e -- --grep "final work"`
 - [ ] 手动播放 final work。
 
 **Dependencies:** Task 23, Task 29
