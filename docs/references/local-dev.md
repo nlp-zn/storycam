@@ -26,12 +26,12 @@ pnpm test
 pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
+STORYCAM_SEED_USER_ID=<auth.users.id> pnpm storycam:seed
 ```
 
 Planned but not implemented yet:
 
 ```bash
-pnpm storycam:seed
 pnpm storycam:reset
 ```
 
