@@ -450,15 +450,15 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] UI 提供 Google 登录入口。
-- [ ] Server route 能读取当前 Supabase user。
+- [x] UI 提供 Google 登录入口。
+- [x] Server route 能读取当前 Supabase user。
 - [ ] 上传照片、创建 session、真实生成视频、生成 final work 必须登录。
 - [ ] 未登录用户只能看样例/输入前导，不能创建真实资源。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run auth`
-- [ ] `pnpm test:e2e -- --grep "auth"`
+- [x] `pnpm test -- --run auth`
+- [x] `pnpm test:e2e -- --grep "auth"`
 - [ ] 手动用 Google OAuth 登录并刷新保持 session。
 
 **Dependencies:** Task 3, Task 4

@@ -4,6 +4,7 @@ import {
   expansionCards,
   storyAssets
 } from "@/features/storycam/domain/shellContent";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function Home() {
   return (
@@ -84,6 +85,8 @@ export default function Home() {
         </section>
 
         <aside className="space-y-5">
+          <GoogleSignInButton />
+
           <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
             <h2 className="text-lg font-semibold text-stone-50">故事世界</h2>
             <div className="mt-4 space-y-3">
