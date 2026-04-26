@@ -1212,16 +1212,16 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `STORYCAM_TEXT_PROVIDER=openrouter` 和 `STORYCAM_MULTIMODAL_PROVIDER=openrouter` 可配置。
-- [ ] `OPENROUTER_API_KEY` 只存在服务端。
-- [ ] 模型名通过 `OPENROUTER_TEXT_MODEL`、`OPENROUTER_MULTIMODAL_MODEL` 配置。
-- [ ] 通过 Vercel AI SDK 进行 structured output 或 schema-validated output。
-- [ ] Provider 输出经过 schema validation。
-- [ ] malformed JSON 有重试/错误归一化。
+- [x] `STORYCAM_TEXT_PROVIDER=openrouter` 和 `STORYCAM_MULTIMODAL_PROVIDER=openrouter` 可配置。
+- [x] `OPENROUTER_API_KEY` 只存在服务端。
+- [x] 模型名通过 `OPENROUTER_TEXT_MODEL`、`OPENROUTER_MULTIMODAL_MODEL` 配置。
+- [x] 通过 Vercel AI SDK 进行 structured output 或 schema-validated output。
+- [x] Provider 输出经过 schema validation。
+- [x] malformed JSON 有重试/错误归一化。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run openrouter-text-provider`
+- [x] `pnpm test -- --run openrouter-text-provider`
 - [ ] secret-gated manual smoke test。
 
 **Dependencies:** Task 11, Task 16, Task 18

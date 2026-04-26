@@ -65,6 +65,7 @@ Requirements:
 - malformed JSON handling,
 - no raw prompt exposure in API responses,
 - model name from `OPENROUTER_TEXT_MODEL`.
+- recommended starting model: `deepseek/deepseek-v4-pro`.
 
 ## Multimodal Provider
 
@@ -83,6 +84,7 @@ Requirements:
 - model name from `OPENROUTER_MULTIMODAL_MODEL`,
 - uploaded media must belong to current user,
 - provider request summary must not include signed URLs.
+- recommended starting model: `deepseek/deepseek-v4-pro`.
 
 ## Image Provider
 
@@ -101,6 +103,7 @@ Requirements:
 - model name from `OPENROUTER_IMAGE_MODEL`,
 - output stored in `storycam-generated` bucket,
 - failure may degrade to placeholder without blocking video generation.
+- recommended storyboard image model: `openai/gpt-5.4-image-2`.
 
 ## Video Provider
 
@@ -151,9 +154,9 @@ STORYCAM_VIDEO_PROVIDER=mock|seedance_2_0
 STORYCAM_FINAL_WORK_PROVIDER=mock|ffmpeg
 
 OPENROUTER_API_KEY=
-OPENROUTER_TEXT_MODEL=
-OPENROUTER_MULTIMODAL_MODEL=
-OPENROUTER_IMAGE_MODEL=
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 
 SEEDANCE_API_KEY=
 ```
