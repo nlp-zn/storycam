@@ -47,6 +47,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 DATABASE_URL=
 
+SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=
+SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=
+
 STORYCAM_GENERATION_MODE=mock
 STORYCAM_TEXT_PROVIDER=mock
 STORYCAM_MULTIMODAL_PROVIDER=mock
@@ -56,6 +59,41 @@ STORYCAM_FINAL_WORK_PROVIDER=mock
 ```
 
 For local UI/E2E smoke without real credentials, the test harness uses mocked HTTP routes. For manual browser testing, use a Supabase local stack or a dedicated Supabase test project, then log in with Google before creating resources.
+
+## Google OAuth Local Setup
+
+Create a Google OAuth web client and add this authorized redirect URI:
+
+```text
+http://127.0.0.1:54321/auth/v1/callback
+```
+
+Use these authorized JavaScript origins for local browser testing:
+
+```text
+http://localhost:3000
+http://127.0.0.1:3000
+```
+
+Add the client values to your local shell before starting Supabase:
+
+```bash
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID=<google-oauth-client-id>
+export SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET=<google-oauth-client-secret>
+supabase stop
+supabase start
+```
+
+If you keep these values in `.env.local`, load them into the shell first:
+
+```bash
+set -a
+source .env.local
+set +a
+supabase start
+```
+
+Then start the app with `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` and open `http://localhost:3000`. StoryCam redirects Google login back to `/auth/callback`, exchanges the OAuth code for a Supabase session, and returns to `/`.
 
 ## 10-Minute Mock Flow
 
