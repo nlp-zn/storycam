@@ -8,6 +8,7 @@
     "build": "next build",
     "lint": "eslint .",
     "storycam:seed": "tsx scripts/storycam-seed.ts",
+    "storycam:smoke:seedance": "tsx scripts/storycam-smoke-seedance.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:api": "vitest run tests/api --passWithNoTests",

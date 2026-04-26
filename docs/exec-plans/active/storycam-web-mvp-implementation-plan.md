@@ -1276,6 +1276,7 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 **Verification:**
 
 - [x] `pnpm test -- --run seedance`
+- [x] `pnpm storycam:smoke:seedance` 默认安全跳过，`STORYCAM_RUN_REAL_SMOKE=1` 时才调用真实 provider。
 - [ ] secret-gated smoke：生成一个短 clip。
 
 **Dependencies:** Task 20, Task 21, Task 22, Task 9
@@ -1438,7 +1439,7 @@ Verified on 2026-04-26 with mock provider configuration and production build env
 - [x] `pnpm qa:visual`
 - [x] `pnpm build`
 - [x] mock mode 全流程可跑。
-- [ ] real Seedance smoke test opt-in 可跑。
+- [x] real Seedance smoke test opt-in 可跑。
 - [x] final work 是真实视频文件并存入 Supabase Storage。
 - [x] 第一版没有分享入口。
 - [x] 文档和产品规格一致。

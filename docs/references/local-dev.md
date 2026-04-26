@@ -132,6 +132,24 @@ SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
 ```
 
+Run the Seedance short-clip smoke only when you explicitly intend to spend provider credits:
+
+```bash
+STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:seedance
+```
+
+Optional overrides:
+
+```text
+SEEDANCE_SMOKE_PROMPT=
+SEEDANCE_SMOKE_DURATION_SECONDS=5
+SEEDANCE_SMOKE_RATIO=16:9
+SEEDANCE_SMOKE_POLL_INTERVAL_MS=10000
+SEEDANCE_SMOKE_MAX_ATTEMPTS=60
+```
+
+Successful smoke output is written to `.temp/storycam-smoke/`. The command does not print the Seedance video URL.
+
 ## Safety Defaults
 
 - Default mode is mock.
