@@ -539,13 +539,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 编辑 `script` 会 stale storyboard、expanded cards、clip packets、clips、final work。
-- [ ] 编辑 character/scene asset 会 stale 下游生成物。
-- [ ] stale clip prompt packet 不能生成视频 job。
+- [x] 编辑 `script` 会 stale storyboard、expanded cards、clip packets、clips、final work。
+- [x] 编辑 character/scene asset 会 stale 下游生成物。
+- [x] stale clip prompt packet 不能生成视频 job。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run stale`
+- [x] `pnpm test -- --run stale`
 
 **Dependencies:** Task 5
 

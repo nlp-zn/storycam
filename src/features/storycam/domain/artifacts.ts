@@ -31,6 +31,7 @@ export const artifactTypes = [
   "quality_check"
 ] as const;
 
+export type ArtifactType = (typeof artifactTypes)[number];
 export type ArtifactState = z.infer<typeof artifactStateSchema>;
 export type VersionedArtifact = z.infer<typeof versionedArtifactSchema>;
 export type StoryScript = z.infer<typeof storyScriptSchema>;
