@@ -154,7 +154,7 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
               value={idea}
             />
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-1 flex-wrap items-center gap-2" data-testid="story-idea-params">
                 <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-[#3b494b] bg-[#2a2a2a]/70 text-[#b9cacb] transition hover:border-[#00f0ff]/60 hover:text-white">
                   <span className="sr-only">上传一张参考照片</span>
                   <span aria-hidden="true" className="text-lg font-black">+</span>
@@ -166,9 +166,26 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
                     type="file"
                   />
                 </label>
-                <span className="rounded-full border border-[#3b494b] bg-[#2a2a2a]/60 px-3 py-2 text-xs font-black text-[#b9cacb]">
-                  私人记忆
-                </span>
+                {selectedChoices.length > 0 ? (
+                  selectedChoices.map((choice) => (
+                    <button
+                      aria-label={`移除 ${choice}`}
+                      className="rounded-full border border-[#3b494b] bg-[#2a2a2a]/60 px-3 py-2 text-xs font-black text-[#b9cacb] transition hover:border-[#00f0ff]/60 hover:text-white"
+                      key={choice}
+                      onClick={() => toggleChoice(choice)}
+                      type="button"
+                    >
+                      {choice}
+                      <span className="ml-2" aria-hidden="true">
+                        ×
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <span className="rounded-full border border-dashed border-[#3b494b] px-3 py-2 text-xs font-black text-[#849495]">
+                    未选择拍法
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <span className="storycam-eyebrow text-[#849495]">{ideaLength} / 120</span>
@@ -192,7 +209,7 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
           <span className="flex size-9 items-center justify-center rounded-full border border-[#ff4b89]/40 bg-[#ff4b89]/10 text-sm font-black text-[#ffb1c3]">
             调
           </span>
-          <h2 className="storycam-eyebrow text-[#b9cacb]">灯光指导</h2>
+          <h2 className="storycam-eyebrow text-[#b9cacb]">拍法倾向</h2>
         </div>
         <div className="flex flex-wrap gap-4">
           {directorChoices.map((choice) => {
