@@ -1,5 +1,28 @@
 export const directorChoices = ["更遗憾一点", "像私人回忆", "少说话", "加旁白"] as const;
 
+export const storyModeEntries = [
+  {
+    label: "私人记忆",
+    status: "当前主线",
+    text: "把一句真实念头拍成 10-15 秒私人短片。"
+  },
+  {
+    label: "宠物小剧场",
+    status: "暂不完整支持",
+    text: "可先记录想法，后续补齐宠物稳定角色和动作。"
+  },
+  {
+    label: "小说角色",
+    status: "暂不完整支持",
+    text: "适合角色气质预演，第一版不做完整连载。"
+  },
+  {
+    label: "情绪短片",
+    status: "暂不完整支持",
+    text: "可尝试氛围方向，视频生成仍以主线流程为准。"
+  }
+] as const;
+
 export const storyAssets = [
   {
     label: "我的剧本",
@@ -34,3 +57,12 @@ export const coreStoryboardGroups = [
 ] as const;
 
 export const expansionCards = ["进入", "动作", "反应", "空镜", "转场", "续写"] as const;
+
+export const workflowStages = [
+  "输入想法",
+  "确认剧本 / 人物 / 地点",
+  "生成核心分镜",
+  "扩展这一组",
+  "生成片段",
+  "拼成最终作品"
+] as const;

@@ -1023,15 +1023,15 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 首屏是可用创作界面，不是 landing page。
-- [ ] 保留宠物、小说角色、情绪短片入口，但标注暂不完整支持。
-- [ ] 桌面 Web 体验优先，移动端可用但不是 mobile-only。
+- [x] 首屏是可用创作界面，不是 landing page。
+- [x] 保留宠物、小说角色、情绪短片入口，但标注暂不完整支持。
+- [x] 桌面 Web 体验优先，移动端可用但不是 mobile-only。
 
 **Verification:**
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] 手动检查 `http://localhost:3000`
+- [x] `pnpm lint`
+- [x] `pnpm typecheck`
+- [x] 手动检查 `http://localhost:3000`
 
 **Dependencies:** Task 3
 

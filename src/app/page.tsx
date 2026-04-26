@@ -2,18 +2,23 @@ import {
   coreStoryboardGroups,
   directorChoices,
   expansionCards,
+  storyModeEntries,
+  workflowStages,
   storyAssets
 } from "@/features/storycam/domain/shellContent";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 export default function Home() {
   return (
-    <main className="min-h-screen px-5 py-6 text-stone-100 sm:px-8 lg:px-10">
-      <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[300px_minmax(0,1fr)_320px]">
-        <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4 shadow-2xl shadow-black/20">
+    <main className="min-h-screen px-5 py-5 text-stone-100 sm:px-8 lg:px-10">
+      <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[310px_minmax(0,1fr)_330px]">
+        <section className="rounded-lg border border-stone-700/70 bg-stone-950/75 p-4 shadow-2xl shadow-black/20">
           <div className="mb-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-amber-300">StoryCam</p>
+            <p className="text-xs font-semibold uppercase text-amber-300">StoryCam</p>
             <h1 className="mt-2 text-2xl font-semibold text-stone-50">私人小剧场相机</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-400">
+              从一句私人念头开始，先确认故事世界，再生成分镜和片段。
+            </p>
           </div>
 
           <label className="text-sm font-medium text-stone-200" htmlFor="story-idea">
@@ -43,9 +48,31 @@ export default function Home() {
           >
             生成故事世界
           </button>
+
+          <div className="mt-5 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-stone-100">创作入口</h2>
+              <span className="text-xs text-stone-500">Web first</span>
+            </div>
+            <div className="grid gap-2">
+              {storyModeEntries.map((entry) => (
+                <button
+                  className="rounded-md border border-stone-800 bg-stone-900/70 p-3 text-left transition hover:border-amber-300"
+                  key={entry.label}
+                  type="button"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-stone-100">{entry.label}</span>
+                    <span className="shrink-0 rounded border border-stone-700 px-2 py-1 text-xs text-stone-400">{entry.status}</span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-stone-500">{entry.text}</p>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
-        <section className="rounded-lg border border-stone-700/70 bg-[#201d18]/80 p-4 shadow-2xl shadow-black/20">
+        <section className="rounded-lg border border-stone-700/70 bg-[#201d18]/85 p-4 shadow-2xl shadow-black/20">
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <p className="text-sm text-teal-200">这一段会这样拍</p>
@@ -64,7 +91,7 @@ export default function Home() {
               >
                 <span className="text-xs text-stone-400">扩展卡 {index + 1}</span>
                 <p className="text-lg font-medium text-stone-100">{card}</p>
-                <div className="h-16 rounded-md bg-gradient-to-br from-stone-700 via-teal-900 to-rose-900" />
+                <div className="h-16 rounded-md bg-[linear-gradient(135deg,#534438,#12485a_54%,#853d3a)]" />
               </div>
             ))}
 
@@ -86,6 +113,20 @@ export default function Home() {
 
         <aside className="space-y-5">
           <GoogleSignInButton />
+
+          <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
+            <h2 className="text-lg font-semibold text-stone-50">当前流程</h2>
+            <ol className="mt-4 space-y-2">
+              {workflowStages.map((stage, index) => (
+                <li className="flex items-center gap-3 text-sm text-stone-300" key={stage}>
+                  <span className="flex size-6 items-center justify-center rounded-full border border-stone-700 text-xs text-amber-200">
+                    {index + 1}
+                  </span>
+                  <span>{stage}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
 
           <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
             <h2 className="text-lg font-semibold text-stone-50">故事世界</h2>
