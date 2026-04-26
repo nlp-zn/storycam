@@ -1222,6 +1222,7 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 **Verification:**
 
 - [x] `pnpm test -- --run openrouter-text-provider`
+- [x] `pnpm storycam:smoke:openrouter` 默认安全跳过，`STORYCAM_RUN_REAL_SMOKE=1` 时才调用真实 provider。
 - [ ] secret-gated manual smoke test。
 
 **Dependencies:** Task 11, Task 16, Task 18
@@ -1250,6 +1251,7 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 **Verification:**
 
 - [x] `pnpm test -- --run openrouter-image-provider`
+- [x] `pnpm storycam:smoke:openrouter` 默认安全跳过，`STORYCAM_RUN_REAL_SMOKE=1` 时才调用真实 image provider。
 - [ ] secret-gated smoke：生成一张核心分镜代表图并生成 signed preview URL。
 
 **Dependencies:** Task 11, Task 9, Task 18, Task 31

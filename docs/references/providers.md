@@ -79,14 +79,16 @@ pnpm qa:visual
 Real smoke verification is intentionally manual and secret-gated:
 
 ```bash
+STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:openrouter
 STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:seedance
 ```
+
+The OpenRouter smoke command requires `OPENROUTER_API_KEY`, `OPENROUTER_TEXT_MODEL`, and `OPENROUTER_IMAGE_MODEL`. It validates a small structured text response and writes one generated storyboard image to `.temp/storycam-smoke/`. Set `OPENROUTER_SMOKE_SKIP_IMAGE=1` to smoke only the text path.
 
 The Seedance smoke command requires `SEEDANCE_API_KEY` and `SEEDANCE_MODEL`. It polls the provider until a terminal task status, downloads the returned video into `.temp/storycam-smoke/`, and does not print the provider video URL.
 
 Other real smoke checks still need dedicated scripts or manual harnesses:
 
-- OpenRouter text/multimodal/image smoke
 - real clip -> final work smoke
 
 Do not make real smoke required for ordinary PRs until a separate CI secret policy exists.

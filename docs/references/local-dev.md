@@ -132,15 +132,23 @@ SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
 ```
 
-Run the Seedance short-clip smoke only when you explicitly intend to spend provider credits:
+Run real provider smoke commands only when you explicitly intend to spend provider credits:
 
 ```bash
+STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:openrouter
 STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:seedance
 ```
 
 Optional overrides:
 
 ```text
+OPENROUTER_SMOKE_TEXT_PROMPT=
+OPENROUTER_SMOKE_TEXT_TEMPERATURE=0.4
+OPENROUTER_SMOKE_IMAGE_PROMPT=
+OPENROUTER_SMOKE_IMAGE_ASPECT_RATIO=16:9
+OPENROUTER_SMOKE_IMAGE_SIZE=
+OPENROUTER_SMOKE_SKIP_IMAGE=1
+
 SEEDANCE_SMOKE_PROMPT=
 SEEDANCE_SMOKE_DURATION_SECONDS=5
 SEEDANCE_SMOKE_RATIO=16:9
@@ -148,7 +156,7 @@ SEEDANCE_SMOKE_POLL_INTERVAL_MS=10000
 SEEDANCE_SMOKE_MAX_ATTEMPTS=60
 ```
 
-Successful smoke output is written to `.temp/storycam-smoke/`. The command does not print the Seedance video URL.
+Successful smoke output is written to `.temp/storycam-smoke/`. The commands do not print provider media URLs.
 
 ## Safety Defaults
 
