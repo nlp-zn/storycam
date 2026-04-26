@@ -23,7 +23,7 @@ export type UploadStoryCamPhotoResult = {
 };
 
 export class StoryCamUploadRequestError extends Error {
-  constructor(readonly code: "missing_session_id" | "missing_file") {
+  constructor(readonly code: "missing_file") {
     super(`StoryCam upload request error: ${code}`);
     this.name = "StoryCamUploadRequestError";
   }
@@ -70,13 +70,12 @@ export async function parseUploadFormData(request: Request) {
   const sessionId = formData.get("sessionId");
   const file = formData.get("file");
 
-  if (typeof sessionId !== "string" || !sessionId) {
-    throw new StoryCamUploadRequestError("missing_session_id");
-  }
-
   if (!(file instanceof File)) {
     throw new StoryCamUploadRequestError("missing_file");
   }
 
-  return { file, sessionId };
+  return {
+    file,
+    sessionId: typeof sessionId === "string" && sessionId ? sessionId : undefined
+  };
 }

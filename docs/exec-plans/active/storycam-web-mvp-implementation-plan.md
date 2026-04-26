@@ -1050,13 +1050,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 用户可输入文本。
-- [ ] 用户可上传照片并看到账号内预览。
-- [ ] 点击 `生成故事雏形` 调用 story-world route。
+- [x] 用户可输入文本。
+- [x] 用户可上传照片并看到账号内预览。
+- [x] 点击 `生成故事雏形` 调用 story-world route。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e -- --grep "story input"`
+- [x] `pnpm test:e2e -- --grep "story input"`
 - [ ] 手动上传一张图片。
 
 **Dependencies:** Task 16, Task 17, Task 24

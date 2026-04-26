@@ -42,11 +42,31 @@ describe("POST /api/uploads", () => {
         kind: "uploaded_photo",
         mimeType: "image/jpeg"
       },
+      sessionId: "session-1",
       uploadedPhotoIds: ["media-1"],
       uploadedPhotoRefs: [{ mediaAssetId: "media-1" }]
     });
     expect(JSON.stringify(body)).not.toContain("users/user-1/sessions/session-1/uploads/private.jpg");
     expect(client.uploads).toHaveLength(1);
+  });
+
+  it("creates a draft session when uploading before story world exists", async () => {
+    const { POST } = await import("@/app/api/uploads/route");
+    const client = new FakeSupabaseClient();
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(uploadRequest(new File(["hello"], "photo.jpg", { type: "image/jpeg" }), { sessionId: null }));
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      sessionId: "session-created-1",
+      uploadedPhotoIds: ["media-1"]
+    });
+    expect(client.queries[0]?.table).toBe("storycam_sessions");
+    expect(client.queries[1]?.table).toBe("media_assets");
   });
 
   it("rejects non-image uploads before writing storage", async () => {
@@ -90,9 +110,14 @@ describe("POST /api/uploads", () => {
   });
 });
 
-function uploadRequest(file: File) {
+function uploadRequest(file: File, options: { sessionId?: string | null } = {}) {
   const formData = new FormData();
-  formData.set("sessionId", "session-1");
+  const sessionId = options.sessionId === undefined ? "session-1" : options.sessionId;
+
+  if (sessionId) {
+    formData.set("sessionId", sessionId);
+  }
+
   formData.set("file", file);
 
   return new Request("https://storycam.test/api/uploads", {
@@ -163,6 +188,21 @@ class FakeQuery {
         source: "upload",
         storage_bucket: "storycam-uploads",
         storage_path: "users/user-1/sessions/session-1/uploads/private.jpg",
+        user_id: "user-1",
+        ...this.inserted
+      };
+    }
+
+    if (this.table === "storycam_sessions") {
+      return {
+        core_group_target_count: 1,
+        created_at: "2026-04-26T00:00:00.000Z",
+        deleted_at: null,
+        generation_mode: "mock",
+        id: "session-created-1",
+        planned_duration_seconds: 12,
+        status: "draft",
+        updated_at: "2026-04-26T00:00:00.000Z",
         user_id: "user-1",
         ...this.inserted
       };

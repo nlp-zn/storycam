@@ -10,7 +10,7 @@ test.describe("StoryCam visual smoke", () => {
     expect(desktopScreenshot.byteLength).toBeGreaterThan(20_000);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByRole("button", { name: "生成故事世界" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成故事雏形" })).toBeVisible();
 
     const mobileScreenshot = await page.screenshot();
     expect(mobileScreenshot.byteLength).toBeGreaterThan(20_000);

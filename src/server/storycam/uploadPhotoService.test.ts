@@ -93,13 +93,20 @@ describe("uploadStoryCamPhoto", () => {
 });
 
 describe("parseUploadFormData", () => {
-  it("requires a session id and file", async () => {
+  it("accepts an optional session id and requires a file", async () => {
     const formData = new FormData();
     formData.set("sessionId", "session-1");
     formData.set("file", new File(["hello"], "photo.jpg", { type: "image/jpeg" }));
+    const formDataWithoutSession = new FormData();
+    formDataWithoutSession.set("file", new File(["hello"], "photo.jpg", { type: "image/jpeg" }));
 
     await expect(parseUploadFormData(new Request("https://storycam.test", { method: "POST", body: formData }))).resolves.toMatchObject({
       sessionId: "session-1"
+    });
+    await expect(
+      parseUploadFormData(new Request("https://storycam.test", { method: "POST", body: formDataWithoutSession }))
+    ).resolves.toMatchObject({
+      sessionId: undefined
     });
     await expect(parseUploadFormData(new Request("https://storycam.test", { method: "POST", body: new FormData() }))).rejects.toBeInstanceOf(
       StoryCamUploadRequestError
