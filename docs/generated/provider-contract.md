@@ -102,6 +102,7 @@ Requirements:
 
 - model name from `OPENROUTER_IMAGE_MODEL`,
 - output stored in `storycam-generated` bucket,
+- representative images are stored as `thumbnail` media linked to the core storyboard group,
 - failure may degrade to placeholder without blocking video generation.
 - recommended storyboard image model: `openai/gpt-5.4-image-2`.
 

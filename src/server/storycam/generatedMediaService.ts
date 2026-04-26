@@ -5,10 +5,13 @@ import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamMediaStoreError, storyCamGeneratedBucket, uploadStoryCamObject } from "./mediaStore";
 
 export const storyCamGeneratedVideoMimeType = "video/mp4";
+export const storyCamGeneratedImageMimeTypes = ["image/png", "image/jpeg", "image/webp"] as const;
 export const storyCamGeneratedMediaMaxBytes = 500 * 1024 * 1024;
+export const storyCamGeneratedImageMaxBytes = 25 * 1024 * 1024;
 
-export type GeneratedStoryCamMediaKind = Extract<MediaAssetRow["kind"], "generated_clip" | "final_work">;
+export type GeneratedStoryCamMediaKind = Extract<MediaAssetRow["kind"], "generated_clip" | "final_work" | "thumbnail">;
 export type GeneratedStoryCamMediaSource = Extract<MediaAssetRow["source"], "provider" | "composer">;
+export type GeneratedStoryCamImageMimeType = (typeof storyCamGeneratedImageMimeTypes)[number];
 
 export type WriteGeneratedStoryCamMediaInput = {
   bytes: Uint8Array;
@@ -34,10 +37,12 @@ export async function writeGeneratedStoryCamMedia(
 ) {
   const validated = validateGeneratedStoryCamMedia({
     byteSize: input.bytes.byteLength,
+    kind: input.kind,
     mimeType: input.mimeType
   });
   const path = buildGeneratedStoragePath({
     kind: input.kind,
+    extension: validated.extension,
     sessionId: input.sessionId,
     userId: input.userId
   });
@@ -68,7 +73,23 @@ export async function writeGeneratedStoryCamMedia(
   } satisfies WriteGeneratedStoryCamMediaResult;
 }
 
-export function validateGeneratedStoryCamMedia(input: { byteSize: number; mimeType: string }) {
+export function validateGeneratedStoryCamMedia(input: { byteSize: number; kind: GeneratedStoryCamMediaKind; mimeType: string }) {
+  if (input.kind === "thumbnail") {
+    if (!storyCamGeneratedImageMimeTypes.includes(input.mimeType as GeneratedStoryCamImageMimeType)) {
+      throw new StoryCamMediaStoreError("invalid_mime_type");
+    }
+
+    if (!Number.isInteger(input.byteSize) || input.byteSize <= 0 || input.byteSize > storyCamGeneratedImageMaxBytes) {
+      throw new StoryCamMediaStoreError("invalid_size");
+    }
+
+    return {
+      byteSize: input.byteSize,
+      extension: extensionForGeneratedImageMimeType(input.mimeType as GeneratedStoryCamImageMimeType),
+      mimeType: input.mimeType as GeneratedStoryCamImageMimeType
+    };
+  }
+
   if (input.mimeType !== storyCamGeneratedVideoMimeType) {
     throw new StoryCamMediaStoreError("invalid_mime_type");
   }
@@ -85,6 +106,7 @@ export function validateGeneratedStoryCamMedia(input: { byteSize: number; mimeTy
 }
 
 function buildGeneratedStoragePath(input: {
+  extension?: string;
   kind: GeneratedStoryCamMediaKind;
   mediaId?: string;
   sessionId: string;
@@ -92,7 +114,7 @@ function buildGeneratedStoragePath(input: {
 }) {
   return `users/${sanitizePathSegment(input.userId)}/sessions/${sanitizePathSegment(input.sessionId)}/generated/${directoryForGeneratedKind(
     input.kind
-  )}/${sanitizePathSegment(input.mediaId ?? randomUUID())}.mp4`;
+  )}/${sanitizePathSegment(input.mediaId ?? randomUUID())}.${sanitizeExtension(input.extension ?? "mp4")}`;
 }
 
 function sourceForGeneratedKind(kind: GeneratedStoryCamMediaKind): GeneratedStoryCamMediaSource {
@@ -101,6 +123,8 @@ function sourceForGeneratedKind(kind: GeneratedStoryCamMediaKind): GeneratedStor
       return "provider";
     case "final_work":
       return "composer";
+    case "thumbnail":
+      return "provider";
   }
 }
 
@@ -110,7 +134,24 @@ function directoryForGeneratedKind(kind: GeneratedStoryCamMediaKind) {
       return "clips";
     case "final_work":
       return "final";
+    case "thumbnail":
+      return "storyboards";
   }
+}
+
+function extensionForGeneratedImageMimeType(mimeType: GeneratedStoryCamImageMimeType) {
+  switch (mimeType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+  }
+}
+
+function sanitizeExtension(extension: string) {
+  return extension.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
 }
 
 function sanitizePathSegment(segment: string) {

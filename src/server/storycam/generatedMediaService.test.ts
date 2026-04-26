@@ -79,6 +79,34 @@ describe("writeGeneratedStoryCamMedia", () => {
     ]);
   });
 
+  it("uploads a representative storyboard image to the generated bucket", async () => {
+    const client = new FakeSupabaseClient();
+
+    const result = await writeGeneratedStoryCamMedia(client.asSupabaseClient(), {
+      bytes: new Uint8Array([1, 2, 3]),
+      kind: "thumbnail",
+      linkedArtifactId: "core-group-1",
+      mimeType: "image/webp",
+      sessionId: "session-1",
+      userId: "user-1"
+    });
+
+    expect(result.bucket).toBe("storycam-generated");
+    expect(result.path).toMatch(/^users\/user-1\/sessions\/session-1\/generated\/storyboards\/.+\.webp$/);
+    expect(client.queries[0]?.calls).toContainEqual([
+      "insert",
+      expect.objectContaining({
+        byte_size: 3,
+        kind: "thumbnail",
+        linked_artifact_id: "core-group-1",
+        mime_type: "image/webp",
+        source: "provider",
+        storage_bucket: "storycam-generated",
+        storage_path: result.path
+      })
+    ]);
+  });
+
   it("rejects invalid MIME type and size before storage writes", async () => {
     const client = new FakeSupabaseClient();
 

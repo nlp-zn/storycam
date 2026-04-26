@@ -55,9 +55,9 @@ Optional real provider smoke variables:
 
 ```text
 OPENROUTER_API_KEY=
-OPENROUTER_TEXT_MODEL=
-OPENROUTER_MULTIMODAL_MODEL=
-OPENROUTER_IMAGE_MODEL=
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 SEEDANCE_API_KEY=
 ```
 

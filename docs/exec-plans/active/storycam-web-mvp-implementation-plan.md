@@ -274,9 +274,9 @@ Storage path 建议：
 
 ```text
 users/{user_id}/sessions/{session_id}/uploads/{media_id}.{ext}
-users/{user_id}/sessions/{session_id}/clips/{clip_id}.{ext}
-users/{user_id}/sessions/{session_id}/final/{final_work_id}.{ext}
-users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
+users/{user_id}/sessions/{session_id}/generated/clips/{clip_id}.{ext}
+users/{user_id}/sessions/{session_id}/generated/final/{final_work_id}.{ext}
+users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 ```
 
 ### RLS policy 基线
@@ -1242,14 +1242,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `STORYCAM_IMAGE_PROVIDER=openrouter` 可配置。
-- [ ] 模型名通过 `OPENROUTER_IMAGE_MODEL` 配置。
-- [ ] 核心分镜代表图真实生成并存入 `storycam-generated` bucket。
-- [ ] 生成失败时可降级为 placeholder，不阻塞视频生成。
+- [x] `STORYCAM_IMAGE_PROVIDER=openrouter` 可配置。
+- [x] 模型名通过 `OPENROUTER_IMAGE_MODEL` 配置。
+- [x] 核心分镜代表图真实生成并存入 `storycam-generated` bucket。
+- [x] 生成失败时可降级为 placeholder，不阻塞视频生成。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run openrouter-image-provider`
+- [x] `pnpm test -- --run openrouter-image-provider`
 - [ ] secret-gated smoke：生成一张核心分镜代表图并生成 signed preview URL。
 
 **Dependencies:** Task 11, Task 9, Task 18, Task 31
