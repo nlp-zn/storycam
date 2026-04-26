@@ -50,7 +50,7 @@ describe("storeProviderGeneratedClip", () => {
       path: expect.stringMatching(/^users\/user-1\/sessions\/session-1\/generated\/clips\/.+\.mp4$/),
       upsert: false
     });
-    expect(client.queries[0]?.calls).toContainEqual([
+    expect(client.queries[1]?.calls).toContainEqual([
       "insert",
       expect.objectContaining({
         kind: "generated_clip",
@@ -60,7 +60,7 @@ describe("storeProviderGeneratedClip", () => {
         user_id: "user-1"
       })
     ]);
-    expect(client.queries[1]?.calls).toContainEqual([
+    expect(client.queries[2]?.calls).toContainEqual([
       "insert",
       expect.objectContaining({
         state: "ready",
@@ -68,7 +68,7 @@ describe("storeProviderGeneratedClip", () => {
         user_id: "user-1"
       })
     ]);
-    expect(client.queries[2]?.calls).toContainEqual([
+    expect(client.queries[3]?.calls).toContainEqual([
       "update",
       expect.objectContaining({
         output_artifact_id: expect.stringMatching(/^artifact-/),
@@ -103,8 +103,44 @@ describe("storeProviderGeneratedClip", () => {
       retryable: true
     });
     expect(client.uploads).toEqual([]);
-    expect(client.queries).toEqual([]);
+    expect(client.queries).toHaveLength(1);
+    expect(client.queries[0]?.table).toBe("generation_jobs");
     expect(JSON.stringify(result)).not.toContain("signed-secret");
+  });
+
+  it("discards late Seedance results for tombstoned jobs before download or storage writes", async () => {
+    const client = new FakeSupabaseClient({
+      jobRow: {
+        ...baseJobRow(),
+        status: "canceled",
+        tombstoned_at: "2026-04-26T01:02:03.000Z"
+      }
+    });
+    const fetch = vi.fn();
+
+    const result = await storeProviderGeneratedClip(client.asSupabaseClient(), {
+      clipPromptPacketId: "packet-1",
+      coreGroupId: "core-group-1",
+      durationSeconds: 5,
+      fetch,
+      jobId: "job-1",
+      providerName: "seedance_2_0",
+      providerRequestId: "cgt-2026-storycam",
+      sessionId: "session-1",
+      userId: "user-1",
+      videoUrl: "https://ark-content.example/late-result.mp4"
+    });
+
+    expect(result).toMatchObject({
+      errorCode: "SEEDANCE_LATE_RESULT_DISCARDED",
+      ok: false,
+      providerRequestId: "cgt-2026-storycam",
+      retryable: false
+    });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(client.uploads).toEqual([]);
+    expect(client.queries.some((query) => query.table === "media_assets")).toBe(false);
+    expect(client.queries.some((query) => query.table === "storycam_artifacts")).toBe(false);
   });
 
   it("supports a real clip to final work smoke path with a private preview URL and no share link", async () => {
@@ -193,10 +229,16 @@ function videoResponse(bytes: Uint8Array, status = 200) {
   });
 }
 
+type FakeSupabaseClientOptions = {
+  jobRow?: Record<string, unknown> | null;
+};
+
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
   readonly signedUrls: Array<{ bucket: string; expiresIn: number; path: string }> = [];
   readonly uploads: Array<{ bucket: string; body: Uint8Array; byteSize: number; contentType: string; path: string; upsert: boolean }> = [];
+
+  constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
 
   asSupabaseClient() {
     return this as unknown as SupabaseClient<Database>;
@@ -229,7 +271,7 @@ class FakeSupabaseClient {
   };
 
   from(table: string) {
-    const query = new FakeQuery(table);
+    const query = new FakeQuery(table, this.options);
     this.queries.push(query);
     return query;
   }
@@ -240,7 +282,10 @@ class FakeQuery {
   private inserted: Record<string, unknown> | null = null;
   private updated: Record<string, unknown> | null = null;
 
-  constructor(readonly table: string) {}
+  constructor(
+    readonly table: string,
+    private readonly options: FakeSupabaseClientOptions
+  ) {}
 
   insert(value: Record<string, unknown>) {
     this.inserted = value;
@@ -267,6 +312,13 @@ class FakeQuery {
   is(column: string, value: unknown) {
     this.calls.push(["is", column, value]);
     return this;
+  }
+
+  maybeSingle() {
+    return Promise.resolve({
+      data: this.row(),
+      error: null
+    });
   }
 
   single() {
@@ -298,10 +350,15 @@ class FakeQuery {
     }
 
     if (this.table === "generation_jobs") {
+      if (!this.updated && this.options.jobRow !== undefined) {
+        return this.options.jobRow;
+      }
+
       return {
         id: "job-1",
         created_at: "2026-04-26T00:00:00.000Z",
         ended_at: "2026-04-26T00:01:00.000Z",
+        status: this.updated ? "succeeded" : "running",
         tombstoned_at: null,
         updated_at: "2026-04-26T00:01:00.000Z",
         ...this.updated
@@ -310,4 +367,30 @@ class FakeQuery {
 
     return this.inserted ?? this.updated;
   }
+}
+
+function baseJobRow() {
+  return {
+    attempts: 1,
+    created_at: "2026-04-26T00:00:00.000Z",
+    ended_at: null,
+    error_code: null,
+    generation_mode: "real",
+    id: "job-1",
+    idempotency_key_hash: "hash-1",
+    input_artifact_versions_json: {},
+    max_attempts: 1,
+    output_artifact_id: null,
+    provider_kind: "video",
+    provider_name: "seedance_2_0",
+    provider_request_id: "cgt-2026-storycam",
+    redacted_error: null,
+    session_id: "session-1",
+    started_at: null,
+    status: "running",
+    tombstoned_at: null,
+    type: "video_clip",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1"
+  };
 }

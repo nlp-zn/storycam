@@ -1331,14 +1331,14 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] duration/group count 有 unit tests。
-- [ ] stale artifact、idempotency、late-result discard 有 tests。
-- [ ] privacy redaction 有 regression tests。
+- [x] duration/group count 有 unit tests。
+- [x] stale artifact、idempotency、late-result discard 有 tests。
+- [x] privacy redaction 有 regression tests。
 
 **Verification:**
 
-- [ ] `pnpm test`
-- [ ] `pnpm test:api`
+- [x] `pnpm test`
+- [x] `pnpm test:api`
 
 **Dependencies:** Task 23, Task 32
 

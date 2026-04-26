@@ -49,6 +49,16 @@ export async function storeProviderGeneratedClip(
   };
 
   try {
+    const jobs = new StoryCamGenerationJobRepository(client);
+    const job = await jobs.findById(input.userId, input.jobId);
+
+    if (!job || job.tombstoned_at || !canAcceptProviderResult(job.status)) {
+      return providerFailure(providerIdentity, new Error("Late provider result discarded."), {
+        errorCode: "SEEDANCE_LATE_RESULT_DISCARDED",
+        retryable: false
+      });
+    }
+
     const bytes = await downloadProviderVideo(input.fetch ?? fetch, input.videoUrl);
     const media = await writeGeneratedStoryCamMedia(client, {
       bytes,
@@ -82,9 +92,16 @@ export async function storeProviderGeneratedClip(
       })
     );
 
-    await new StoryCamGenerationJobRepository(client).markSucceeded(input.userId, input.jobId, {
+    const completedJob = await jobs.markSucceeded(input.userId, input.jobId, {
       outputArtifactId: artifact.id
     });
+
+    if (!completedJob) {
+      return providerFailure(providerIdentity, new Error("Late provider result discarded."), {
+        errorCode: "SEEDANCE_LATE_RESULT_DISCARDED",
+        retryable: false
+      });
+    }
 
     return providerSuccess(providerIdentity, {
       artifact: toArtifactRef(artifact),
@@ -130,4 +147,8 @@ function toArtifactRef(row: StoryCamArtifactRow): StoreProviderGeneratedClipOutp
     type: row.type,
     version: row.version
   };
+}
+
+function canAcceptProviderResult(status: string) {
+  return status === "queued" || status === "running";
 }
