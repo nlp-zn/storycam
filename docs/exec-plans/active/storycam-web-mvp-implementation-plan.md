@@ -1428,17 +1428,20 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 ### Checkpoint：MVP Ready
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] `pnpm test:api`
-- [ ] `pnpm test:e2e`
-- [ ] `pnpm qa:visual`
-- [ ] mock mode 全流程可跑。
+Verified on 2026-04-26 with mock provider configuration and production build envs.
+
+- [x] `pnpm lint`
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] `pnpm test:api`
+- [x] `pnpm test:e2e`
+- [x] `pnpm qa:visual`
+- [x] `pnpm build`
+- [x] mock mode 全流程可跑。
 - [ ] real Seedance smoke test opt-in 可跑。
-- [ ] final work 是真实视频文件并存入 Supabase Storage。
-- [ ] 第一版没有分享入口。
-- [ ] 文档和产品规格一致。
+- [x] final work 是真实视频文件并存入 Supabase Storage。
+- [x] 第一版没有分享入口。
+- [x] 文档和产品规格一致。
 
 ## 风险与缓解
 
@@ -1469,4 +1472,4 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 - [ ] 任务依赖顺序清楚。
 - [ ] 单个任务没有刻意跨越太多子系统。
 - [ ] 每 2-4 个任务有 checkpoint。
-- [ ] 产品最新决策已覆盖：照片上传、不分享、真实 final work、长度自动分组、重拍优先。
+- [x] 产品最新决策已覆盖：照片上传、不分享、真实 final work、长度自动分组、重拍优先。
