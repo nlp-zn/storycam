@@ -1,0 +1,175 @@
+import { describe, expect, it } from "vitest";
+import type { MediaAssetRow } from "@/server/db/types";
+import type { StoryCamPrivateBucket } from "./mediaStore";
+import {
+  StoryCamSessionDeletionService,
+  StoryCamStorageCleanupError,
+  StoryCamStorageCleanupService,
+  type StorageCleanupRepository,
+  type StorageCleanupSessionRepository
+} from "./storageCleanupService";
+
+describe("StoryCamStorageCleanupService", () => {
+  it("groups session media removal by private storage bucket", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "storycam-generated", storagePath: "generated/clip-1.mp4" }),
+      media({ id: "media-2", storageBucket: "storycam-generated", storagePath: "generated/final.mp4" }),
+      media({ id: "media-3", storageBucket: "storycam-mock", storagePath: "mock/clip-1.mp4" })
+    ]);
+    const storage = new FakeStorageClient();
+    const service = new StoryCamStorageCleanupService(storage, repository);
+
+    const summary = await service.removeSessionMedia("user-1", "session-1");
+
+    expect(storage.removals).toEqual([
+      { bucket: "storycam-generated", paths: ["generated/clip-1.mp4", "generated/final.mp4"] },
+      { bucket: "storycam-mock", paths: ["mock/clip-1.mp4"] }
+    ]);
+    expect(summary).toEqual({
+      bucketsTouched: ["storycam-generated", "storycam-mock"],
+      removedObjectCount: 3,
+      skippedObjectCount: 0
+    });
+  });
+
+  it("lists media through the repository with owner and session scope", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "storycam-uploads", storagePath: "uploads/photo.jpg" })
+    ]);
+    const storage = new FakeStorageClient();
+    const service = new StoryCamStorageCleanupService(storage, repository);
+
+    await service.removeSessionMedia("user-1", "session-1");
+
+    expect(repository.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+  });
+
+  it("does nothing when the session has no active media rows", async () => {
+    const repository = new FakeMediaRepository([]);
+    const storage = new FakeStorageClient();
+    const service = new StoryCamStorageCleanupService(storage, repository);
+
+    const summary = await service.removeSessionMedia("user-1", "session-1");
+
+    expect(storage.removals).toEqual([]);
+    expect(summary).toEqual({
+      bucketsTouched: [],
+      removedObjectCount: 0,
+      skippedObjectCount: 0
+    });
+  });
+
+  it("ignores unexpected buckets instead of deleting outside StoryCam private storage", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "public-sharing", storagePath: "public/object.mp4" }),
+      media({ id: "media-2", storageBucket: "storycam-uploads", storagePath: "uploads/photo.jpg" })
+    ]);
+    const storage = new FakeStorageClient();
+    const service = new StoryCamStorageCleanupService(storage, repository);
+
+    const summary = await service.removeSessionMedia("user-1", "session-1");
+
+    expect(storage.removals).toEqual([{ bucket: "storycam-uploads", paths: ["uploads/photo.jpg"] }]);
+    expect(summary).toEqual({
+      bucketsTouched: ["storycam-uploads"],
+      removedObjectCount: 1,
+      skippedObjectCount: 1
+    });
+  });
+
+  it("throws redacted storage errors when remove fails", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "storycam-generated", storagePath: "generated/clip-1.mp4" })
+    ]);
+    const storage = new FakeStorageClient({
+      "storycam-generated": { message: "signed url https://example.test/token and service role key leaked" }
+    });
+    const service = new StoryCamStorageCleanupService(storage, repository);
+
+    await expect(service.removeSessionMedia("user-1", "session-1")).rejects.toMatchObject({
+      code: "remove_failed"
+    });
+    await expect(service.removeSessionMedia("user-1", "session-1")).rejects.toBeInstanceOf(
+      StoryCamStorageCleanupError
+    );
+    await expect(service.removeSessionMedia("user-1", "session-1")).rejects.not.toThrow("service role key");
+    await expect(service.removeSessionMedia("user-1", "session-1")).rejects.not.toThrow("signed url");
+  });
+
+  it("deletes storage objects before soft-deleting session metadata", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "storycam-generated", storagePath: "generated/clip-1.mp4" })
+    ]);
+    const storage = new FakeStorageClient();
+    const cleanup = new StoryCamStorageCleanupService(storage, repository);
+    const sessions = new FakeSessionRepository();
+    const service = new StoryCamSessionDeletionService(cleanup, sessions);
+
+    const summary = await service.deleteSession("user-1", "session-1");
+
+    expect(summary.removedObjectCount).toBe(1);
+    expect(storage.removals).toEqual([{ bucket: "storycam-generated", paths: ["generated/clip-1.mp4"] }]);
+    expect(sessions.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+  });
+});
+
+type MediaOverrides = {
+  id: string;
+  storageBucket: string;
+  storagePath: string;
+};
+
+function media(overrides: MediaOverrides): MediaAssetRow {
+  return {
+    byte_size: 1024,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    id: overrides.id,
+    kind: "generated_clip",
+    linked_artifact_id: null,
+    mime_type: "video/mp4",
+    session_id: "session-1",
+    source: "provider",
+    storage_bucket: overrides.storageBucket,
+    storage_path: overrides.storagePath,
+    user_id: "user-1"
+  };
+}
+
+class FakeMediaRepository implements StorageCleanupRepository {
+  readonly calls: Array<{ sessionId: string; userId: string }> = [];
+
+  constructor(private readonly rows: MediaAssetRow[]) {}
+
+  listBySession(userId: string, sessionId: string) {
+    this.calls.push({ sessionId, userId });
+    return Promise.resolve(this.rows);
+  }
+}
+
+class FakeStorageClient {
+  readonly removals: Array<{ bucket: StoryCamPrivateBucket; paths: string[] }> = [];
+
+  constructor(private readonly errors: Partial<Record<StoryCamPrivateBucket, { message?: string }>> = {}) {}
+
+  storage = {
+    from: (bucket: StoryCamPrivateBucket) => ({
+      remove: (paths: string[]) => {
+        this.removals.push({ bucket, paths });
+        return Promise.resolve({
+          data: null,
+          error: this.errors[bucket] ?? null
+        });
+      }
+    })
+  };
+}
+
+class FakeSessionRepository implements StorageCleanupSessionRepository {
+  readonly calls: Array<{ sessionId: string; userId: string }> = [];
+
+  softDelete(userId: string, sessionId: string) {
+    this.calls.push({ sessionId, userId });
+    return Promise.resolve();
+  }
+}
