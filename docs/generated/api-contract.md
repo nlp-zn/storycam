@@ -84,6 +84,8 @@ Success:
 type UploadResponse = {
   ok: true;
   media: MediaRef;
+  uploadedPhotoIds: string[];
+  uploadedPhotoRefs: Array<{ mediaAssetId: string }>;
 };
 ```
 

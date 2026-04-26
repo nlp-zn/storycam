@@ -844,13 +844,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 支持安全图片类型。
-- [ ] 拒绝超大文件和非图片文件。
-- [ ] 返回的 ref 可被 story-world route 使用。
+- [x] 支持安全图片类型。
+- [x] 拒绝超大文件和非图片文件。
+- [x] 返回的 ref 可被 story-world route 使用。
 
 **Verification:**
 
-- [ ] `pnpm test:api -- --run upload`
+- [x] `pnpm test:api -- --run upload`
 
 **Dependencies:** Task 9
 

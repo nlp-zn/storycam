@@ -13,8 +13,22 @@ export async function POST(request: Request) {
       sessionId,
       userId: user.id
     });
+    const uploadedPhotoRefs = [{ mediaAssetId: media.id }];
 
-    return NextResponse.json({ media }, { status: 201 });
+    return NextResponse.json(
+      {
+        ok: true,
+        media: {
+          byteSize: media.byteSize,
+          id: media.id,
+          kind: "uploaded_photo",
+          mimeType: media.mimeType
+        },
+        uploadedPhotoIds: uploadedPhotoRefs.map((ref) => ref.mediaAssetId),
+        uploadedPhotoRefs
+      },
+      { status: 201 }
+    );
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: "authentication_required" }, { status: 401 });
