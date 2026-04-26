@@ -1,11 +1,34 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("StoryCam final work", () => {
-  test("clip review can retake and create a private final work preview", async ({ page }) => {
+  test("mock happy path with photo can retake and create a private final work preview", async ({ page }) => {
     let generateCalls = 0;
     let finalWorkCalled = false;
 
+    await page.route("**/api/uploads", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          media: {
+            byteSize: 4,
+            id: "media-photo-1",
+            kind: "uploaded_photo",
+            mimeType: "image/png"
+          },
+          ok: true,
+          sessionId: "session-1",
+          uploadedPhotoIds: ["media-photo-1"],
+          uploadedPhotoRefs: [{ mediaAssetId: "media-photo-1" }]
+        })
+      });
+    });
+
     await page.route("**/api/story-world", async (route) => {
+      const body = route.request().postDataJSON() as { uploadedPhotoIds?: string[] };
+
+      expect(body.uploadedPhotoIds).toEqual(["media-photo-1"]);
+
       await route.fulfill({
         contentType: "application/json",
         status: 201,
@@ -135,6 +158,11 @@ test.describe("StoryCam final work", () => {
 
     await page.goto("/");
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByTestId("story-photo-input").setInputFiles({
+      buffer: Buffer.from([137, 80, 78, 71]),
+      mimeType: "image/png",
+      name: "rain.png"
+    });
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
     await page.getByRole("button", { name: "生成核心分镜" }).click();
@@ -151,6 +179,9 @@ test.describe("StoryCam final work", () => {
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
     await expect(page.getByText("播放账号内预览")).toBeVisible();
     await expect(page.getByText("分享")).toHaveCount(0);
+    await expect(page.getByText("prompt packet")).toHaveCount(0);
+    await expect(page.getByText("Shanyin")).toHaveCount(0);
+    await expect(page.getByText("模型参数")).toHaveCount(0);
     expect(finalWorkCalled).toBe(true);
   });
 });

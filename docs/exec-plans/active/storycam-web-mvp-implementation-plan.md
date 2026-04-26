@@ -1199,10 +1199,10 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 ### Checkpoint：UI Mock E2E
 
-- [ ] mock mode 下，从输入/照片到 final work 账号内预览完整跑通。
-- [ ] 不出现分享入口。
-- [ ] 不出现 Shanyin-style、prompt packet、模型参数等用户不该看到的术语。
-- [ ] UI 在桌面 Web 下可读、无明显重叠。
+- [x] mock mode 下，从输入/照片到 final work 账号内预览完整跑通。
+- [x] 不出现分享入口。
+- [x] 不出现 Shanyin-style、prompt packet、模型参数等用户不该看到的术语。
+- [x] UI 在桌面 Web 下可读、无明显重叠。
 
 ## Phase 5：Real provider spike
 
