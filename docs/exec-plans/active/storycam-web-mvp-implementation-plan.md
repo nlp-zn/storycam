@@ -652,14 +652,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 原始 input/script/prompt packet 被 redacted。
-- [ ] provider error 只输出 `errorCode` 和 `redactedError`。
-- [ ] session/idempotency 只允许 hash。
+- [x] 原始 input/script/prompt packet 被 redacted。
+- [x] provider error 只输出 `errorCode` 和 `redactedError`。
+- [x] session/idempotency 只允许 hash。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run redaction`
-- [ ] `pnpm test -- --run privacy`
+- [x] `pnpm test -- --run redaction`
+- [x] `pnpm test -- --run privacy`
 
 **Dependencies:** Task 5
 
@@ -676,7 +676,7 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 - [ ] Artifact schemas、version、stale propagation 全部有 unit tests。
 - [ ] Supabase session/media store 能增删改查。
 - [ ] RLS 和 Storage policy 测试通过。
-- [ ] 隐私脱敏测试通过。
+- [x] 隐私脱敏测试通过。
 - [ ] 不存在真实 provider 调用。
 
 ## Phase 2：Provider contract 和 mock 全链路

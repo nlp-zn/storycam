@@ -1,6 +1,6 @@
 # Privacy Logging Contract
 
-Status: planned contract, to be regenerated from logging helpers once implementation exists.
+Status: implemented baseline, sourced from `src/lib/privacy/redact.ts` and `src/server/logging/storycamLogger.ts`.
 
 ## Allowed Log Fields
 
