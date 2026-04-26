@@ -41,7 +41,7 @@ export type UploadStorageClient = {
       upload(
         path: string,
         body: Uint8Array,
-        options: { contentType: StoryCamUploadMimeType; upsert: false }
+        options: { contentType: string; upsert: false }
       ): Promise<{
         data: { path: string } | null;
         error: { message?: string } | null;
@@ -64,7 +64,7 @@ export async function uploadStoryCamObject(
   bucket: StoryCamPrivateBucket,
   path: string,
   body: Uint8Array,
-  mimeType: StoryCamUploadMimeType
+  mimeType: string
 ) {
   assertStoryCamPrivateBucket(bucket);
 
