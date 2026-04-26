@@ -490,14 +490,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 定义 `DirectorPacket`、`ArtifactState`、`CharacterAsset`、`SceneAsset`、`CoreStoryboardGroup`、`ExpandedStoryboardCard`、`ClipPromptPacket`、`GeneratedClip`、`FinalWork`。
-- [ ] 每个 artifact 有 `state` 和 `version`。
-- [ ] schemas 能拒绝 malformed provider output。
+- [x] 定义 `DirectorPacket`、`ArtifactState`、`CharacterAsset`、`SceneAsset`、`CoreStoryboardGroup`、`ExpandedStoryboardCard`、`ClipPromptPacket`、`GeneratedClip`、`FinalWork`。
+- [x] 每个 artifact 有 `state` 和 `version`。
+- [x] schemas 能拒绝 malformed provider output。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run artifacts`
-- [ ] `pnpm typecheck`
+- [x] `pnpm test -- --run artifacts`
+- [x] `pnpm typecheck`
 
 **Dependencies:** Task 3
 
