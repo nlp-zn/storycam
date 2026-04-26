@@ -1,6 +1,6 @@
 # Provider Contract
 
-Status: planned contract, to be regenerated from provider interfaces once implementation exists.
+Status: implemented baseline, sourced from `src/lib/providers/types.ts`.
 
 ## Provider Concepts
 

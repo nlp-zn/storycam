@@ -687,14 +687,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] UI 不直接 import provider implementation。
-- [ ] Provider result 有统一 success/error shape。
-- [ ] Provider error 进入 redaction pipeline。
+- [x] UI 不直接 import provider implementation。
+- [x] Provider result 有统一 success/error shape。
+- [x] Provider error 进入 redaction pipeline。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run providers`
-- [ ] `pnpm typecheck`
+- [x] `pnpm test -- --run providers`
+- [x] `pnpm typecheck`
 
 **Dependencies:** Task 5, Task 10
 
