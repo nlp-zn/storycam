@@ -6,21 +6,44 @@ type FinalWorkPanelProps = {
 
 export function FinalWorkPanel({ finalWork }: FinalWorkPanelProps) {
   return (
-    <section className="rounded-3xl border border-[#00f0ff]/35 bg-[#0a0a0a]/95 p-4 shadow-[0_0_28px_rgba(0,240,255,0.16)]">
-      <p className="text-xs font-bold uppercase text-[#00f0ff]">最终作品</p>
-      <h3 className="mt-2 text-lg font-extrabold text-[#e2e2e2]">账号内预览已保存</h3>
-      <div className="mt-4 overflow-hidden rounded-3xl border border-white/10 bg-black">
-        <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-[#0e0e0e] via-[#00363a]/70 to-[#590026]/70">
-          <div className="rounded-full border border-[#00f0ff]/40 bg-black/60 px-5 py-3 text-sm font-bold text-[#dbfcff]">
-            播放账号内预览
+    <section className="storycam-panel storycam-neon-panel">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <article className="overflow-hidden rounded-[2rem] border border-[#00f0ff]/30 bg-black shadow-[0_0_30px_rgba(0,240,255,0.18)]">
+          <div className="storycam-cinematic-frame flex aspect-video items-center justify-center">
+            <button
+              className="relative z-10 flex size-24 items-center justify-center rounded-full border border-[#00f0ff]/40 bg-black/60 text-3xl text-[#00f0ff] shadow-[0_0_30px_rgba(0,240,255,0.2)]"
+              type="button"
+            >
+              ▶
+            </button>
           </div>
-        </div>
-        <div className="grid min-w-0 gap-2 border-t border-white/10 px-4 py-3 text-xs text-[#b9cacb] sm:grid-cols-2">
-          <span className="min-w-0 break-words">作品 {finalWork.finalWork.id}</span>
-          <span className="min-w-0 break-words">媒体 {finalWork.media.id}</span>
-        </div>
+          <div className="border-t border-white/10 p-5">
+            <p className="storycam-eyebrow">最终拼接</p>
+            <h3 className="mt-2 text-3xl font-black text-[#e2e2e2]">账号内预览已保存</h3>
+            <p className="mt-3 text-sm leading-6 text-[#b9cacb]">已保存到你的账号空间。第一版只提供私密预览和保存。</p>
+          </div>
+        </article>
+
+        <aside className="flex flex-col gap-5">
+          <div className="storycam-glass rounded-[2rem] p-5">
+            <p className="storycam-eyebrow">序列时间线</p>
+            <h4 className="mt-2 text-xl font-black text-[#e2e2e2]">1 个片段 • 1 个音轨</h4>
+            <div className="mt-5 flex gap-3 overflow-x-auto">
+              <span className="flex h-20 min-w-20 items-end rounded-[1rem] border-2 border-[#00f0ff] bg-[#00f0ff]/10 p-3 text-xs font-bold text-[#dbfcff]">
+                Clip 01
+              </span>
+              <span className="flex h-20 min-w-20 items-center justify-center rounded-[1rem] border border-white/10 bg-white/[0.03] text-xl text-[#849495]">＋</span>
+            </div>
+          </div>
+
+          <div className="storycam-glass grid min-w-0 gap-3 rounded-[2rem] p-5 text-xs text-[#b9cacb]">
+            <span className="min-w-0 break-words">作品 {finalWork.finalWork.id}</span>
+            <span className="min-w-0 break-words">媒体 {finalWork.media.id}</span>
+          </div>
+
+          <button className="storycam-primary-button w-full" type="button">播放账号内预览</button>
+        </aside>
       </div>
-      <p className="mt-3 text-sm leading-6 text-[#b9cacb]">已保存到你的账号空间。第一版只提供私密预览和保存。</p>
     </section>
   );
 }

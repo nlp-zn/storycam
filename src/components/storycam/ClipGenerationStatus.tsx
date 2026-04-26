@@ -12,45 +12,54 @@ export function ClipGenerationStatus({ job, onCancel, onRetry }: ClipGenerationS
   const canRetry = job.status === "failed" || job.status === "canceled" || job.status === "expired";
 
   return (
-    <section className="rounded-3xl border border-[#3b494b] bg-[#0a0a0a]/95 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase text-[#00f0ff]">片段生成</p>
-          <h3 className="mt-2 text-lg font-extrabold text-[#e2e2e2]">{statusLabel(job.status)}</h3>
+    <section className="storycam-panel storycam-neon-panel">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-black">
+          <div className="storycam-cinematic-frame relative flex aspect-video items-end p-6">
+            <div className="relative z-10 w-full">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="storycam-eyebrow">片段生成</p>
+                  <h3 className="mt-2 text-3xl font-black text-[#e2e2e2]">{statusLabel(job.status)}</h3>
+                </div>
+                <span className="max-w-36 truncate rounded-full border border-white/10 bg-black/50 px-3 py-2 text-xs font-bold text-[#b9cacb]">
+                  {job.status}
+                </span>
+              </div>
+              <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#00f0ff] to-[#ff4b89] shadow-[0_0_14px_rgba(0,240,255,0.5)]"
+                  style={{ width: progressForStatus(job.status) }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex min-w-0 items-center justify-between gap-3 border-t border-white/10 px-5 py-4 text-xs text-[#b9cacb]">
+            <span className="shrink-0">账号内任务</span>
+            <span className="min-w-0 truncate text-right">{job.id}</span>
+          </div>
         </div>
-        <span className="max-w-36 truncate rounded-full border border-white/10 px-3 py-2 text-xs font-bold text-[#b9cacb]">
-          {job.status}
-        </span>
+
+        <aside className="flex flex-col justify-between rounded-[2rem] border border-white/10 bg-white/[0.03] p-5">
+          <div>
+            <p className="storycam-eyebrow">导演笔记</p>
+            <p className="mt-4 break-words text-sm leading-6 text-[#b9cacb]">
+              任务 {job.id}，仅保存账号内预览。{job.redactedError ? ` ${job.redactedError}` : ""}
+            </p>
+            {isTerminalGenerationJobStatus(job.status) ? <p className="mt-4 text-xs text-[#849495]">当前任务已结束。</p> : null}
+          </div>
+
+          <div className="mt-5 grid gap-3">
+            <button className="storycam-secondary-button w-full disabled:opacity-50" disabled={!canCancel} onClick={onCancel} type="button">
+              取消生成
+            </button>
+            <button className="storycam-primary-button w-full disabled:opacity-50" disabled={!canRetry} onClick={onRetry} type="button">
+              重试
+            </button>
+          </div>
+        </aside>
       </div>
-
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-gradient-to-r from-[#00f0ff] to-[#ff4b89]" style={{ width: progressForStatus(job.status) }} />
-      </div>
-
-      <p className="mt-3 break-words text-sm leading-6 text-[#b9cacb]">
-        任务 {job.id}，仅保存账号内预览。{job.redactedError ? ` ${job.redactedError}` : ""}
-      </p>
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <button
-          className="rounded-full border border-[#3b494b] px-4 py-3 text-sm font-bold text-[#b9cacb] transition hover:border-[#ffb1c3] hover:text-[#ffb1c3] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!canCancel}
-          onClick={onCancel}
-          type="button"
-        >
-          取消生成
-        </button>
-        <button
-          className="rounded-full border border-[#00f0ff]/40 px-4 py-3 text-sm font-bold text-[#dbfcff] transition hover:bg-[#00f0ff]/10 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!canRetry}
-          onClick={onRetry}
-          type="button"
-        >
-          重试
-        </button>
-      </div>
-
-      {isTerminalGenerationJobStatus(job.status) ? <p className="mt-3 text-xs text-[#849495]">当前任务已结束。</p> : null}
     </section>
   );
 }

@@ -71,7 +71,7 @@ test.describe("StoryCam expansion", () => {
     await page.getByRole("button", { name: "生成核心分镜" }).click();
     await page.getByRole("button", { name: "扩展这一组" }).first().click();
 
-    await expect(page.getByRole("heading", { name: "围绕核心组补拍法" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "分镜扩展画布" })).toBeVisible();
     await expect(page.getByRole("article").filter({ hasText: "当前核心分镜" }).getByRole("heading", { name: "未发送短信" })).toBeVisible();
     await expect(page.getByText("门外停住")).toBeVisible();
     await expect(page.getByText("听见门铃")).toBeVisible();

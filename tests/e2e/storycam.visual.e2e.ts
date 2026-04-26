@@ -40,7 +40,7 @@ test.describe("StoryCam visual smoke", () => {
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
     await page.getByRole("button", { name: "生成核心分镜" }).click();
     await page.getByRole("button", { name: "扩展这一组" }).first().click();
-    await expect(page.getByRole("heading", { name: "围绕核心组补拍法" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "分镜扩展画布" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
