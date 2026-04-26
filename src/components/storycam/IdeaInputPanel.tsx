@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createStoryWorld, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
+import type { CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
 import { directorChoices, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
 type SubmitState =
@@ -10,7 +11,11 @@ type SubmitState =
   | { kind: "success"; message: string; sessionId: string }
   | { kind: "error"; message: string };
 
-export function IdeaInputPanel() {
+type IdeaInputPanelProps = {
+  onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse) => void;
+};
+
+export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
   const [idea, setIdea] = useState("我想把暗恋拍成韩剧雨夜");
   const [selectedChoices, setSelectedChoices] = useState<string[]>(["像私人回忆"]);
   const [photo, setPhoto] = useState<File | null>(null);
@@ -48,6 +53,7 @@ export function IdeaInputPanel() {
       });
 
       setSessionId(storyWorld.sessionId);
+      onStoryWorldCreated?.(storyWorld);
       setSubmitState({
         kind: "success",
         message: `故事雏形已生成，剧本版本 ${storyWorld.artifacts.script.version}。`,

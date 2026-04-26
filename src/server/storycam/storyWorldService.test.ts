@@ -21,7 +21,12 @@ describe("story world service", () => {
           sceneAssets: [{ type: "scene_asset", version: 1 }],
           script: { type: "script", version: 1 }
         },
-        sessionId: "session-1"
+        sessionId: "session-1",
+        storyWorld: {
+          characterAssets: [expect.objectContaining({ name: "她" })],
+          sceneAssets: [expect.objectContaining({ name: "便利店外的玻璃反光" })],
+          script: expect.objectContaining({ title: "雨夜未发送" })
+        }
       }
     });
     expect(client.queries[0]?.table).toBe("storycam_sessions");

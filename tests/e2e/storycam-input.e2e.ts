@@ -53,7 +53,8 @@ test.describe("StoryCam story input", () => {
             }
           },
           ok: true,
-          sessionId: "session-1"
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
         })
       });
     });
@@ -76,3 +77,37 @@ test.describe("StoryCam story input", () => {
     expect(storyWorldCalled).toBe(true);
   });
 });
+
+function storyWorldFixture() {
+  return {
+    characterAssets: [
+      {
+        emotionalBaseline: "克制、犹豫、把情绪藏在动作里",
+        name: "她",
+        props: ["手机", "透明伞"],
+        relationshipToUserStory: "承载那段没有说出口的暗恋记忆",
+        role: "暗恋者",
+        stableVisualDescription: "湿发贴在脸侧，浅色风衣，手指反复点亮手机屏幕",
+        wardrobe: "浅色风衣、低饱和围巾"
+      }
+    ],
+    sceneAssets: [
+      {
+        atmosphere: "潮湿、安静、私人回忆感",
+        keyObjects: ["便利店玻璃门"],
+        light: "冷白便利店灯混合暖色街灯",
+        location: "雨夜街角便利店门口",
+        name: "便利店外的玻璃反光",
+        spatialLogic: "她在门外低头删短信，他从店里出来，倒影在玻璃上短暂重叠",
+        timeOfDay: "night"
+      }
+    ],
+    script: {
+      beats: ["雨夜删改短信", "便利店门铃响起", "玻璃倒影短暂重叠"],
+      logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
+      summary: "冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的那一秒。",
+      title: "雨夜未发送",
+      version: 1
+    }
+  };
+}

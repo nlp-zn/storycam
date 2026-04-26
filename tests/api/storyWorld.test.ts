@@ -61,7 +61,12 @@ describe("POST /api/story-world", () => {
         script: { type: "script", version: 1 }
       },
       ok: true,
-      sessionId: "session-1"
+      sessionId: "session-1",
+      storyWorld: {
+        characterAssets: [expect.objectContaining({ name: "她" })],
+        sceneAssets: [expect.objectContaining({ name: "便利店外的玻璃反光" })],
+        script: expect.objectContaining({ title: "雨夜未发送" })
+      }
     });
   });
 });

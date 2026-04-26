@@ -119,7 +119,33 @@ type StoryWorldResponse = {
     script: VersionedArtifact;
     characterAssets: VersionedArtifact[];
     sceneAssets: VersionedArtifact[];
-    qualityChecks: VersionedArtifact[];
+  };
+  storyWorld: {
+    script: {
+      title: string;
+      logline: string;
+      summary: string;
+      beats: string[];
+      version: number;
+    };
+    characterAssets: Array<{
+      name: string;
+      role: string;
+      relationshipToUserStory: string;
+      stableVisualDescription: string;
+      emotionalBaseline: string;
+      wardrobe?: string;
+      props: string[];
+    }>;
+    sceneAssets: Array<{
+      name: string;
+      location: string;
+      timeOfDay: string;
+      light: string;
+      atmosphere: string;
+      keyObjects: string[];
+      spatialLogic: string;
+    }>;
   };
 };
 ```

@@ -1,3 +1,10 @@
+type ArtifactRef = {
+  id: string;
+  state: string;
+  type: string;
+  version: number;
+};
+
 export type UploadStoryCamPhotoResponse = {
   ok: true;
   media: {
@@ -14,9 +21,50 @@ export type UploadStoryCamPhotoResponse = {
 export type CreateStoryWorldResponse = {
   ok: true;
   artifacts: {
-    characterAssets: Array<{ id: string; state: string; type: string; version: number }>;
-    sceneAssets: Array<{ id: string; state: string; type: string; version: number }>;
-    script: { id: string; state: string; type: string; version: number };
+    characterAssets: ArtifactRef[];
+    sceneAssets: ArtifactRef[];
+    script: ArtifactRef;
+  };
+  sessionId: string;
+  storyWorld: {
+    characterAssets: Array<{
+      emotionalBaseline: string;
+      name: string;
+      props: string[];
+      relationshipToUserStory: string;
+      role: string;
+      stableVisualDescription: string;
+      wardrobe?: string;
+    }>;
+    sceneAssets: Array<{
+      atmosphere: string;
+      keyObjects: string[];
+      light: string;
+      location: string;
+      name: string;
+      spatialLogic: string;
+      timeOfDay: string;
+    }>;
+    script: {
+      beats: string[];
+      logline: string;
+      summary: string;
+      title: string;
+      version: number;
+    };
+  };
+};
+
+export type CreateStoryboardResponse = {
+  ok: true;
+  artifacts: {
+    coreStoryboardGroups: ArtifactRef[];
+    storyboardScript: ArtifactRef;
+  };
+  durationPlan: {
+    clipDurationTargets: number[];
+    coreGroupTargetCount: 1 | 2 | 3;
+    plannedDurationSeconds: number;
   };
   sessionId: string;
 };
@@ -68,6 +116,25 @@ export async function createStoryWorld(input: {
   }
 
   return (await response.json()) as CreateStoryWorldResponse;
+}
+
+export async function createStoryboard(input: { confirmedArtifactVersions: Record<string, number>; sessionId: string }) {
+  const response = await fetch("/api/storyboard", {
+    body: JSON.stringify({
+      confirmedArtifactVersions: input.confirmedArtifactVersions,
+      sessionId: input.sessionId
+    }),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "storyboard_failed"));
+  }
+
+  return (await response.json()) as CreateStoryboardResponse;
 }
 
 function errorCode(value: unknown, fallback: string) {

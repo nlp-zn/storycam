@@ -36,6 +36,7 @@ export type StoryWorldServiceOutput = {
     script: StoryWorldArtifactRef;
   };
   sessionId: string;
+  storyWorld: MockStoryWorldOutput;
 };
 
 export class StoryWorldRequestError extends Error {
@@ -117,7 +118,8 @@ export async function createStoryWorld(
         sceneAssets: sceneAssets.map((artifact) => toArtifactRef(requireArtifactRow(artifact))),
         script: toArtifactRef(script)
       },
-      sessionId: session.id
+      sessionId: session.id,
+      storyWorld: providerResult.value
     }
   };
 }

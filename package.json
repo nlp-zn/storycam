@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:api": "vitest run tests/api --passWithNoTests",
-    "test:e2e": "playwright test tests/e2e/storycam.sanity.e2e.ts tests/e2e/storycam.auth.e2e.ts tests/e2e/storycam-input.e2e.ts",
+    "test:e2e": "playwright test tests/e2e/storycam.sanity.e2e.ts tests/e2e/storycam.auth.e2e.ts tests/e2e/storycam-input.e2e.ts tests/e2e/storycam-story-world.e2e.ts",
     "qa:visual": "playwright test tests/e2e/storycam.visual.e2e.ts"
   },
   "dependencies": {

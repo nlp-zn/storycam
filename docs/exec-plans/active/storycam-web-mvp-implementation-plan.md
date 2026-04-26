@@ -1076,13 +1076,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 故事世界默认像短剧本。
-- [ ] 用户必须确认后才能生成 storyboard。
-- [ ] 编辑 story world 会 stale 下游 artifact。
+- [x] 故事世界默认像短剧本。
+- [x] 用户必须确认后才能生成 storyboard。
+- [x] 编辑 story world 会 stale 下游 artifact。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e -- --grep "story world"`
+- [x] `pnpm test:e2e -- --grep "story world"`
 
 **Dependencies:** Task 16, Task 25
 
