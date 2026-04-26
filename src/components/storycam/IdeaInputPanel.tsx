@@ -128,37 +128,66 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
         <span className="storycam-eyebrow tracking-[0.2em]">第一步：核心前提</span>
       </div>
 
-      <div className="storycam-panel storycam-neon-panel relative overflow-hidden p-6 md:p-10">
+      <div className="storycam-panel storycam-neon-panel relative overflow-hidden p-5 md:p-7">
         <div className="absolute inset-0 opacity-[0.06] [background-image:linear-gradient(90deg,#fff_1px,transparent_1px),linear-gradient(#fff_1px,transparent_1px)] [background-size:42px_42px]" />
-        <div className="relative">
-          <p className="storycam-eyebrow">StoryCam</p>
-          <h1 className="mt-3 text-4xl font-black leading-tight text-[#e2e2e2] md:text-5xl">私人小剧场相机</h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-[#b9cacb]">
+        <div className="relative flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="storycam-eyebrow">StoryCam</p>
+            <h1 className="mt-2 text-3xl font-black leading-tight text-[#e2e2e2] md:text-4xl">私人小剧场相机</h1>
+          </div>
+          <p className="max-w-sm text-sm leading-6 text-[#b9cacb] md:text-right">
             从一句私人念头开始，先确认故事世界，再生成分镜和片段。
           </p>
         </div>
 
-        <label className="relative mt-10 block text-sm font-bold text-[#e2e2e2]" htmlFor="story-idea">
+        <label className="relative mt-6 block text-sm font-bold text-[#e2e2e2]" htmlFor="story-idea">
           你的这一幕
         </label>
-        <div className="group relative mt-3">
-          <div className="absolute -inset-0.5 rounded-[3rem] bg-gradient-to-r from-[#00f0ff]/35 via-transparent to-[#ff4b89]/30 opacity-45 blur transition group-focus-within:opacity-100" />
-          <div className="relative rounded-[3rem] border border-[#3b494b]/70 bg-[#1b1b1b]/85 p-6 shadow-2xl backdrop-blur-2xl transition group-focus-within:border-[#00f0ff]/60 md:p-10">
+        <div className="group relative mt-3 max-w-3xl">
+          <div className="absolute -inset-0.5 rounded-[2rem] bg-gradient-to-r from-[#00f0ff]/35 via-transparent to-[#ff4b89]/30 opacity-45 blur transition group-focus-within:opacity-100" />
+          <div className="relative rounded-[2rem] border border-[#3b494b]/70 bg-[#0f1111]/90 p-4 shadow-2xl backdrop-blur-2xl transition group-focus-within:border-[#00f0ff]/60 md:p-5">
             <textarea
-              className="min-h-40 w-full resize-none border-none bg-transparent p-0 text-3xl font-black leading-tight text-[#e2e2e2] outline-none placeholder:text-[#849495]/45 focus:ring-0 md:text-5xl"
+              className="min-h-[88px] w-full resize-none border-none bg-transparent p-0 text-base font-semibold leading-7 text-[#e2e2e2] outline-none placeholder:text-[#849495]/45 focus:ring-0 md:min-h-[104px] md:text-lg"
               id="story-idea"
               onChange={(event) => setIdea(event.target.value)}
-              placeholder="描述电影般的瞬间..."
+              placeholder="拖拽/粘贴图片，或写下你想拍成电影的一幕..."
               value={idea}
             />
-            <div className="mt-5 flex justify-end border-t border-white/5 pt-4">
-              <span className="storycam-eyebrow text-[#849495]">{ideaLength} / 120</span>
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+              <div className="flex items-center gap-2">
+                <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-[#3b494b] bg-[#2a2a2a]/70 text-[#b9cacb] transition hover:border-[#00f0ff]/60 hover:text-white">
+                  <span className="sr-only">上传一张参考照片</span>
+                  <span aria-hidden="true" className="text-lg font-black">+</span>
+                  <input
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    data-testid="story-photo-input"
+                    onChange={(event) => selectPhoto(event.target.files?.[0] ?? null)}
+                    type="file"
+                  />
+                </label>
+                <span className="rounded-full border border-[#3b494b] bg-[#2a2a2a]/60 px-3 py-2 text-xs font-black text-[#b9cacb]">
+                  私人记忆
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="storycam-eyebrow text-[#849495]">{ideaLength} / 120</span>
+                <button
+                  aria-label={submitState.kind === "submitting" ? submitState.message : "生成故事雏形"}
+                  className="flex size-10 items-center justify-center rounded-full border border-[#ff4b89]/50 bg-[#ff4b89] text-xl font-black text-black shadow-[0_0_22px_rgba(255,75,137,0.38)] transition hover:brightness-110 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
+                  disabled={!canSubmit}
+                  onClick={submitStoryWorld}
+                  type="button"
+                >
+                  <span aria-hidden="true">{submitState.kind === "submitting" ? "..." : "↑"}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-8 space-y-5 px-1">
+      <div className="mt-5 space-y-4 px-1">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-full border border-[#ff4b89]/40 bg-[#ff4b89]/10 text-sm font-black text-[#ffb1c3]">
             调
@@ -166,37 +195,26 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
           <h2 className="storycam-eyebrow text-[#b9cacb]">灯光指导</h2>
         </div>
         <div className="flex flex-wrap gap-4">
-        {directorChoices.map((choice) => {
-          const isSelected = selectedChoiceSet.has(choice);
+          {directorChoices.map((choice) => {
+            const isSelected = selectedChoiceSet.has(choice);
 
-          return (
-            <button
-              aria-pressed={isSelected}
+            return (
+              <button
+                aria-pressed={isSelected}
                 className={`rounded-full border px-7 py-4 text-left text-xs font-black uppercase tracking-widest transition ${
-                isSelected
-                  ? "border-[#00f0ff] bg-[#00f0ff] text-black shadow-[0_0_18px_rgba(0,240,255,0.35)]"
-                  : "border-[#3b494b] bg-[#2a2a2a]/50 text-[#e2e2e2] hover:border-[#00f0ff]/60 hover:bg-[#353535]"
-              }`}
-              key={choice}
-              onClick={() => toggleChoice(choice)}
-              type="button"
-            >
-              {choice}
+                  isSelected
+                    ? "border-[#00f0ff] bg-[#00f0ff] text-black shadow-[0_0_18px_rgba(0,240,255,0.35)]"
+                    : "border-[#3b494b] bg-[#2a2a2a]/50 text-[#e2e2e2] hover:border-[#00f0ff]/60 hover:bg-[#353535]"
+                }`}
+                key={choice}
+                onClick={() => toggleChoice(choice)}
+                type="button"
+              >
+                {choice}
                 {isSelected ? <span className="ml-2" aria-hidden="true">×</span> : null}
-            </button>
-          );
-        })}
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-dashed border-[#3b494b] px-6 py-4 text-[#849495] transition hover:border-white/50 hover:text-white">
-            <span className="sr-only">上传一张参考照片</span>
-            <span aria-hidden="true" className="text-lg font-black">+</span>
-            <input
-              accept="image/jpeg,image/png,image/webp"
-              className="sr-only"
-              data-testid="story-photo-input"
-              onChange={(event) => selectPhoto(event.target.files?.[0] ?? null)}
-              type="file"
-            />
-          </label>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -212,18 +230,6 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
           </div>
         </div>
       ) : null}
-
-      <div className="mt-12 flex justify-center">
-        <button
-          className="group relative overflow-hidden rounded-full border border-[#ff4b89]/40 bg-gradient-to-r from-[#ff4b89] via-[#ff7a59] to-[#ffcfbe] px-12 py-5 text-lg font-black uppercase tracking-wider text-black shadow-[0_0_24px_rgba(255,75,137,0.35)] transition hover:brightness-110 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none md:px-16 md:py-6 md:text-2xl"
-          disabled={!canSubmit}
-          onClick={submitStoryWorld}
-          type="button"
-        >
-          <span className="absolute inset-0 -translate-x-full bg-white/20 transition duration-700 group-hover:translate-x-full" />
-          <span className="relative">{submitState.kind === "submitting" ? submitState.message : "生成故事雏形"}</span>
-        </button>
-      </div>
 
       {authStatus !== "authenticated" ? (
         <p className="mx-auto mt-4 max-w-xl rounded-2xl border border-[#3b494b] bg-black/30 px-4 py-3 text-center text-sm leading-6 text-[#b9cacb]" role="status">
