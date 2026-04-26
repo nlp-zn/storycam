@@ -1,23 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
 import { CoreStoryboardGroups } from "@/components/storycam/CoreStoryboardGroups";
 import { ExpansionCanvas } from "@/components/storycam/ExpansionCanvas";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
+import { ProviderSendConfirm } from "@/components/storycam/ProviderSendConfirm";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
 import {
+  confirmedArtifactVersionsForClip,
   confirmedArtifactVersionsFromStoryWorld,
   staleStoryboardAfterStoryWorldEdit,
   type StoryboardStatus
 } from "@/features/storycam/client/storycamState";
 import {
+  cancelGenerationJob,
   createStoryboard,
   expandStoryboardGroup,
+  generateClipJob,
+  getGenerationJob,
   type CreateStoryboardResponse,
   type CreateStoryWorldResponse,
+  type GenerationJobSummary,
   type ExpandStoryboardGroupResponse
 } from "@/features/storycam/client/storycamApi";
+import { shouldPollGenerationJob } from "@/features/storycam/client/jobPolling";
 import { expansionCards, workflowStages } from "@/features/storycam/domain/shellContent";
 
 export function StoryCamWorkspace() {
@@ -27,8 +35,28 @@ export function StoryCamWorkspace() {
   const [selectedCoreGroupIndex, setSelectedCoreGroupIndex] = useState<number | null>(null);
   const [expansion, setExpansion] = useState<ExpandStoryboardGroupResponse | null>(null);
   const [isExpansionLoading, setIsExpansionLoading] = useState(false);
+  const [clipConfirmationSummary, setClipConfirmationSummary] = useState<string | null>(null);
+  const [clipJob, setClipJob] = useState<GenerationJobSummary | null>(null);
+  const [isClipSubmitting, setIsClipSubmitting] = useState(false);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
+
+  useEffect(() => {
+    if (!clipJob || !shouldPollGenerationJob(clipJob.status)) {
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await getGenerationJob(clipJob.id);
+        setClipJob(response.job);
+      } catch {
+        setClipJob((current) => (current ? { ...current, redactedError: "状态更新失败。", status: "failed" } : current));
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [clipJob]);
 
   function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse) {
     setStoryWorld(nextStoryWorld);
@@ -36,6 +64,8 @@ export function StoryCamWorkspace() {
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
     setExpansion(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
   }
@@ -50,6 +80,8 @@ export function StoryCamWorkspace() {
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
     setExpansion(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
   }
@@ -70,6 +102,8 @@ export function StoryCamWorkspace() {
       setStoryboard(storyboard);
       setSelectedCoreGroupIndex(0);
       setExpansion(null);
+      setClipConfirmationSummary(null);
+      setClipJob(null);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
     } catch {
@@ -100,6 +134,8 @@ export function StoryCamWorkspace() {
       });
 
       setExpansion(nextExpansion);
+      setClipConfirmationSummary(null);
+      setClipJob(null);
       setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展卡。`);
     } catch {
       setStoryboardMessage("扩展卡生成失败，可以跳过扩展直接生成片段。");
@@ -108,8 +144,73 @@ export function StoryCamWorkspace() {
     }
   }
 
-  function skipExpansion() {
-    setStoryboardMessage("已选择跳过扩展，下一步会进入片段生成确认。");
+  function prepareClipGeneration() {
+    if (!selectedGroup) {
+      return;
+    }
+
+    setClipJob(null);
+    setClipConfirmationSummary(
+      `用「${selectedGroup.title}」生成一个约 ${selectedGroup.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
+    );
+    setStoryboardMessage("请确认是否发送这一组生成片段。");
+  }
+
+  async function confirmClipGeneration() {
+    if (!storyboard || selectedCoreGroupIndex === null) {
+      return;
+    }
+
+    const coreArtifact = storyboard.artifacts.coreStoryboardGroups[selectedCoreGroupIndex];
+
+    if (!coreArtifact) {
+      return;
+    }
+
+    try {
+      setIsClipSubmitting(true);
+      const response = await generateClipJob({
+        confirmedArtifactVersions: confirmedArtifactVersionsForClip(storyboard, selectedCoreGroupIndex, expansion),
+        coreStoryboardGroupId: coreArtifact.id,
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${coreArtifact.id}-${Date.now()}`,
+        sessionId: storyboard.sessionId
+      });
+
+      setClipConfirmationSummary(response.confirmationSummary);
+      setClipJob({
+        attempts: 0,
+        id: response.jobId,
+        providerKind: "video",
+        providerName: "mock",
+        sessionId: storyboard.sessionId,
+        status: response.status,
+        type: "video_clip"
+      });
+      setStoryboardMessage("片段生成任务已创建。");
+    } catch {
+      setStoryboardMessage("片段生成任务创建失败，请重试。");
+    } finally {
+      setIsClipSubmitting(false);
+    }
+  }
+
+  async function cancelClipJob() {
+    if (!clipJob) {
+      return;
+    }
+
+    try {
+      const response = await cancelGenerationJob(clipJob.id);
+      setClipJob((current) => (current ? { ...current, status: response.status } : current));
+      setStoryboardMessage("已取消片段生成任务。");
+    } catch {
+      setStoryboardMessage("取消失败，请稍后再试。");
+    }
+  }
+
+  function retryClipGeneration() {
+    setClipJob(null);
+    void confirmClipGeneration();
   }
 
   const selectedGroup =
@@ -123,9 +224,21 @@ export function StoryCamWorkspace() {
         {storyboard && selectedGroup && (expansion || isExpansionLoading) ? (
           <ExpansionCanvas
             expansion={expansion}
+            generationPanel={
+              clipJob ? (
+                <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
+              ) : clipConfirmationSummary ? (
+                <ProviderSendConfirm
+                  confirmationSummary={clipConfirmationSummary}
+                  isSubmitting={isClipSubmitting}
+                  onCancel={() => setClipConfirmationSummary(null)}
+                  onConfirm={confirmClipGeneration}
+                />
+              ) : null
+            }
             isLoading={isExpansionLoading}
             onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
-            onSkipExpansion={skipExpansion}
+            onSkipExpansion={prepareClipGeneration}
             selectedGroup={selectedGroup}
             selectedIndex={selectedCoreGroupIndex ?? 0}
           />

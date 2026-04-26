@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("StoryCam expansion", () => {
-  test("expansion canvas keeps the selected core group and stable waiting slots", async ({ page }) => {
-    let expansionRequestedFor = "";
+test.describe("StoryCam generate clip", () => {
+  test("clip generation requires one-sentence confirmation and supports cancel and retry", async ({ page }) => {
+    let generateCalls = 0;
 
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
@@ -27,17 +27,13 @@ test.describe("StoryCam expansion", () => {
         status: 201,
         body: JSON.stringify({
           artifacts: {
-            coreStoryboardGroups: [
-              { id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 },
-              { id: "core-artifact-2", state: "ready", type: "core_storyboard_group", version: 1 },
-              { id: "core-artifact-3", state: "ready", type: "core_storyboard_group", version: 1 }
-            ],
+            coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
             storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
           },
           durationPlan: {
-            clipDurationTargets: [4, 4, 4],
-            coreGroupTargetCount: 3,
-            plannedDurationSeconds: 12
+            clipDurationTargets: [4],
+            coreGroupTargetCount: 1,
+            plannedDurationSeconds: 10
           },
           ok: true,
           sessionId: "session-1",
@@ -47,19 +43,89 @@ test.describe("StoryCam expansion", () => {
     });
 
     await page.route("**/api/storyboard-groups/*/expand", async (route) => {
-      expansionRequestedFor = route.request().url();
       await route.fulfill({
         contentType: "application/json",
         status: 201,
         body: JSON.stringify({
           expandedStoryboardCards: [
-            { id: "expanded-1", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
-            { id: "expanded-2", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
-            { id: "expanded-3", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 }
+            { id: "expanded-1", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 }
           ],
-          expansionCards: expansionCardsFixture(),
+          expansionCards: [expansionCardsFixture()[0]],
           ok: true,
           sessionId: "session-1"
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard-groups/*/generate-clip", async (route) => {
+      generateCalls += 1;
+      const body = route.request().postDataJSON() as {
+        confirmedArtifactVersions: Record<string, number>;
+        providerSendConfirmed: boolean;
+      };
+
+      expect(body.providerSendConfirmed).toBe(true);
+      expect(body.confirmedArtifactVersions).toEqual({
+        "core-artifact-1": 1,
+        "expanded-1": 1
+      });
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          confirmationSummary: "Use \"未发送短信\" to generate one private 4 second clip.",
+          jobId: `job-${generateCalls}`,
+          ok: true,
+          status: "queued"
+        })
+      });
+    });
+
+    await page.route("**/api/generation-jobs/job-*/cancel", async (route) => {
+      const jobId = route.request().url().includes("job-2") ? "job-2" : "job-1";
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          jobId,
+          ok: true,
+          status: "canceled"
+        })
+      });
+    });
+
+    await page.route("**/api/generation-jobs/job-*", async (route) => {
+      const jobId = route.request().url().includes("job-2") ? "job-2" : "job-1";
+
+      if (route.request().url().includes("/cancel")) {
+        await route.fulfill({
+          contentType: "application/json",
+          status: 200,
+          body: JSON.stringify({
+            jobId,
+            ok: true,
+            status: "canceled"
+          })
+        });
+        return;
+      }
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          job: {
+            attempts: 0,
+            id: jobId,
+            providerKind: "video",
+            providerName: "mock",
+            sessionId: "session-1",
+            status: "queued",
+            type: "video_clip"
+          },
+          ok: true
         })
       });
     });
@@ -70,19 +136,21 @@ test.describe("StoryCam expansion", () => {
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
     await page.getByRole("button", { name: "生成核心分镜" }).click();
     await page.getByRole("button", { name: "扩展这一组" }).first().click();
-
-    await expect(page.getByRole("heading", { name: "围绕核心组补拍法" })).toBeVisible();
-    await expect(page.getByRole("article").filter({ hasText: "当前核心分镜" }).getByRole("heading", { name: "未发送短信" })).toBeVisible();
-    await expect(page.getByText("门外停住")).toBeVisible();
-    await expect(page.getByText("听见门铃")).toBeVisible();
-    await expect(page.getByText("删掉那句")).toBeVisible();
-    await expect(page.getByText(/等待槽/)).toHaveCount(5);
-    await expect(page.getByRole("button", { name: "跳过扩展直接生成片段" })).toBeVisible();
-    expect(expansionRequestedFor).toContain("/api/storyboard-groups/core-artifact-1/expand");
-
     await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
-    await expect(page.getByText("请确认是否发送这一组生成片段。")).toBeVisible();
-    await expect(page.getByRole("button", { name: "确认发送生成片段" })).toBeVisible();
+
+    await expect(page.getByText("用「未发送短信」生成一个约 4 秒的私人片段。")).toBeVisible();
+    expect(generateCalls).toBe(0);
+    await expect(page.getByText("redactedPromptSummary")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "确认发送生成片段" }).click();
+    await expect(page.getByText("任务 job-1")).toBeVisible();
+    expect(generateCalls).toBe(1);
+
+    await page.getByRole("button", { name: "取消生成" }).click();
+    await expect(page.getByText("已取消片段生成任务。")).toBeVisible();
+    await page.getByRole("button", { name: "重试" }).click();
+    await expect(page.getByText("任务 job-2")).toBeVisible();
+    expect(generateCalls).toBe(2);
   });
 });
 
@@ -129,25 +197,11 @@ function storyboardFixture() {
         storyPurpose: "建立她和未发送短信之间的私人情绪。",
         title: "未发送短信",
         version: 1
-      },
-      {
-        emotionalTurn: "靠近但错过",
-        estimatedClipDurationSeconds: 4,
-        storyPurpose: "让对方靠近，但仍然不让告白真正发生。",
-        title: "玻璃反光",
-        version: 1
-      },
-      {
-        emotionalTurn: "把话收回去",
-        estimatedClipDurationSeconds: 4,
-        storyPurpose: "用删除短信完成这段记忆的收束。",
-        title: "擦肩而过",
-        version: 1
       }
     ],
     storyboardScript: {
       planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
-      plannedDurationSeconds: 12,
+      plannedDurationSeconds: 10,
       rhythm: "慢进入，短暂停顿，安静离开",
       tone: "韩剧雨夜，私人回忆",
       version: 1
@@ -163,22 +217,6 @@ function expansionCardsFixture() {
       guidance: "动作很小，重点是手指停顿和雨声。",
       sortOrder: 0,
       title: "门外停住",
-      version: 1
-    },
-    {
-      beatType: "reaction",
-      description: "门铃响起，她下意识抬眼，又立刻低头。",
-      guidance: "不需要对白，用眼神和玻璃反光完成情绪。",
-      sortOrder: 1,
-      title: "听见门铃",
-      version: 1
-    },
-    {
-      beatType: "emotion",
-      description: "两人的倒影短暂重叠，短信被删掉。",
-      guidance: "最后一秒留给空白屏幕和没说出口的呼吸。",
-      sortOrder: 2,
-      title: "删掉那句",
       version: 1
     }
   ];

@@ -99,6 +99,38 @@ export type ExpandStoryboardGroupResponse = {
   sessionId: string;
 };
 
+export type GenerateClipJobResponse = {
+  confirmationSummary: string;
+  jobId: string;
+  ok: true;
+  status: GenerationJobStatus;
+};
+
+export type GenerationJobStatus = "queued" | "running" | "succeeded" | "failed" | "cancel_requested" | "canceled" | "expired";
+
+export type GenerationJobSummary = {
+  attempts: number;
+  id: string;
+  outputArtifactId?: string;
+  providerKind: string;
+  providerName: string;
+  redactedError?: string;
+  sessionId: string;
+  status: GenerationJobStatus;
+  type: string;
+};
+
+export type GenerationJobResponse = {
+  job: GenerationJobSummary;
+  ok: true;
+};
+
+export type CancelGenerationJobResponse = {
+  jobId: string;
+  ok: true;
+  status: "cancel_requested" | "canceled";
+};
+
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {
   const formData = new FormData();
   formData.set("file", input.file);
@@ -184,6 +216,56 @@ export async function expandStoryboardGroup(input: { coreStoryboardGroupId: stri
   }
 
   return (await response.json()) as ExpandStoryboardGroupResponse;
+}
+
+export async function generateClipJob(input: {
+  confirmedArtifactVersions: Record<string, number>;
+  coreStoryboardGroupId: string;
+  idempotencyKey: string;
+  sessionId: string;
+}) {
+  const response = await fetch(`/api/storyboard-groups/${input.coreStoryboardGroupId}/generate-clip`, {
+    body: JSON.stringify({
+      confirmedArtifactVersions: input.confirmedArtifactVersions,
+      coreStoryboardGroupId: input.coreStoryboardGroupId,
+      generationMode: "mock",
+      idempotencyKey: input.idempotencyKey,
+      providerSendConfirmed: true,
+      sessionId: input.sessionId
+    }),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "generation_job_failed"));
+  }
+
+  return (await response.json()) as GenerateClipJobResponse;
+}
+
+export async function getGenerationJob(jobId: string) {
+  const response = await fetch(`/api/generation-jobs/${jobId}`);
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "generation_job_failed"));
+  }
+
+  return (await response.json()) as GenerationJobResponse;
+}
+
+export async function cancelGenerationJob(jobId: string) {
+  const response = await fetch(`/api/generation-jobs/${jobId}/cancel`, {
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "generation_job_failed"));
+  }
+
+  return (await response.json()) as CancelGenerationJobResponse;
 }
 
 function errorCode(value: unknown, fallback: string) {

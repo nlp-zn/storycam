@@ -1,8 +1,10 @@
 import { ExpandedStoryboardCard } from "@/components/storycam/ExpandedStoryboardCard";
+import type { ReactNode } from "react";
 import type { CreateStoryboardResponse, ExpandStoryboardGroupResponse } from "@/features/storycam/client/storycamApi";
 
 type ExpansionCanvasProps = {
   expansion: ExpandStoryboardGroupResponse | null;
+  generationPanel?: ReactNode;
   isLoading: boolean;
   onGenerateMore: () => void;
   onSkipExpansion: () => void;
@@ -12,7 +14,15 @@ type ExpansionCanvasProps = {
 
 const canvasSlotCount = 8;
 
-export function ExpansionCanvas({ expansion, isLoading, onGenerateMore, onSkipExpansion, selectedGroup, selectedIndex }: ExpansionCanvasProps) {
+export function ExpansionCanvas({
+  expansion,
+  generationPanel,
+  isLoading,
+  onGenerateMore,
+  onSkipExpansion,
+  selectedGroup,
+  selectedIndex
+}: ExpansionCanvasProps) {
   const cards = expansion?.expansionCards ?? [];
   const slots = Array.from({ length: canvasSlotCount }, (_, index) => cards[index]);
 
@@ -68,6 +78,8 @@ export function ExpansionCanvas({ expansion, isLoading, onGenerateMore, onSkipEx
           <ExpandedStoryboardCard card={card} index={index + 4} key={`slot-b-${index}`} />
         ))}
       </div>
+
+      {generationPanel ? <div className="mt-4">{generationPanel}</div> : null}
     </section>
   );
 }

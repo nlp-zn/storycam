@@ -1152,13 +1152,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 未确认前不创建真实视频 job。
-- [ ] 只展示一句话 confirmation，不展示完整 packet。
-- [ ] 支持 cancel 和 retry。
+- [x] 未确认前不创建真实视频 job。
+- [x] 只展示一句话 confirmation，不展示完整 packet。
+- [x] 支持 cancel 和 retry。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e -- --grep "generate clip"`
+- [x] `pnpm test:e2e -- --grep "generate clip"`
 
 **Dependencies:** Task 22, Task 28
 
