@@ -1,0 +1,184 @@
+import { expect, test } from "@playwright/test";
+
+test.describe("StoryCam expansion", () => {
+  test("expansion canvas keeps the selected core group and stable waiting slots", async ({ page }) => {
+    let expansionRequestedFor = "";
+
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            coreStoryboardGroups: [
+              { id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 },
+              { id: "core-artifact-2", state: "ready", type: "core_storyboard_group", version: 1 },
+              { id: "core-artifact-3", state: "ready", type: "core_storyboard_group", version: 1 }
+            ],
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+          },
+          durationPlan: {
+            clipDurationTargets: [4, 4, 4],
+            coreGroupTargetCount: 3,
+            plannedDurationSeconds: 12
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyboard: storyboardFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard-groups/*/expand", async (route) => {
+      expansionRequestedFor = route.request().url();
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          expandedStoryboardCards: [
+            { id: "expanded-1", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
+            { id: "expanded-2", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
+            { id: "expanded-3", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 }
+          ],
+          expansionCards: expansionCardsFixture(),
+          ok: true,
+          sessionId: "session-1"
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await page.getByRole("button", { name: "对，继续拍这一段" }).click();
+    await page.getByRole("button", { name: "生成核心分镜" }).click();
+    await page.getByRole("button", { name: "扩展这一组" }).first().click();
+
+    await expect(page.getByRole("heading", { name: "围绕核心组补拍法" })).toBeVisible();
+    await expect(page.getByRole("article").filter({ hasText: "当前核心分镜" }).getByRole("heading", { name: "未发送短信" })).toBeVisible();
+    await expect(page.getByText("门外停住")).toBeVisible();
+    await expect(page.getByText("听见门铃")).toBeVisible();
+    await expect(page.getByText("删掉那句")).toBeVisible();
+    await expect(page.getByText(/等待槽/)).toHaveCount(5);
+    await expect(page.getByRole("button", { name: "跳过扩展直接生成片段" })).toBeVisible();
+    expect(expansionRequestedFor).toContain("/api/storyboard-groups/core-artifact-1/expand");
+
+    await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
+    await expect(page.getByText("已选择跳过扩展，下一步会进入片段生成确认。")).toBeVisible();
+  });
+});
+
+function storyWorldFixture() {
+  return {
+    characterAssets: [
+      {
+        emotionalBaseline: "克制、犹豫、把情绪藏在动作里",
+        name: "她",
+        props: ["手机", "透明伞"],
+        relationshipToUserStory: "承载那段没有说出口的暗恋记忆",
+        role: "暗恋者",
+        stableVisualDescription: "湿发贴在脸侧，浅色风衣，手指反复点亮手机屏幕",
+        wardrobe: "浅色风衣、低饱和围巾"
+      }
+    ],
+    sceneAssets: [
+      {
+        atmosphere: "潮湿、安静、私人回忆感",
+        keyObjects: ["便利店玻璃门"],
+        light: "冷白便利店灯混合暖色街灯",
+        location: "雨夜街角便利店门口",
+        name: "便利店外的玻璃反光",
+        spatialLogic: "她在门外低头删短信，他从店里出来，倒影在玻璃上短暂重叠",
+        timeOfDay: "night"
+      }
+    ],
+    script: {
+      beats: ["雨夜删改短信", "便利店门铃响起", "玻璃倒影短暂重叠"],
+      logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
+      summary: "冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的那一秒。",
+      title: "雨夜未发送",
+      version: 1
+    }
+  };
+}
+
+function storyboardFixture() {
+  return {
+    coreStoryboardGroups: [
+      {
+        emotionalTurn: "想说出口",
+        estimatedClipDurationSeconds: 4,
+        storyPurpose: "建立她和未发送短信之间的私人情绪。",
+        title: "未发送短信",
+        version: 1
+      },
+      {
+        emotionalTurn: "靠近但错过",
+        estimatedClipDurationSeconds: 4,
+        storyPurpose: "让对方靠近，但仍然不让告白真正发生。",
+        title: "玻璃反光",
+        version: 1
+      },
+      {
+        emotionalTurn: "把话收回去",
+        estimatedClipDurationSeconds: 4,
+        storyPurpose: "用删除短信完成这段记忆的收束。",
+        title: "擦肩而过",
+        version: 1
+      }
+    ],
+    storyboardScript: {
+      planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
+      plannedDurationSeconds: 12,
+      rhythm: "慢进入，短暂停顿，安静离开",
+      tone: "韩剧雨夜，私人回忆",
+      version: 1
+    }
+  };
+}
+
+function expansionCardsFixture() {
+  return [
+    {
+      beatType: "enter",
+      description: "她停在便利店门外，雨伞压低，手机屏幕映出未发送的短信。",
+      guidance: "动作很小，重点是手指停顿和雨声。",
+      sortOrder: 0,
+      title: "门外停住",
+      version: 1
+    },
+    {
+      beatType: "reaction",
+      description: "门铃响起，她下意识抬眼，又立刻低头。",
+      guidance: "不需要对白，用眼神和玻璃反光完成情绪。",
+      sortOrder: 1,
+      title: "听见门铃",
+      version: 1
+    },
+    {
+      beatType: "emotion",
+      description: "两人的倒影短暂重叠，短信被删掉。",
+      guidance: "最后一秒留给空白屏幕和没说出口的呼吸。",
+      sortOrder: 2,
+      title: "删掉那句",
+      version: 1
+    }
+  ];
+}

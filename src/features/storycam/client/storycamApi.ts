@@ -85,6 +85,20 @@ export type CreateStoryboardResponse = {
   };
 };
 
+export type ExpandStoryboardGroupResponse = {
+  ok: true;
+  expansionCards: Array<{
+    beatType: string;
+    description: string;
+    guidance: string;
+    sortOrder: number;
+    title: string;
+    version: number;
+  }>;
+  expandedStoryboardCards: Array<ArtifactRef & { parentArtifactId: string | null }>;
+  sessionId: string;
+};
+
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {
   const formData = new FormData();
   formData.set("file", input.file);
@@ -151,6 +165,25 @@ export async function createStoryboard(input: { confirmedArtifactVersions: Recor
   }
 
   return (await response.json()) as CreateStoryboardResponse;
+}
+
+export async function expandStoryboardGroup(input: { coreStoryboardGroupId: string; sessionId: string; targetCount?: number }) {
+  const response = await fetch(`/api/storyboard-groups/${input.coreStoryboardGroupId}/expand`, {
+    body: JSON.stringify({
+      sessionId: input.sessionId,
+      ...(input.targetCount ? { targetCount: input.targetCount } : {})
+    }),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "expansion_failed"));
+  }
+
+  return (await response.json()) as ExpandStoryboardGroupResponse;
 }
 
 function errorCode(value: unknown, fallback: string) {

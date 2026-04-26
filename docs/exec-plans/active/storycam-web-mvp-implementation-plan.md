@@ -1126,14 +1126,14 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 中心保持选中核心组。
-- [ ] loading/waiting slots 不造成布局跳动。
-- [ ] 用户可跳过扩展直接生成片段。
+- [x] 中心保持选中核心组。
+- [x] loading/waiting slots 不造成布局跳动。
+- [x] 用户可跳过扩展直接生成片段。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e -- --grep "expansion"`
-- [ ] Visual QA desktop/mobile。
+- [x] `pnpm test:e2e -- --grep "expansion"`
+- [x] Visual QA desktop/mobile。
 
 **Dependencies:** Task 19, Task 27
 

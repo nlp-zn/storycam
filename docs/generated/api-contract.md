@@ -237,6 +237,14 @@ Success:
 type ExpansionResponse = {
   ok: true;
   sessionId: string;
+  expansionCards: Array<{
+    beatType: string;
+    title: string;
+    description: string;
+    guidance: string;
+    sortOrder: number;
+    version: number;
+  }>;
   expandedStoryboardCards: VersionedArtifact[];
 };
 ```

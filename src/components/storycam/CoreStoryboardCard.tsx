@@ -3,11 +3,14 @@ import type { CreateStoryboardResponse } from "@/features/storycam/client/storyc
 type CoreStoryboardCardProps = {
   group: CreateStoryboardResponse["storyboard"]["coreStoryboardGroups"][number];
   index: number;
+  isSelected?: boolean;
+  onExpand?: () => void;
+  onSelect?: () => void;
 };
 
-export function CoreStoryboardCard({ group, index }: CoreStoryboardCardProps) {
+export function CoreStoryboardCard({ group, index, isSelected = false, onExpand, onSelect }: CoreStoryboardCardProps) {
   return (
-    <article className="rounded-md border border-stone-700 bg-stone-900 p-3">
+    <article className={`rounded-md border bg-stone-900 p-3 ${isSelected ? "border-cyan-300" : "border-stone-700"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-rose-200">片段 {String.fromCharCode(65 + index)}</p>
@@ -22,12 +25,14 @@ export function CoreStoryboardCard({ group, index }: CoreStoryboardCardProps) {
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           className="rounded-md border border-stone-600 px-3 py-2 text-xs font-semibold text-stone-200 transition hover:border-amber-300 hover:text-amber-100"
+          onClick={onExpand ?? onSelect}
           type="button"
         >
           扩展这一组
         </button>
         <button
           className="rounded-md bg-amber-300 px-3 py-2 text-xs font-semibold text-stone-950 transition hover:bg-amber-200"
+          onClick={onSelect}
           type="button"
         >
           用这一组生成片段

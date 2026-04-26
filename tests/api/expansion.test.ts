@@ -36,6 +36,11 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
+      expansionCards: [
+        { sortOrder: 0, title: "门外停住" },
+        { sortOrder: 1, title: "听见门铃" },
+        { sortOrder: 2, title: "删掉那句" }
+      ],
       expandedStoryboardCards: [
         { parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
         { parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
@@ -67,6 +72,7 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
+    expect(body.expansionCards).toHaveLength(8);
     expect(body.expandedStoryboardCards).toHaveLength(8);
     expect(client.queries.some((query) => query.table === "generation_jobs")).toBe(false);
   });

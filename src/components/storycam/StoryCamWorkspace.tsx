@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { CoreStoryboardGroups } from "@/components/storycam/CoreStoryboardGroups";
+import { ExpansionCanvas } from "@/components/storycam/ExpansionCanvas";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
 import {
@@ -10,13 +11,22 @@ import {
   staleStoryboardAfterStoryWorldEdit,
   type StoryboardStatus
 } from "@/features/storycam/client/storycamState";
-import { createStoryboard, type CreateStoryboardResponse, type CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
+import {
+  createStoryboard,
+  expandStoryboardGroup,
+  type CreateStoryboardResponse,
+  type CreateStoryWorldResponse,
+  type ExpandStoryboardGroupResponse
+} from "@/features/storycam/client/storycamApi";
 import { expansionCards, workflowStages } from "@/features/storycam/domain/shellContent";
 
 export function StoryCamWorkspace() {
   const [storyWorld, setStoryWorld] = useState<CreateStoryWorldResponse | null>(null);
   const [storyWorldConfirmed, setStoryWorldConfirmed] = useState(false);
   const [storyboard, setStoryboard] = useState<CreateStoryboardResponse | null>(null);
+  const [selectedCoreGroupIndex, setSelectedCoreGroupIndex] = useState<number | null>(null);
+  const [expansion, setExpansion] = useState<ExpandStoryboardGroupResponse | null>(null);
+  const [isExpansionLoading, setIsExpansionLoading] = useState(false);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
 
@@ -24,6 +34,8 @@ export function StoryCamWorkspace() {
     setStoryWorld(nextStoryWorld);
     setStoryWorldConfirmed(false);
     setStoryboard(null);
+    setSelectedCoreGroupIndex(null);
+    setExpansion(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
   }
@@ -36,6 +48,8 @@ export function StoryCamWorkspace() {
   function handleStoryWorldEdit() {
     setStoryWorldConfirmed(false);
     setStoryboard(null);
+    setSelectedCoreGroupIndex(null);
+    setExpansion(null);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
   }
@@ -54,6 +68,8 @@ export function StoryCamWorkspace() {
       });
 
       setStoryboard(storyboard);
+      setSelectedCoreGroupIndex(0);
+      setExpansion(null);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
     } catch {
@@ -62,12 +78,58 @@ export function StoryCamWorkspace() {
     }
   }
 
+  async function expandCoreGroup(index: number, targetCount = 3) {
+    if (!storyboard || isExpansionLoading) {
+      return;
+    }
+
+    const coreArtifact = storyboard.artifacts.coreStoryboardGroups[index];
+
+    if (!coreArtifact) {
+      return;
+    }
+
+    try {
+      setSelectedCoreGroupIndex(index);
+      setIsExpansionLoading(true);
+      setStoryboardMessage("正在扩展当前核心分镜组。");
+      const nextExpansion = await expandStoryboardGroup({
+        coreStoryboardGroupId: coreArtifact.id,
+        sessionId: storyboard.sessionId,
+        targetCount
+      });
+
+      setExpansion(nextExpansion);
+      setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展卡。`);
+    } catch {
+      setStoryboardMessage("扩展卡生成失败，可以跳过扩展直接生成片段。");
+    } finally {
+      setIsExpansionLoading(false);
+    }
+  }
+
+  function skipExpansion() {
+    setStoryboardMessage("已选择跳过扩展，下一步会进入片段生成确认。");
+  }
+
+  const selectedGroup =
+    storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
+
   return (
     <main className="min-h-screen px-5 py-5 text-stone-100 sm:px-8 lg:px-10">
       <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[310px_minmax(0,1fr)_330px]">
         <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
 
-        {storyWorld ? (
+        {storyboard && selectedGroup && (expansion || isExpansionLoading) ? (
+          <ExpansionCanvas
+            expansion={expansion}
+            isLoading={isExpansionLoading}
+            onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
+            onSkipExpansion={skipExpansion}
+            selectedGroup={selectedGroup}
+            selectedIndex={selectedCoreGroupIndex ?? 0}
+          />
+        ) : storyWorld ? (
           <StoryWorldReview
             isConfirmed={storyWorldConfirmed}
             key={storyWorld.artifacts.script.id}
@@ -118,7 +180,12 @@ export function StoryCamWorkspace() {
 
           <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
             <h2 className="text-lg font-semibold text-stone-50">片段时间线</h2>
-            <CoreStoryboardGroups storyboard={storyboard} />
+            <CoreStoryboardGroups
+              onExpandGroup={(index) => expandCoreGroup(index)}
+              onSelectGroup={setSelectedCoreGroupIndex}
+              selectedIndex={selectedCoreGroupIndex}
+              storyboard={storyboard}
+            />
             <button
               className="mt-4 w-full rounded-md bg-stone-800 px-4 py-2 text-sm font-semibold text-stone-400"
               disabled

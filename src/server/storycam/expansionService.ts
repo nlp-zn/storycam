@@ -24,6 +24,14 @@ export type ExpansionArtifactRef = {
 };
 
 export type ExpansionServiceOutput = {
+  expansionCards: Array<{
+    beatType: string;
+    description: string;
+    guidance: string;
+    sortOrder: number;
+    title: string;
+    version: number;
+  }>;
   expandedStoryboardCards: ExpansionArtifactRef[];
   sessionId: string;
 };
@@ -88,6 +96,14 @@ export async function createExpandedStoryboardCards(
   return {
     ok: true,
     value: {
+      expansionCards: cards.map((card) => ({
+        beatType: card.beatType,
+        description: card.description,
+        guidance: card.guidance,
+        sortOrder: card.sortOrder,
+        title: card.title,
+        version: card.version
+      })),
       expandedStoryboardCards: expandedStoryboardCards.map((artifact) => toArtifactRef(requireArtifactRow(artifact))),
       sessionId: session.id
     }
