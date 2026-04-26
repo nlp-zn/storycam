@@ -892,13 +892,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 默认 3 张扩展卡。
-- [ ] 最多 8 张。
-- [ ] 扩展卡不会创建 video job。
+- [x] 默认 3 张扩展卡。
+- [x] 最多 8 张。
+- [x] 扩展卡不会创建 video job。
 
 **Verification:**
 
-- [ ] `pnpm test:api -- --run expansion`
+- [x] `pnpm test:api -- --run expansion`
 
 **Dependencies:** Task 13, Task 18
 

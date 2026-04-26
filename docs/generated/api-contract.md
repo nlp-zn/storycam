@@ -193,6 +193,7 @@ Success:
 ```ts
 type ExpansionResponse = {
   ok: true;
+  sessionId: string;
   expandedStoryboardCards: VersionedArtifact[];
 };
 ```
