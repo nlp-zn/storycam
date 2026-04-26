@@ -392,17 +392,17 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `pnpm install` 可安装依赖。
-- [ ] `pnpm dev` 可启动Web app。
-- [ ] `pnpm lint`、`pnpm typecheck`、`pnpm test` 有脚本入口。
-- [ ] 首页显示 StoryCam Phase 1 shell，而不是营销页。
+- [x] `pnpm install` 可安装依赖。
+- [x] `pnpm dev` 可启动Web app。
+- [x] `pnpm lint`、`pnpm typecheck`、`pnpm test` 有脚本入口。
+- [x] 首页显示 StoryCam Phase 1 shell，而不是营销页。
 
 **Verification:**
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] 手动打开 `http://localhost:3000`
+- [x] `pnpm lint`
+- [x] `pnpm typecheck`
+- [x] `pnpm test`
+- [x] 手动打开 `http://localhost:3000`
 
 **Dependencies:** Task 2
 

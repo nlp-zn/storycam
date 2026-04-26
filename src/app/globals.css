@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  background: #181612;
+  color: #f7efe2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(120deg, rgba(21, 94, 117, 0.2), transparent 34%),
+    linear-gradient(170deg, transparent 42%, rgba(190, 76, 64, 0.18)),
+    #181612;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+textarea {
+  font: inherit;
+}

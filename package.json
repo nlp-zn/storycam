@@ -1,0 +1,32 @@
+{
+  "name": "storycam",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.22.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:api": "vitest run tests/api --passWithNoTests",
+    "test:e2e": "echo \"E2E tests are not wired yet\"",
+    "qa:visual": "echo \"Visual QA is not wired yet\""
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "4.2.4",
+    "next": "16.2.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
+    "tailwindcss": "4.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.4",
+    "typescript": "6.0.3",
+    "vitest": "4.1.5"
+  }
+}
