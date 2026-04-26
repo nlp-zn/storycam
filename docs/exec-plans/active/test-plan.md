@@ -77,6 +77,7 @@ CI 默认使用 mock mode。真实 provider smoke test 必须 opt-in、secret-ga
 - mock provider output 和 error normalization 测试。
 - 每个 generation route 在 mock mode 下的 integration tests。
 - final work composer 输出真实视频文件并上传 Supabase Storage 的 tests。
+- Seedance 成功产物 `content.video_url` 下载、私有存储、generated clip artifact、job succeeded、final work signed preview 的 server tests。
 - UI component 的 loading、empty、error、success states。
 - E2E happy path 和 short path。
 - duplicate submit、resume、deletion、stale artifact 的 E2E/integration tests。

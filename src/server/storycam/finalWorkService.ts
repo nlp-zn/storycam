@@ -11,7 +11,13 @@ import type { Database, Json, MediaAssetRow, StoryCamArtifactRow } from "@/serve
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { writeGeneratedStoryCamMedia, type WriteGeneratedStoryCamMediaResult } from "./generatedMediaService";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
-import { assertStoryCamPrivateBucket, downloadStoryCamObject } from "./mediaStore";
+import {
+  assertStoryCamPrivateBucket,
+  createStoryCamSignedUrl,
+  downloadStoryCamObject,
+  storyCamGeneratedBucket,
+  storyCamSignedUrlTtlSeconds
+} from "./mediaStore";
 import { StoryCamSessionRepository } from "./sessionRepository";
 
 export type ComposeFinalWorkInput = {
@@ -26,6 +32,11 @@ export type ComposeFinalWorkOutput = {
   artifact: FinalWorkArtifactRef;
   finalWork: FinalWork;
   media: WriteGeneratedStoryCamMediaResult;
+};
+
+export type FinalWorkPreviewUrl = {
+  signedUrl: string;
+  signedUrlExpiresIn: number;
 };
 
 export type StoryCamArtifactRef = {
@@ -212,6 +223,21 @@ export async function composeAndStoreFinalWork(
       media
     }
   } as const;
+}
+
+export async function createPrivateFinalWorkPreviewUrl(
+  client: SupabaseClient<Database>,
+  input: {
+    expiresIn?: number;
+    media: WriteGeneratedStoryCamMediaResult;
+  }
+): Promise<FinalWorkPreviewUrl> {
+  const signedUrlExpiresIn = input.expiresIn ?? storyCamSignedUrlTtlSeconds;
+
+  return {
+    signedUrl: await createStoryCamSignedUrl(client, storyCamGeneratedBucket, input.media.path, signedUrlExpiresIn),
+    signedUrlExpiresIn
+  };
 }
 
 function parseStitchSuggestionRequest(body: StitchSuggestionRequestBody) {

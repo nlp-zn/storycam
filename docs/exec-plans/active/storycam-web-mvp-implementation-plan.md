@@ -1295,16 +1295,16 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 一个真实 clip 能生成 final work 并写入 `storycam-generated` bucket。
-- [ ] final work metadata 写入 Supabase Postgres。
-- [ ] 登录用户可以通过短期 signed URL 预览自己的 final work。
-- [ ] 失败时第一救援路径是重拍。
-- [ ] 不生成分享链接。
+- [x] 一个真实 clip 能生成 final work 并写入 `storycam-generated` bucket。
+- [x] final work metadata 写入 Supabase Postgres。
+- [x] 登录用户可以通过短期 signed URL 预览自己的 final work。
+- [x] 失败时第一救援路径是重拍。
+- [x] 不生成分享链接。
 
 **Verification:**
 
 - [ ] secret-gated smoke：real clip -> final work。
-- [ ] `pnpm test:e2e -- --grep "mock final work"` 仍在 mock mode 通过。
+- [x] `pnpm test:e2e -- --grep "mock final work"` 仍在 mock mode 通过。
 
 **Dependencies:** Task 15, Task 30, Task 32
 
