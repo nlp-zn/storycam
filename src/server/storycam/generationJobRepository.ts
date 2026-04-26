@@ -76,6 +76,17 @@ export class StoryCamGenerationJobRepository {
     return unwrapRepositoryResult("find_active_generation_job", data, error);
   }
 
+  async findById(userId: string, jobId: string) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .select(jobColumns)
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    return unwrapRepositoryResult<GenerationJobRow | null>("find_generation_job", data, error);
+  }
+
   async markSucceeded(userId: string, jobId: string, input: CompleteGenerationJobInput) {
     const { data, error } = await this.client
       .from("generation_jobs")

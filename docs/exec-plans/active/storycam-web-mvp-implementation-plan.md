@@ -964,13 +964,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `/api/storyboard-groups/:id/generate-clip` 创建 job。
-- [ ] `/api/generation-jobs/:id` 返回状态。
-- [ ] `/api/generation-jobs/:id/cancel` tombstone/cancel job。
+- [x] `/api/storyboard-groups/:id/generate-clip` 创建 job。
+- [x] `/api/generation-jobs/:id` 返回状态。
+- [x] `/api/generation-jobs/:id/cancel` tombstone/cancel job。
 
 **Verification:**
 
-- [ ] `pnpm test:api -- --run generation-jobs`
+- [x] `pnpm test:api -- --run generation-jobs`
 
 **Dependencies:** Task 14, Task 20, Task 21
 
