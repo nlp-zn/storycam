@@ -35,13 +35,49 @@ export type SignedUrlStorageClient = {
   };
 };
 
+export type UploadStorageClient = {
+  storage: {
+    from(bucket: string): {
+      upload(
+        path: string,
+        body: Uint8Array,
+        options: { contentType: StoryCamUploadMimeType; upsert: false }
+      ): Promise<{
+        data: { path: string } | null;
+        error: { message?: string } | null;
+      }>;
+    };
+  };
+};
+
 export class StoryCamMediaStoreError extends Error {
   constructor(
-    readonly code: "invalid_mime_type" | "invalid_size" | "invalid_bucket" | "signed_url_failed"
+    readonly code: "invalid_mime_type" | "invalid_size" | "invalid_bucket" | "signed_url_failed" | "upload_failed"
   ) {
     super(`StoryCam media store error: ${code}`);
     this.name = "StoryCamMediaStoreError";
   }
+}
+
+export async function uploadStoryCamObject(
+  client: UploadStorageClient,
+  bucket: StoryCamPrivateBucket,
+  path: string,
+  body: Uint8Array,
+  mimeType: StoryCamUploadMimeType
+) {
+  assertStoryCamPrivateBucket(bucket);
+
+  const { data, error } = await client.storage.from(bucket).upload(path, body, {
+    contentType: mimeType,
+    upsert: false
+  });
+
+  if (error || !data?.path) {
+    throw new StoryCamMediaStoreError("upload_failed");
+  }
+
+  return data.path;
 }
 
 export function validateUploadPhoto(input: UploadPhotoValidationInput) {
