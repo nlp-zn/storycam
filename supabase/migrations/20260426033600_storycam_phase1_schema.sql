@@ -250,3 +250,49 @@ begin
   end if;
 end;
 $$;
+
+create or replace function public.soft_delete_storycam_session(
+  target_user_id uuid,
+  target_session_id uuid,
+  target_deleted_at timestamptz default now()
+)
+returns void
+language plpgsql
+security invoker
+as $$
+begin
+  update public.generation_jobs
+  set status = case
+      when status in ('queued', 'running') then 'expired'
+      else status
+    end,
+    tombstoned_at = coalesce(tombstoned_at, target_deleted_at),
+    updated_at = target_deleted_at
+  where user_id = target_user_id
+    and session_id = target_session_id
+    and tombstoned_at is null;
+
+  update public.storycam_artifacts
+  set deleted_at = coalesce(deleted_at, target_deleted_at),
+      updated_at = target_deleted_at
+  where user_id = target_user_id
+    and session_id = target_session_id
+    and deleted_at is null;
+
+  update public.media_assets
+  set deleted_at = coalesce(deleted_at, target_deleted_at)
+  where user_id = target_user_id
+    and session_id = target_session_id
+    and deleted_at is null;
+
+  update public.storycam_sessions
+  set status = 'deleted',
+      deleted_at = coalesce(deleted_at, target_deleted_at),
+      updated_at = target_deleted_at
+  where user_id = target_user_id
+    and id = target_session_id
+    and deleted_at is null;
+end;
+$$;
+
+grant execute on function public.soft_delete_storycam_session(uuid, uuid, timestamptz) to authenticated;

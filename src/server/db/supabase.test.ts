@@ -51,4 +51,14 @@ describe("supabase-db migration baseline", () => {
     expect(migrationSql).toContain("on conflict (id) do update");
     expect(migrationSql).toContain("if not exists (select 1 from pg_policies");
   });
+
+  it("defines the session soft delete transaction helper", () => {
+    expect(migrationSql).toContain("create or replace function public.soft_delete_storycam_session");
+    expect(migrationSql).toContain("update public.generation_jobs");
+    expect(migrationSql).toContain("when status in ('queued', 'running') then 'expired'");
+    expect(migrationSql).toContain("update public.storycam_artifacts");
+    expect(migrationSql).toContain("update public.media_assets");
+    expect(migrationSql).toContain("update public.storycam_sessions");
+    expect(migrationSql).toContain("where user_id = target_user_id");
+  });
 });

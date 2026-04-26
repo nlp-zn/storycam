@@ -99,6 +99,7 @@ Status: static migration summary, not introspected from a live database yet.
 - Row-level security is enabled for every StoryCam metadata table.
 - Table policies scope select, insert, update, and delete to `auth.uid() = user_id`.
 - Storage buckets are private and object policies scope access to `users/{auth.uid()}/...` paths.
+- `soft_delete_storycam_session` tombstones in-flight jobs and soft deletes related artifacts/media/session metadata inside one database function.
 
 ## Regeneration Rule
 
