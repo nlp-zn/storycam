@@ -19,6 +19,8 @@ This directory is the source of truth for StoryCam. The repo knowledge structure
 - `QUALITY_SCORE.md` — how to score readiness and quality.
 - `RELIABILITY.md` — jobs, provider failures, recovery, observability.
 - `SECURITY.md` — auth, Supabase RLS, storage, secrets, privacy.
+- `references/local-dev.md` — local mock-mode setup and verification commands.
+- `references/providers.md` — provider mode matrix and opt-in real smoke policy.
 
 ## Directories
 
@@ -34,6 +36,9 @@ This directory is the source of truth for StoryCam. The repo knowledge structure
 - Product vision: `product-specs/product-vision.md`
 - Active implementation plan: `exec-plans/active/storycam-web-mvp-implementation-plan.md`
 - Active test plan: `exec-plans/active/test-plan.md`
+- Local development: `references/local-dev.md`
+- Provider modes: `references/providers.md`
+- Provider contract: `generated/provider-contract.md`
 - UI design brief: `design-docs/storycam-ui-design.md`
 - Shanyin director reference: `references/shanyin-director-master/`
 - Harness engineering reference: `references/openai-harness-engineering.md`

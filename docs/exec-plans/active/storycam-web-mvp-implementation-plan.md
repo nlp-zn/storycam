@@ -1406,14 +1406,14 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `docs/README.md` 索引包含本详细计划和新增工程文档。
-- [ ] `local-dev.md` 可让新开发者 10 分钟内跑 mock flow。
-- [ ] `providers.md` 明确 real provider smoke test 是 opt-in。
+- [x] `docs/README.md` 索引包含本详细计划和新增工程文档。
+- [x] `local-dev.md` 可让新开发者 10 分钟内跑 mock flow。
+- [x] `providers.md` 明确 real provider smoke test 是 opt-in。
 
 **Verification:**
 
 - [ ] 按 `docs/references/local-dev.md` 从 clean env 跑通 mock flow。
-- [ ] `rg -n "分享链接|私密分享|Shanyin-style shot data" docs` 不出现错误产品承诺。
+- [x] `rg -n "分享链接|私密分享|Shanyin-style shot data" docs` 不出现错误产品承诺。
 
 **Dependencies:** Task 36
 
