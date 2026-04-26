@@ -5,13 +5,22 @@ import { AssetCard } from "@/components/storycam/AssetCard";
 import type { CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
 
 type StoryWorldReviewProps = {
+  isDeleting?: boolean;
   isConfirmed: boolean;
   onConfirm: () => void;
+  onDeleteStory: () => void;
   onEditSaved: (summary: string) => void;
   storyWorld: CreateStoryWorldResponse;
 };
 
-export function StoryWorldReview({ isConfirmed, onConfirm, onEditSaved, storyWorld }: StoryWorldReviewProps) {
+export function StoryWorldReview({
+  isConfirmed,
+  isDeleting = false,
+  onConfirm,
+  onDeleteStory,
+  onEditSaved,
+  storyWorld
+}: StoryWorldReviewProps) {
   const [isEditingScript, setIsEditingScript] = useState(false);
   const [scriptSummary, setScriptSummary] = useState(storyWorld.storyWorld.script.summary);
 
@@ -122,9 +131,11 @@ export function StoryWorldReview({ isConfirmed, onConfirm, onEditSaved, storyWor
         </button>
         <button
           className="rounded-md border border-stone-700 px-4 py-2 text-sm font-semibold text-stone-400 transition hover:border-rose-300 hover:text-rose-100"
+          disabled={isDeleting}
+          onClick={onDeleteStory}
           type="button"
         >
-          删除这个故事
+          {isDeleting ? "正在删除" : "删除这个故事"}
         </button>
       </div>
     </section>

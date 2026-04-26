@@ -152,6 +152,154 @@ test.describe("StoryCam generate clip", () => {
     await expect(page.getByText("任务 job-2")).toBeVisible();
     expect(generateCalls).toBe(2);
   });
+
+  test("deleting a story with a running clip job discards late clip results", async ({ page }) => {
+    let cancelCalls = 0;
+    let deleteCalls = 0;
+    let releaseLateResult: (() => void) | undefined;
+    const lateRequestStarted = new Promise<void>((resolve) => {
+      page.route("**/api/generation-jobs/job-delete**", async (route) => {
+        if (route.request().url().endsWith("/cancel")) {
+          cancelCalls += 1;
+          await route.fulfill({
+            contentType: "application/json",
+            status: 200,
+            body: JSON.stringify({
+              jobId: "job-delete",
+              ok: true,
+              status: "canceled"
+            })
+          });
+          return;
+        }
+
+        resolve();
+        await new Promise<void>((lateResolve) => {
+          releaseLateResult = lateResolve;
+        });
+        await route.fulfill({
+          contentType: "application/json",
+          status: 200,
+          body: JSON.stringify({
+            job: {
+              attempts: 1,
+              id: "job-delete",
+              outputArtifactId: "clip-artifact-late",
+              providerKind: "video",
+              providerName: "mock",
+              sessionId: "session-delete",
+              status: "succeeded",
+              type: "video_clip"
+            },
+            ok: true
+          })
+        });
+      });
+    });
+
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-delete",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+          },
+          durationPlan: {
+            clipDurationTargets: [4],
+            coreGroupTargetCount: 1,
+            plannedDurationSeconds: 10
+          },
+          ok: true,
+          sessionId: "session-delete",
+          storyboard: storyboardFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard-groups/*/expand", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          expandedStoryboardCards: [
+            { id: "expanded-1", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 }
+          ],
+          expansionCards: [expansionCardsFixture()[0]],
+          ok: true,
+          sessionId: "session-delete"
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard-groups/*/generate-clip", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          confirmationSummary: "Use \"未发送短信\" to generate one private 4 second clip.",
+          jobId: "job-delete",
+          ok: true,
+          status: "running"
+        })
+      });
+    });
+
+    await page.route("**/api/storycam-sessions/session-delete", async (route) => {
+      deleteCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          bucketsTouched: ["storycam-generated"],
+          ok: true,
+          removedObjectCount: 1,
+          sessionId: "session-delete",
+          skippedObjectCount: 0
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await page.getByRole("button", { name: "对，继续拍这一段" }).click();
+    await page.getByRole("button", { name: "生成核心分镜" }).click();
+    await page.getByRole("button", { name: "扩展这一组" }).first().click();
+    await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
+    await page.getByRole("button", { name: "确认发送生成片段" }).click();
+    await expect(page.getByText("任务 job-delete")).toBeVisible();
+
+    await lateRequestStarted;
+    await page.getByRole("button", { name: "删除这个故事" }).click();
+    await expect(page.getByText("这个故事已删除，可以重新开始。")).toBeVisible();
+
+    expect(cancelCalls).toBe(1);
+    expect(deleteCalls).toBe(1);
+
+    releaseLateResult?.();
+    await expect(page.getByRole("heading", { name: "先写下这一幕" })).toBeVisible();
+    await expect(page.getByText("clip-artifact-late")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "片段已生成" })).toHaveCount(0);
+  });
 });
 
 function storyWorldFixture() {

@@ -131,6 +131,14 @@ export type CancelGenerationJobResponse = {
   status: "cancel_requested" | "canceled";
 };
 
+export type DeleteStoryCamSessionResponse = {
+  bucketsTouched: string[];
+  ok: true;
+  removedObjectCount: number;
+  sessionId: string;
+  skippedObjectCount: number;
+};
+
 export type StitchSuggestionResponse = {
   ok: true;
   stitchSuggestion: ArtifactRef;
@@ -282,6 +290,18 @@ export async function cancelGenerationJob(jobId: string) {
   }
 
   return (await response.json()) as CancelGenerationJobResponse;
+}
+
+export async function deleteStoryCamSession(sessionId: string) {
+  const response = await fetch(`/api/storycam-sessions/${sessionId}`, {
+    method: "DELETE"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "session_deletion_failed"));
+  }
+
+  return (await response.json()) as DeleteStoryCamSessionResponse;
 }
 
 export async function createStitchSuggestion(input: { generatedClipArtifactIds: string[]; sessionId: string }) {

@@ -1356,13 +1356,13 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] happy path：input/photo -> story world -> storyboard -> expansion -> clip -> final work。
-- [ ] retry path：mock video failure -> 重拍 -> success。
-- [ ] deletion path：running job -> delete -> late result discarded。
+- [x] happy path：input/photo -> story world -> storyboard -> expansion -> clip -> final work。
+- [x] retry path：mock video failure -> 重拍 -> success。
+- [x] deletion path：running job -> delete -> late result discarded。
 
 **Verification:**
 
-- [ ] `pnpm test:e2e`
+- [x] `pnpm test:e2e`
 
 **Dependencies:** Task 30, Task 34
 

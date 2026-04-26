@@ -21,6 +21,7 @@ import {
   createFinalWork,
   createStitchSuggestion,
   createStoryboard,
+  deleteStoryCamSession,
   expandStoryboardGroup,
   generateClipJob,
   getGenerationJob,
@@ -45,6 +46,7 @@ export function StoryCamWorkspace() {
   const [isClipSubmitting, setIsClipSubmitting] = useState(false);
   const [finalWork, setFinalWork] = useState<FinalWorkResponse | null>(null);
   const [isFinalWorkSubmitting, setIsFinalWorkSubmitting] = useState(false);
+  const [isDeletingStory, setIsDeletingStory] = useState(false);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
 
@@ -56,9 +58,11 @@ export function StoryCamWorkspace() {
     const timer = window.setTimeout(async () => {
       try {
         const response = await getGenerationJob(clipJob.id);
-        setClipJob(response.job);
+        setClipJob((current) => (current?.id === clipJob.id ? response.job : current));
       } catch {
-        setClipJob((current) => (current ? { ...current, redactedError: "状态更新失败。", status: "failed" } : current));
+        setClipJob((current) =>
+          current?.id === clipJob.id ? { ...current, redactedError: "状态更新失败。", status: "failed" } : current
+        );
       }
     }, 1200);
 
@@ -93,6 +97,40 @@ export function StoryCamWorkspace() {
     setFinalWork(null);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
+  }
+
+  async function deleteCurrentStory() {
+    if (!storyWorld || isDeletingStory) {
+      return;
+    }
+
+    const sessionId = storyWorld.sessionId;
+    const runningClipJob = clipJob;
+
+    try {
+      setIsDeletingStory(true);
+      setStoryboardMessage("正在删除这个故事。");
+
+      if (runningClipJob?.status === "queued" || runningClipJob?.status === "running") {
+        await cancelGenerationJob(runningClipJob.id).catch(() => undefined);
+      }
+
+      await deleteStoryCamSession(sessionId);
+      setStoryWorld(null);
+      setStoryWorldConfirmed(false);
+      setStoryboard(null);
+      setSelectedCoreGroupIndex(null);
+      setExpansion(null);
+      setClipConfirmationSummary(null);
+      setClipJob(null);
+      setFinalWork(null);
+      setStoryboardStatus("idle");
+      setStoryboardMessage("这个故事已删除，可以重新开始。");
+    } catch {
+      setStoryboardMessage("删除失败，请稍后再试。");
+    } finally {
+      setIsDeletingStory(false);
+    }
   }
 
   async function generateStoryboard() {
@@ -292,9 +330,11 @@ export function StoryCamWorkspace() {
           />
         ) : storyWorld ? (
           <StoryWorldReview
+            isDeleting={isDeletingStory}
             isConfirmed={storyWorldConfirmed}
             key={storyWorld.artifacts.script.id}
             onConfirm={confirmStoryWorld}
+            onDeleteStory={deleteCurrentStory}
             onEditSaved={handleStoryWorldEdit}
             storyWorld={storyWorld}
           />
@@ -331,12 +371,22 @@ export function StoryCamWorkspace() {
             </p>
             <button
               className="mt-4 w-full rounded-md bg-teal-500 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400"
-              disabled={!storyWorld || !storyWorldConfirmed || storyboardStatus === "generating"}
+              disabled={!storyWorld || !storyWorldConfirmed || storyboardStatus === "generating" || isDeletingStory}
               onClick={generateStoryboard}
               type="button"
             >
               {storyboardStatus === "generating" ? "正在生成核心分镜" : "生成核心分镜"}
             </button>
+            {storyWorld ? (
+              <button
+                className="mt-2 w-full rounded-md border border-stone-700 px-4 py-2 text-sm font-semibold text-stone-400 transition hover:border-rose-300 hover:text-rose-100 disabled:cursor-not-allowed disabled:border-stone-800 disabled:text-stone-600"
+                disabled={isDeletingStory}
+                onClick={deleteCurrentStory}
+                type="button"
+              >
+                {isDeletingStory ? "正在删除" : "删除这个故事"}
+              </button>
+            ) : null}
           </section>
 
           <section className="rounded-lg border border-stone-700/70 bg-stone-950/70 p-4">
