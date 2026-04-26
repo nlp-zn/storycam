@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("auth foundation", () => {
-  test("shows Google login entry point", async ({ page }) => {
+  test("keeps account login chrome out of the first creation step", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.getByRole("button", { name: "使用 Google 登录" })).toBeVisible();
-    await expect(page.getByText("保存到你的账号")).toBeVisible();
+    await expect(page.getByRole("button", { name: "使用 Google 登录" })).toHaveCount(0);
+    await expect(page.getByText("保存到你的账号")).toHaveCount(0);
   });
 
   test("keeps real creation disabled until the user signs in", async ({ page }) => {

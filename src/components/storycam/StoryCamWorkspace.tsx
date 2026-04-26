@@ -390,24 +390,22 @@ export function StoryCamWorkspace() {
       />
     </div>
   ) : (
-    <div className="flex max-w-4xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       {workspaceNotice ? (
         <p className="rounded-[1.5rem] border border-[#00f0ff]/40 bg-[#00f0ff]/10 px-5 py-4 text-sm font-bold text-[#dbfcff]" role="status">
           {workspaceNotice}
         </p>
       ) : null}
       <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
-      <div className="mx-auto w-full max-w-md">
-        <GoogleSignInButton />
-      </div>
     </div>
   );
+  const isInputStep = activeStepIndex === 0 && !storyWorld;
 
   return (
     <main className="storycam-page">
       <StoryCamTopBar />
-      <div className="storycam-shell">
-        <StoryCamProgress activeIndex={activeStepIndex} />
+      <div className={`storycam-shell ${isInputStep ? "storycam-shell--centered" : ""}`}>
+        {isInputStep ? null : <StoryCamProgress activeIndex={activeStepIndex} />}
         <div className="storycam-workspace-surface">{mainSurface}</div>
       </div>
     </main>

@@ -87,8 +87,17 @@ button:disabled {
   align-items: start;
 }
 
+.storycam-shell--centered {
+  display: block;
+  max-width: 960px;
+}
+
+.storycam-shell--centered .storycam-workspace-surface {
+  margin: 0 auto;
+  width: 100%;
+}
+
 .storycam-stepper {
-  position: relative;
   position: sticky;
   top: 112px;
   min-height: min(720px, calc(100vh - 160px));
