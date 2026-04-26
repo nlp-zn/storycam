@@ -736,13 +736,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 根据计划视频长度输出 1-3 组。
-- [ ] 每组包含 title、story purpose、duration、scene、characters。
-- [ ] 扩展默认生成 3 张卡，最多 8 张。
+- [x] 根据计划视频长度输出 1-3 组。
+- [x] 每组包含 title、story purpose、duration、scene、characters。
+- [x] 扩展默认生成 3 张卡，最多 8 张。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run mock-storyboard`
+- [x] `pnpm test -- --run mock-storyboard`
 
 **Dependencies:** Task 6, Task 11, Task 12
 
