@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, StoryCamSessionRow } from "@/server/db/types";
+import { StoryCamRepositoryError, unwrapRepositoryResult } from "./repositoryErrors";
 
 export type StoryCamDbClient = SupabaseClient<Database>;
 
@@ -14,16 +15,6 @@ export type UpdateStoryCamSessionInput = Partial<CreateStoryCamSessionInput>;
 
 const sessionColumns =
   "id,user_id,status,generation_mode,planned_duration_seconds,core_group_target_count,created_at,updated_at,deleted_at" as const;
-
-export class StoryCamRepositoryError extends Error {
-  constructor(
-    readonly operation: string,
-    readonly code = "repository_error"
-  ) {
-    super(`StoryCam repository operation failed: ${operation}`);
-    this.name = "StoryCamRepositoryError";
-  }
-}
 
 export class StoryCamSessionRepository {
   constructor(private readonly client: StoryCamDbClient) {}
@@ -91,10 +82,4 @@ function toSessionUpdate(input: UpdateStoryCamSessionInput) {
   };
 }
 
-function unwrapRepositoryResult<T>(operation: string, data: T, error: { code?: string } | null) {
-  if (error) {
-    throw new StoryCamRepositoryError(operation, error.code);
-  }
-
-  return data;
-}
+export { StoryCamRepositoryError };

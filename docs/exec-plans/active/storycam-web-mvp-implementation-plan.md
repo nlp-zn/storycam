@@ -593,7 +593,7 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 **Acceptance criteria:**
 
 - [x] 可创建、读取、更新、soft delete session。
-- [ ] Artifact 写入保留 version，不覆盖旧版本。
+- [x] Artifact 写入保留 version，不覆盖旧版本。
 - [x] 删除 session 会 tombstone 关联 in-flight jobs，并 soft delete artifacts/media metadata。
 - [x] Repository scope 默认按 `user_id` 查询。
 - [x] Repository 不返回 service role key、长期公开 media URL 或其他敏感信息给上层 API。
