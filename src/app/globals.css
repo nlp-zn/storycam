@@ -133,15 +133,32 @@ button:disabled {
 }
 
 .storycam-step {
-  display: flex;
   min-height: 54px;
-  align-items: center;
-  gap: 14px;
   color: var(--storycam-outline);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
   text-align: left;
+}
+
+.storycam-step-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 14px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: inherit;
+}
+
+.storycam-step.is-reachable .storycam-step-button:hover {
+  color: var(--storycam-primary-soft);
+}
+
+.storycam-step.is-disabled {
+  opacity: 0.55;
 }
 
 .storycam-step-dot {
@@ -346,9 +363,12 @@ button:disabled {
   .storycam-step {
     width: 72px;
     min-height: 0;
+    text-align: center;
+  }
+
+  .storycam-step-button {
     flex-direction: column;
     gap: 12px;
-    text-align: center;
   }
 
   .storycam-panel {

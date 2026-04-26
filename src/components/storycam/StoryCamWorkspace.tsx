@@ -53,6 +53,7 @@ export function StoryCamWorkspace() {
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!clipJob || !shouldPollGenerationJob(clipJob.status)) {
@@ -84,6 +85,7 @@ export function StoryCamWorkspace() {
     setClipJob(null);
     setFinalWork(null);
     setIsStoryWorldEditorOpen(false);
+    setSelectedStepIndex(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
   }
@@ -133,6 +135,7 @@ export function StoryCamWorkspace() {
       setClipJob(null);
       setFinalWork(null);
       setIsStoryWorldEditorOpen(false);
+      setSelectedStepIndex(null);
       setStoryboardStatus("idle");
       setStoryboardMessage("这个故事已删除，可以重新开始。");
       setWorkspaceNotice("这个故事已删除，可以重新开始。");
@@ -163,6 +166,7 @@ export function StoryCamWorkspace() {
       setClipJob(null);
       setFinalWork(null);
       setIsStoryWorldEditorOpen(false);
+      setSelectedStepIndex(null);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
     } catch {
@@ -196,6 +200,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
+      setSelectedStepIndex(null);
       setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展卡。`);
     } catch {
       setStoryboardMessage("扩展卡生成失败，可以跳过扩展直接生成片段。");
@@ -226,6 +231,7 @@ export function StoryCamWorkspace() {
     setSelectedCoreGroupIndex(index);
     setClipJob(null);
     setFinalWork(null);
+    setSelectedStepIndex(null);
     setClipConfirmationSummary(
       `用「${group.title}」生成一个约 ${group.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
     );
@@ -262,6 +268,7 @@ export function StoryCamWorkspace() {
         status: response.status,
         type: "video_clip"
       });
+      setSelectedStepIndex(null);
       setStoryboardMessage("片段生成任务已创建。");
     } catch {
       setStoryboardMessage("片段生成任务创建失败，请重试。");
@@ -308,6 +315,7 @@ export function StoryCamWorkspace() {
       });
 
       setFinalWork(nextFinalWork);
+      setSelectedStepIndex(null);
       setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
     } catch {
       setStoryboardMessage("最终作品生成失败，请稍后再试。");
@@ -318,19 +326,20 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
-  const activeStepIndex = currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld });
-  const generationPanel = finalWork ? (
+  const reachedStepIndex = currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld });
+  const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
+  const generationPanel = activeStepIndex >= 4 && finalWork ? (
     <FinalWorkPanel finalWork={finalWork} />
-  ) : clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
+  ) : activeStepIndex >= 5 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
     <ClipReview
       clipArtifactId={clipJob.outputArtifactId}
       isSubmittingFinalWork={isFinalWorkSubmitting}
       onCreateFinalWork={createFinalWorkFromAcceptedClip}
       onRetake={retryClipGeneration}
     />
-  ) : clipJob ? (
+  ) : activeStepIndex >= 4 && clipJob ? (
     <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
-  ) : clipConfirmationSummary ? (
+  ) : activeStepIndex >= 4 && clipConfirmationSummary ? (
     <ProviderSendConfirm
       confirmationSummary={clipConfirmationSummary}
       isSubmitting={isClipSubmitting}
@@ -338,9 +347,25 @@ export function StoryCamWorkspace() {
       onConfirm={confirmClipGeneration}
     />
   ) : null;
-  const mainSurface = storyWorld ? (
+  function navigateToStep(index: number) {
+    if (index > reachedStepIndex) {
+      return;
+    }
+
+    setSelectedStepIndex(index);
+
+    if (index !== 1) {
+      setIsStoryWorldEditorOpen(false);
+    }
+  }
+
+  const mainSurface = storyWorld && activeStepIndex === 0 ? (
+    <div className="flex w-full flex-col gap-6">
+      <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
+    </div>
+  ) : storyWorld ? (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-      {storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
+      {activeStepIndex >= 3 && storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
         <ExpansionCanvas
           expansion={expansion}
           generationPanel={generationPanel}
@@ -350,7 +375,7 @@ export function StoryCamWorkspace() {
           selectedGroup={selectedGroup}
           selectedIndex={selectedCoreGroupIndex ?? 0}
         />
-      ) : storyboard && !isStoryWorldEditorOpen ? (
+      ) : activeStepIndex >= 2 && storyboard && !isStoryWorldEditorOpen ? (
         <CoreFramesStage
           generationPanel={generationPanel}
           isBusy={isExpansionLoading || isClipSubmitting}
@@ -405,7 +430,9 @@ export function StoryCamWorkspace() {
     <main className="storycam-page">
       <StoryCamTopBar />
       <div className={`storycam-shell ${isInputStep ? "storycam-shell--centered" : ""}`}>
-        {isInputStep ? null : <StoryCamProgress activeIndex={activeStepIndex} />}
+        {isInputStep ? null : (
+          <StoryCamProgress activeIndex={activeStepIndex} onSelectStep={navigateToStep} reachedIndex={reachedStepIndex} />
+        )}
         <div className="storycam-workspace-surface">{mainSurface}</div>
       </div>
     </main>
@@ -558,8 +585,16 @@ function StoryCamTopBar() {
   );
 }
 
-function StoryCamProgress({ activeIndex }: { activeIndex: number }) {
-  const activeHeight = workflowStages.length > 1 ? `${(activeIndex / (workflowStages.length - 1)) * 100}%` : "0%";
+function StoryCamProgress({
+  activeIndex,
+  onSelectStep,
+  reachedIndex
+}: {
+  activeIndex: number;
+  onSelectStep: (index: number) => void;
+  reachedIndex: number;
+}) {
+  const activeHeight = workflowStages.length > 1 ? `${(reachedIndex / (workflowStages.length - 1)) * 100}%` : "0%";
   const activeStyle = {
     "--storycam-mobile-progress": activeHeight,
     height: activeHeight
@@ -570,12 +605,28 @@ function StoryCamProgress({ activeIndex }: { activeIndex: number }) {
       <div className="storycam-stepper-line" />
       <div className="storycam-stepper-line-active" style={activeStyle} />
       <ol className="storycam-stepper-items">
-        {workflowStages.map((stage, index) => (
-          <li className={`storycam-step ${index === activeIndex ? "is-active" : ""}`} key={stage}>
-            <span className="storycam-step-dot">{index + 1}</span>
-            <span>{stage}</span>
-          </li>
-        ))}
+        {workflowStages.map((stage, index) => {
+          const isReachable = index <= reachedIndex;
+
+          return (
+            <li
+              className={`storycam-step ${index === activeIndex ? "is-active" : ""} ${isReachable ? "is-reachable" : "is-disabled"}`}
+              key={stage}
+            >
+              <button
+                aria-current={index === activeIndex ? "step" : undefined}
+                aria-label={`转到${stage}`}
+                className="storycam-step-button"
+                disabled={!isReachable}
+                onClick={() => onSelectStep(index)}
+                type="button"
+              >
+                <span className="storycam-step-dot">{index + 1}</span>
+                <span>{stage}</span>
+              </button>
+            </li>
+          );
+        })}
       </ol>
     </nav>
   );

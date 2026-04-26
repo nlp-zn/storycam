@@ -59,6 +59,11 @@ test.describe("StoryCam story world", () => {
     await page.getByRole("button", { name: "生成故事雏形" }).click();
 
     await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+    await page.getByRole("button", { name: "转到输入创意" }).click();
+    await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
+    await page.getByRole("button", { name: "转到故事世界" }).click();
+    await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "转到核心分镜" })).toBeDisabled();
     await expect(page.getByText("我的剧本")).toBeVisible();
     await expect(page.getByText("人物", { exact: true })).toBeVisible();
     await expect(page.getByText("地点", { exact: true })).toBeVisible();
