@@ -5,6 +5,9 @@ References are local context for agents. They are not product specs unless linke
 ## Current References
 
 - `openai-harness-engineering.md` — local summary of the OpenAI harness engineering article and how StoryCam applies it.
+- `seedance/seedance-2-series-tutorial.md` — placeholder for the official Doubao Seedance 2.0 series tutorial.
+- `seedance/seedance-2-prompt-guide.md` — placeholder for the official Doubao Seedance 2.0 prompt guide.
+- `seedance/seedance-2-video-generation-tutorial.md` — placeholder for the official Doubao Seedance 2.0 video generation tutorial.
 - `shanyin-director-master-source.md` — provenance and integration notes for the Shanyin Director Master reference.
 - `shanyin-director-master/` — local snapshot of director methodology.
 
