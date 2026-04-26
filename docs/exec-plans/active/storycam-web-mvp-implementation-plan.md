@@ -785,15 +785,15 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 1 个 clip 也生成新的 `final_work` 文件。
-- [ ] 2-3 个 clips 可按顺序 concat。
-- [ ] 输出文件写入 `storycam-generated` bucket。
-- [ ] final work metadata 写入 `storycam_artifacts` 和 `media_assets`。
-- [ ] 缺 FFmpeg 时返回可读、脱敏的配置错误。
+- [x] 1 个 clip 也生成新的 `final_work` 文件。
+- [x] 2-3 个 clips 可按顺序 concat。
+- [x] 输出文件写入 `storycam-generated` bucket。
+- [x] final work metadata 写入 `storycam_artifacts` 和 `media_assets`。
+- [x] 缺 FFmpeg 时返回可读、脱敏的配置错误。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run final-work`
+- [x] `pnpm test -- --run final-work`
 - [ ] 手动用 mock clip 生成 final work，通过 signed URL 播放。
 
 **Dependencies:** Task 9, Task 11, Task 14
