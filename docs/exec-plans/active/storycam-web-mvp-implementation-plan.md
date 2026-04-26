@@ -422,17 +422,17 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] `.env.example` 默认 `STORYCAM_GENERATION_MODE=mock`。
-- [ ] mock mode 拒绝非 mock provider。
-- [ ] `STORYCAM_VIDEO_PROVIDER=seedance_2_0` 时必须存在 `SEEDANCE_API_KEY`。
-- [ ] Supabase 必需 env 包含 `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`。
-- [ ] OpenRouter/Vercel AI SDK 必需 env 包含 `OPENROUTER_API_KEY` 和具体模型名配置。
-- [ ] 配置错误输出脱敏错误，不打印 secret。
+- [x] `.env.example` 默认 `STORYCAM_GENERATION_MODE=mock`。
+- [x] mock mode 拒绝非 mock provider。
+- [x] `STORYCAM_VIDEO_PROVIDER=seedance_2_0` 时必须存在 `SEEDANCE_API_KEY`。
+- [x] Supabase 必需 env 包含 `NEXT_PUBLIC_SUPABASE_URL`、`NEXT_PUBLIC_SUPABASE_ANON_KEY`、`SUPABASE_SERVICE_ROLE_KEY`。
+- [x] OpenRouter/Vercel AI SDK 必需 env 包含 `OPENROUTER_API_KEY` 和具体模型名配置。
+- [x] 配置错误输出脱敏错误，不打印 secret。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run config`
-- [ ] 手动设置非法 env 后 `pnpm dev` fail fast。
+- [x] `pnpm test -- --run config`
+- [x] 手动设置非法 env 后 `pnpm dev` fail fast。
 
 **Dependencies:** Task 3
 
