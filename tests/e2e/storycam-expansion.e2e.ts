@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam expansion", () => {
   test("expansion canvas keeps the selected core group and stable waiting slots", async ({ page }) => {
     let expansionRequestedFor = "";
 
+    await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
         contentType: "application/json",

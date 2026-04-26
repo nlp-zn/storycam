@@ -452,8 +452,8 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 - [x] UI 提供 Google 登录入口。
 - [x] Server route 能读取当前 Supabase user。
-- [ ] 上传照片、创建 session、真实生成视频、生成 final work 必须登录。
-- [ ] 未登录用户只能看样例/输入前导，不能创建真实资源。
+- [x] 上传照片、创建 session、真实生成视频、生成 final work 必须登录。
+- [x] 未登录用户只能看样例/输入前导，不能创建真实资源。
 
 **Verification:**
 

@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam final work", () => {
   test("mock happy path with photo can retake and create a private final work preview", async ({ page }) => {
     let generateCalls = 0;
     let finalWorkCalled = false;
 
+    await mockAuthenticated(page);
     await page.route("**/api/uploads", async (route) => {
       await route.fulfill({
         contentType: "application/json",

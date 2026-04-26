@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createStoryWorld, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
+import { createStoryWorld, getAuthStatus, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
 import type { CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
 import { directorChoices, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
@@ -10,6 +10,8 @@ type SubmitState =
   | { kind: "submitting"; message: string }
   | { kind: "success"; message: string; sessionId: string }
   | { kind: "error"; message: string };
+
+type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 
 type IdeaInputPanelProps = {
   onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse) => void;
@@ -23,12 +25,29 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
   const previewUrlRef = useRef<string | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
-  const canSubmit = idea.trim().length > 0 && submitState.kind !== "submitting";
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
+  const canSubmit = idea.trim().length > 0 && submitState.kind !== "submitting" && authStatus === "authenticated";
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
   const ideaLength = idea.trim().length;
 
   useEffect(() => {
+    let isMounted = true;
+
+    void getAuthStatus()
+      .then((response) => {
+        if (isMounted) {
+          setAuthStatus(response.authenticated ? "authenticated" : "anonymous");
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAuthStatus("error");
+        }
+      });
+
     return () => {
+      isMounted = false;
+
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = null;
@@ -38,6 +57,10 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
 
   async function submitStoryWorld() {
     if (!canSubmit) {
+      if (authStatus !== "authenticated") {
+        setSubmitState({ kind: "error", message: authGateMessage(authStatus) });
+      }
+
       return;
     }
 
@@ -202,6 +225,12 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
         </button>
       </div>
 
+      {authStatus !== "authenticated" ? (
+        <p className="mx-auto mt-4 max-w-xl rounded-2xl border border-[#3b494b] bg-black/30 px-4 py-3 text-center text-sm leading-6 text-[#b9cacb]" role="status">
+          {authGateMessage(authStatus)}
+        </p>
+      ) : null}
+
       {submitState.kind === "success" || submitState.kind === "error" ? (
         <p
           className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
@@ -236,6 +265,18 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
       </div>
     </section>
   );
+}
+
+function authGateMessage(authStatus: AuthStatus) {
+  if (authStatus === "checking") {
+    return "正在确认登录状态。";
+  }
+
+  if (authStatus === "error") {
+    return "暂时无法确认登录状态，请稍后再试。";
+  }
+
+  return "登录后才能上传照片和生成真实故事。你可以先编辑想法。";
 }
 
 function messageForError(error: unknown) {

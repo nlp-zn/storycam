@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam story world", () => {
   test("story world must be confirmed before storyboard generation and edits stale downstream work", async ({ page }) => {
+    await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
         contentType: "application/json",

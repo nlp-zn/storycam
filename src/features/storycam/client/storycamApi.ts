@@ -5,6 +5,19 @@ type ArtifactRef = {
   version: number;
 };
 
+export type AuthStatusResponse =
+  | {
+      authenticated: true;
+      user: {
+        email?: string;
+        id: string;
+      };
+    }
+  | {
+      authenticated: false;
+      user: null;
+    };
+
 export type UploadStoryCamPhotoResponse = {
   ok: true;
   media: {
@@ -154,6 +167,20 @@ export type FinalWorkResponse = {
   };
   ok: true;
 };
+
+export async function getAuthStatus() {
+  const response = await fetch("/api/auth/me");
+
+  if (response.status === 401) {
+    return (await response.json()) as AuthStatusResponse;
+  }
+
+  if (!response.ok) {
+    throw new Error("auth_status_failed");
+  }
+
+  return (await response.json()) as AuthStatusResponse;
+}
 
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {
   const formData = new FormData();

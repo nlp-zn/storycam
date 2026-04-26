@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam core storyboard", () => {
   test("core storyboard groups show the duration plan and one clip per group", async ({ page }) => {
+    await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
         contentType: "application/json",

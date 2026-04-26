@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam visual smoke", () => {
   test("homepage has visible non-empty desktop and mobile states", async ({ page }) => {
@@ -70,6 +71,8 @@ test.describe("StoryCam visual smoke", () => {
 });
 
 async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
+  await mockAuthenticated(page);
+
   await page.route("**/api/uploads", async (route) => {
     await route.fulfill({
       contentType: "application/json",

@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam generate clip", () => {
   test("clip generation requires one-sentence confirmation and supports cancel and retry", async ({ page }) => {
     let generateCalls = 0;
 
+    await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -197,6 +199,7 @@ test.describe("StoryCam generate clip", () => {
       });
     });
 
+    await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
         contentType: "application/json",

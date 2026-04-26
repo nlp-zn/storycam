@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam story input", () => {
   test("story input uploads a photo preview and calls story-world", async ({ page }) => {
     let uploadCalled = false;
     let storyWorldCalled = false;
 
+    await mockAuthenticated(page);
     await page.route("**/api/uploads", async (route) => {
       uploadCalled = true;
       await route.fulfill({
