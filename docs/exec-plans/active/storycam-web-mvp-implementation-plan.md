@@ -623,15 +623,15 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 **Acceptance criteria:**
 
 - [ ] 支持 Phase 1 上传人物、宠物、场景或记忆照片。
-- [ ] 只允许安全图片类型和有限大小。
+- [x] 只允许安全图片类型和有限大小。
 - [ ] 上传文件写入 `storycam-uploads` 私有 bucket。
 - [ ] 生成 clip/final work 写入 `storycam-generated` 私有 bucket。
-- [ ] 预览使用短期 signed URL 或 authenticated proxy。
+- [x] 预览使用短期 signed URL 或 authenticated proxy。
 - [ ] 删除 session 会删除关联 Supabase Storage objects。
 
 **Verification:**
 
-- [ ] `pnpm test -- --run media-store`
+- [x] `pnpm test -- --run media-store`
 - [ ] `pnpm test -- --run storage-policy`
 
 **Dependencies:** Task 8A
