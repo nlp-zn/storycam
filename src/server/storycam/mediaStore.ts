@@ -50,11 +50,28 @@ export type UploadStorageClient = {
   };
 };
 
-export type StoryCamStorageClient = SignedUrlStorageClient & UploadStorageClient;
+export type DownloadStorageClient = {
+  storage: {
+    from(bucket: string): {
+      download(path: string): Promise<{
+        data: Blob | null;
+        error: { message?: string } | null;
+      }>;
+    };
+  };
+};
+
+export type StoryCamStorageClient = SignedUrlStorageClient & UploadStorageClient & DownloadStorageClient;
 
 export class StoryCamMediaStoreError extends Error {
   constructor(
-    readonly code: "invalid_mime_type" | "invalid_size" | "invalid_bucket" | "signed_url_failed" | "upload_failed"
+    readonly code:
+      | "download_failed"
+      | "invalid_mime_type"
+      | "invalid_size"
+      | "invalid_bucket"
+      | "signed_url_failed"
+      | "upload_failed"
   ) {
     super(`StoryCam media store error: ${code}`);
     this.name = "StoryCamMediaStoreError";
@@ -120,6 +137,18 @@ export async function createStoryCamSignedUrl(
   }
 
   return data.signedUrl;
+}
+
+export async function downloadStoryCamObject(client: DownloadStorageClient, bucket: StoryCamPrivateBucket, path: string) {
+  assertStoryCamPrivateBucket(bucket);
+
+  const { data, error } = await client.storage.from(bucket).download(path);
+
+  if (error || !data) {
+    throw new StoryCamMediaStoreError("download_failed");
+  }
+
+  return new Uint8Array(await data.arrayBuffer());
 }
 
 export function assertStoryCamPrivateBucket(bucket: string): asserts bucket is StoryCamPrivateBucket {

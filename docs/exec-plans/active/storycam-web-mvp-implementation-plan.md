@@ -989,13 +989,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 没有 confirmed clip 时不能生成 final work。
-- [ ] 1 个 clip 也生成新的 final work 文件。
-- [ ] final work 只支持账号内预览/保存，不生成分享链接。
+- [x] 没有 confirmed clip 时不能生成 final work。
+- [x] 1 个 clip 也生成新的 final work 文件。
+- [x] final work 只支持账号内预览/保存，不生成分享链接。
 
 **Verification:**
 
-- [ ] `pnpm test:api -- --run final-work`
+- [x] `pnpm test:api -- --run final-work`
 - [ ] 手动播放 final work。
 
 **Dependencies:** Task 15, Task 22
