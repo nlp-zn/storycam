@@ -820,13 +820,13 @@ users/{user_id}/sessions/{session_id}/thumbs/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [ ] 空输入/过长输入返回 redacted validation error。
-- [ ] mock mode 生成 script/person/scene。
-- [ ] 返回 artifact versions。
+- [x] 空输入/过长输入返回 redacted validation error。
+- [x] mock mode 生成 script/person/scene。
+- [x] 返回 artifact versions。
 
 **Verification:**
 
-- [ ] `pnpm test:api -- --run story-world`
+- [x] `pnpm test:api -- --run story-world`
 
 **Dependencies:** Task 8A, Task 9, Task 12
 
