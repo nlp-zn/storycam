@@ -1,6 +1,6 @@
 # Local Development Contract
 
-Status: planned contract until app scaffolding begins.
+Status: active foundation contract.
 
 ## Goal
 
@@ -15,19 +15,24 @@ A new developer should be able to run StoryCam in mock mode without AI provider 
 - mock AI providers by default
 - optional secret-gated OpenRouter and Seedance smoke tests
 
-## Planned Commands
+## Commands
 
 ```bash
 pnpm install
 pnpm dev
-pnpm storycam:seed
-pnpm storycam:reset
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
+```
+
+Planned but not implemented yet:
+
+```bash
+pnpm storycam:seed
+pnpm storycam:reset
 ```
 
 ## Required Environment Variables

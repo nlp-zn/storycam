@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:api": "vitest run tests/api --passWithNoTests",
-    "test:e2e": "echo \"E2E tests are not wired yet\"",
-    "qa:visual": "echo \"Visual QA is not wired yet\""
+    "test:e2e": "playwright test tests/e2e/storycam.sanity.e2e.ts",
+    "qa:visual": "playwright test tests/e2e/storycam.visual.e2e.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.2.4",
@@ -21,6 +21,7 @@
     "tailwindcss": "4.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "@types/node": "25.6.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
