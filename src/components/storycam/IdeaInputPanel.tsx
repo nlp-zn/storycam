@@ -14,12 +14,18 @@ type SubmitState =
 type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 
 type IdeaInputPanelProps = {
-  onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse) => void;
+  initialChoices?: string[];
+  initialIdea?: string;
+  onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) => void;
 };
 
-export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
-  const [idea, setIdea] = useState("我想把暗恋拍成韩剧雨夜");
-  const [selectedChoices, setSelectedChoices] = useState<string[]>(["像私人回忆"]);
+export function IdeaInputPanel({
+  initialChoices = ["像私人回忆"],
+  initialIdea = "我想把暗恋拍成韩剧雨夜",
+  onStoryWorldCreated
+}: IdeaInputPanelProps) {
+  const [idea, setIdea] = useState(initialIdea);
+  const [selectedChoices, setSelectedChoices] = useState<string[]>(initialChoices);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -77,7 +83,7 @@ export function IdeaInputPanel({ onStoryWorldCreated }: IdeaInputPanelProps) {
       });
 
       setSessionId(storyWorld.sessionId);
-      onStoryWorldCreated?.(storyWorld);
+      onStoryWorldCreated?.(storyWorld, { idea: idea.trim(), selectedChoices });
       setSubmitState({
         kind: "success",
         message: `故事雏形已生成，剧本版本 ${storyWorld.artifacts.script.version}。`,

@@ -50,7 +50,6 @@ test.describe("StoryCam core storyboard", () => {
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await page.getByRole("button", { name: "生成核心分镜" }).click();
 
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page.getByText("3 个核心分镜组，每组生成一个片段。")).toBeVisible();

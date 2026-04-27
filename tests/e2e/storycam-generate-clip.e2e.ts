@@ -136,7 +136,6 @@ test.describe("StoryCam generate clip", () => {
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await page.getByRole("button", { name: "生成核心分镜" }).click();
     await page.getByRole("button", { name: "扩展这一组" }).first().click();
     await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
 
@@ -285,7 +284,6 @@ test.describe("StoryCam generate clip", () => {
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await page.getByRole("button", { name: "生成核心分镜" }).click();
     await page.getByRole("button", { name: "扩展这一组" }).first().click();
     await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
     await page.getByRole("button", { name: "确认发送生成片段" }).click();

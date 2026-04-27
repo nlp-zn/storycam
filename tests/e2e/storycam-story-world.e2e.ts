@@ -58,28 +58,34 @@ test.describe("StoryCam story world", () => {
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
 
-    await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page.getByText("雨夜未发送", { exact: false })).toBeVisible();
+    await expect(page.getByText("保存到你的账号")).toHaveCount(0);
+    await expect(page.getByText("当前流程")).toHaveCount(0);
+    await expect(page.getByText("片段时间线")).toHaveCount(0);
     await page.getByRole("button", { name: "转到输入创意" }).click();
     await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
-    await page.getByRole("button", { name: "转到故事世界" }).click();
-    await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/input$/);
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
     await expect(page.getByRole("button", { name: "转到核心分镜" })).toBeDisabled();
     await expect(page.getByText("我的剧本")).toBeVisible();
     await expect(page.getByText("人物", { exact: true })).toBeVisible();
     await expect(page.getByText("地点", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "生成核心分镜" })).toBeDisabled();
 
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await expect(page.getByRole("button", { name: "生成核心分镜" })).toBeEnabled();
-    await page.getByRole("button", { name: "生成核心分镜" }).click();
     await expect(page.getByText("分镜已准备好：3 个核心分镜组。")).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
 
     await page.getByRole("button", { name: "改剧本" }).click();
     await page.getByLabel("我的剧本内容").fill("她决定走进便利店，把伞递给他。");
     await page.getByRole("button", { name: "保存修改" }).click();
 
-    await expect(page.getByText("分镜已过期，需要重新确认故事世界。")).toBeVisible();
-    await expect(page.getByRole("button", { name: "生成核心分镜" })).toBeDisabled();
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "转到核心分镜" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "对，继续拍这一段" })).toBeVisible();
   });
 });
 

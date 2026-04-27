@@ -39,9 +39,8 @@ export function StoryWorldReview({
             <span className="size-2 rounded-full bg-[#00f0ff]" />
             <span className="storycam-eyebrow">步骤 2</span>
           </div>
-          <p className="storycam-eyebrow">确认故事世界</p>
-          <h1 className="storycam-heading-lg">{storyWorld.storyWorld.script.title}</h1>
-          <p className="mt-3 text-lg leading-8 text-[#b9cacb]">审查你的生成资产和剧本组件，确认像你的故事后再进入核心分镜。</p>
+          <h1 className="storycam-heading-lg">确认故事世界</h1>
+          <p className="mt-3 text-lg leading-8 text-[#b9cacb]">审查你的生成资产和剧本组件。</p>
         </div>
         <span
           className={`rounded-full border px-4 py-2 text-sm font-bold ${
@@ -63,7 +62,9 @@ export function StoryWorldReview({
                 </span>
                 <div>
                   <p className="storycam-eyebrow">我的剧本</p>
-                  <p className="mt-1 text-xs font-bold text-[#849495]">V {storyWorld.storyWorld.script.version}</p>
+                  <p className="mt-1 text-xs font-bold text-[#849495]">
+                    {storyWorld.storyWorld.script.title} · V {storyWorld.storyWorld.script.version}
+                  </p>
                 </div>
               </div>
               <button

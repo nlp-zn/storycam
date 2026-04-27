@@ -36,6 +36,16 @@ import {
 import { shouldPollGenerationJob } from "@/features/storycam/client/jobPolling";
 import { workflowStages } from "@/features/storycam/domain/shellContent";
 
+const stepPaths = [
+  "/storycam/input",
+  "/storycam/story-world",
+  "/storycam/core-storyboard",
+  "/storycam/expansion",
+  "/storycam/clip-generation",
+  "/storycam/clip-review",
+  "/storycam/export"
+] as const;
+
 export function StoryCamWorkspace() {
   const [storyWorld, setStoryWorld] = useState<CreateStoryWorldResponse | null>(null);
   const [storyWorldConfirmed, setStoryWorldConfirmed] = useState(false);
@@ -53,7 +63,16 @@ export function StoryCamWorkspace() {
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
-  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(() =>
+    typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname)
+  );
+  const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["像私人回忆"] });
+
+  useEffect(() => {
+    if (window.location.pathname === "/" || window.location.pathname === "/storycam") {
+      window.history.replaceState(null, "", stepPaths[0]);
+    }
+  }, []);
 
   useEffect(() => {
     if (!clipJob || !shouldPollGenerationJob(clipJob.status)) {
@@ -74,7 +93,8 @@ export function StoryCamWorkspace() {
     return () => window.clearTimeout(timer);
   }, [clipJob]);
 
-  function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse) {
+  function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) {
+    setInputDraft(draft);
     setWorkspaceNotice(null);
     setStoryWorld(nextStoryWorld);
     setStoryWorldConfirmed(false);
@@ -88,12 +108,17 @@ export function StoryCamWorkspace() {
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
+    syncStepPath(1);
   }
 
-  function confirmStoryWorld() {
+  async function confirmStoryWorld() {
+    if (!storyWorld || storyboardStatus === "generating") {
+      return;
+    }
+
     setStoryWorldConfirmed(true);
     setIsStoryWorldEditorOpen(false);
-    setStoryboardMessage("故事世界已确认，可以生成核心分镜。");
+    await generateStoryboardFromStoryWorld(storyWorld);
   }
 
   function handleStoryWorldEdit() {
@@ -107,6 +132,7 @@ export function StoryCamWorkspace() {
     setIsStoryWorldEditorOpen(false);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
+    syncStepPath(1);
   }
 
   async function deleteCurrentStory() {
@@ -151,12 +177,20 @@ export function StoryCamWorkspace() {
       return;
     }
 
+    await generateStoryboardFromStoryWorld(storyWorld);
+  }
+
+  async function generateStoryboardFromStoryWorld(currentStoryWorld: CreateStoryWorldResponse) {
+    if (storyboardStatus === "generating") {
+      return;
+    }
+
     try {
       setStoryboardStatus("generating");
       setStoryboardMessage("正在生成核心分镜。");
       const storyboard = await createStoryboard({
-        confirmedArtifactVersions: confirmedArtifactVersionsFromStoryWorld(storyWorld),
-        sessionId: storyWorld.sessionId
+        confirmedArtifactVersions: confirmedArtifactVersionsFromStoryWorld(currentStoryWorld),
+        sessionId: currentStoryWorld.sessionId
       });
 
       setStoryboard(storyboard);
@@ -169,6 +203,7 @@ export function StoryCamWorkspace() {
       setSelectedStepIndex(null);
       setStoryboardStatus("ready");
       setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
+      syncStepPath(2);
     } catch {
       setStoryboardStatus("error");
       setStoryboardMessage("核心分镜生成失败，请重新确认后再试。");
@@ -202,6 +237,7 @@ export function StoryCamWorkspace() {
       setFinalWork(null);
       setSelectedStepIndex(null);
       setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展卡。`);
+      syncStepPath(3);
     } catch {
       setStoryboardMessage("扩展卡生成失败，可以跳过扩展直接生成片段。");
     } finally {
@@ -236,6 +272,7 @@ export function StoryCamWorkspace() {
       `用「${group.title}」生成一个约 ${group.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
     );
     setStoryboardMessage("请确认是否发送这一组生成片段。");
+    syncStepPath(4);
   }
 
   async function confirmClipGeneration() {
@@ -270,6 +307,7 @@ export function StoryCamWorkspace() {
       });
       setSelectedStepIndex(null);
       setStoryboardMessage("片段生成任务已创建。");
+      syncStepPath(4);
     } catch {
       setStoryboardMessage("片段生成任务创建失败，请重试。");
     } finally {
@@ -317,6 +355,7 @@ export function StoryCamWorkspace() {
       setFinalWork(nextFinalWork);
       setSelectedStepIndex(null);
       setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
+      syncStepPath(6);
     } catch {
       setStoryboardMessage("最终作品生成失败，请稍后再试。");
     } finally {
@@ -326,8 +365,21 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
-  const reachedStepIndex = currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld });
+  const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld });
   const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
+  const showWorkflowSidebar = Boolean(storyWorld && activeStepIndex >= 2);
+
+  useEffect(() => {
+    function handlePopState() {
+      const stepIndex = stepIndexFromPath(window.location.pathname);
+
+      setSelectedStepIndex(stepIndex !== null && stepIndex <= reachedStepIndex ? stepIndex : null);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [reachedStepIndex]);
   const generationPanel = activeStepIndex >= 4 && finalWork ? (
     <FinalWorkPanel finalWork={finalWork} />
   ) : activeStepIndex >= 5 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
@@ -353,6 +405,7 @@ export function StoryCamWorkspace() {
     }
 
     setSelectedStepIndex(index);
+    syncStepPath(index);
 
     if (index !== 1) {
       setIsStoryWorldEditorOpen(false);
@@ -361,10 +414,14 @@ export function StoryCamWorkspace() {
 
   const mainSurface = storyWorld && activeStepIndex === 0 ? (
     <div className="flex w-full flex-col gap-6">
-      <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
+      <IdeaInputPanel
+        initialChoices={inputDraft.selectedChoices}
+        initialIdea={inputDraft.idea}
+        onStoryWorldCreated={handleStoryWorldCreated}
+      />
     </div>
   ) : storyWorld ? (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+    <div className={`grid gap-8 ${showWorkflowSidebar ? "lg:grid-cols-[minmax(0,1fr)_320px]" : ""}`}>
       {activeStepIndex >= 3 && storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
         <ExpansionCanvas
           expansion={expansion}
@@ -399,20 +456,22 @@ export function StoryCamWorkspace() {
         />
       )}
 
-      <StoryCamSidebar
-        activeStepIndex={activeStepIndex}
-        generateStoryboard={generateStoryboard}
-        isDeletingStory={isDeletingStory}
-        deleteCurrentStory={deleteCurrentStory}
-        selectedCoreGroupIndex={selectedCoreGroupIndex}
-        selectCoreGroup={selectCoreGroup}
-        storyboard={storyboard}
-        storyboardMessage={storyboardMessage}
-        storyboardStatus={storyboardStatus}
-        storyWorld={storyWorld}
-        storyWorldConfirmed={storyWorldConfirmed}
-        expandCoreGroup={expandCoreGroup}
-      />
+      {showWorkflowSidebar ? (
+        <StoryCamSidebar
+          activeStepIndex={activeStepIndex}
+          generateStoryboard={generateStoryboard}
+          isDeletingStory={isDeletingStory}
+          deleteCurrentStory={deleteCurrentStory}
+          selectedCoreGroupIndex={selectedCoreGroupIndex}
+          selectCoreGroup={selectCoreGroup}
+          storyboard={storyboard}
+          storyboardMessage={storyboardMessage}
+          storyboardStatus={storyboardStatus}
+          storyWorld={storyWorld}
+          storyWorldConfirmed={storyWorldConfirmed}
+          expandCoreGroup={expandCoreGroup}
+        />
+      ) : null}
     </div>
   ) : (
     <div className="flex w-full flex-col gap-6">
@@ -421,10 +480,14 @@ export function StoryCamWorkspace() {
           {workspaceNotice}
         </p>
       ) : null}
-      <IdeaInputPanel onStoryWorldCreated={handleStoryWorldCreated} />
+      <IdeaInputPanel
+        initialChoices={inputDraft.selectedChoices}
+        initialIdea={inputDraft.idea}
+        onStoryWorldCreated={handleStoryWorldCreated}
+      />
     </div>
   );
-  const isInputStep = activeStepIndex === 0 && !storyWorld;
+  const isInputStep = activeStepIndex === 0;
 
   return (
     <main className="storycam-page">
@@ -538,6 +601,7 @@ function StoryCamSidebar({
 }
 
 type CurrentStepInput = {
+  clipConfirmationSummary: string | null;
   clipJob: GenerationJobSummary | null;
   expansion: ExpandStoryboardGroupResponse | null;
   finalWork: FinalWorkResponse | null;
@@ -545,7 +609,7 @@ type CurrentStepInput = {
   storyWorld: CreateStoryWorldResponse | null;
 };
 
-function currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorld }: CurrentStepInput) {
+function currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld }: CurrentStepInput) {
   if (finalWork) {
     return 6;
   }
@@ -555,6 +619,10 @@ function currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorl
   }
 
   if (clipJob) {
+    return 4;
+  }
+
+  if (clipConfirmationSummary) {
     return 4;
   }
 
@@ -571,6 +639,22 @@ function currentStepIndex({ clipJob, expansion, finalWork, storyboard, storyWorl
   }
 
   return 0;
+}
+
+function syncStepPath(index: number) {
+  const path = stepPaths[index];
+
+  if (!path || typeof window === "undefined" || window.location.pathname === path) {
+    return;
+  }
+
+  window.history.pushState(null, "", path);
+}
+
+function stepIndexFromPath(pathname: string) {
+  const index = stepPaths.findIndex((path) => path === pathname);
+
+  return index >= 0 ? index : null;
 }
 
 function StoryCamTopBar() {
