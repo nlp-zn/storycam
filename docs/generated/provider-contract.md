@@ -64,7 +64,8 @@ Requirements:
 - structured or schema-validated output,
 - malformed JSON handling,
 - no raw prompt exposure in API responses,
-- model name from `OPENROUTER_TEXT_MODEL`.
+- primary model name from `OPENROUTER_TEXT_MODEL`.
+- optional comma-separated fallback chain from `OPENROUTER_TEXT_FALLBACK_MODELS`.
 - recommended starting model: `deepseek/deepseek-v4-pro`.
 
 ## Multimodal Provider
@@ -160,6 +161,7 @@ STORYCAM_FINAL_WORK_PROVIDER=mock|ffmpeg
 
 OPENROUTER_API_KEY=
 OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 

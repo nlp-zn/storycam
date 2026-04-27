@@ -37,6 +37,7 @@ Required secrets and model names:
 ```text
 OPENROUTER_API_KEY=
 OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 
@@ -48,7 +49,7 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 
 | StoryCam stage | Default | Real path | Notes |
 | --- | --- | --- | --- |
-| Story world text | mock | OpenRouter text | Uses structured output; raw prompts stay server-side. |
+| Story world text | mock | OpenRouter text | Uses AI SDK structured JSON output; raw prompts stay server-side. `OPENROUTER_TEXT_FALLBACK_MODELS` can provide a comma-separated fallback chain when the primary model's structured-output endpoint is unavailable. |
 | Photo understanding | mock | OpenRouter multimodal | Signed URLs and raw private photos must not appear in logs. |
 | Core storyboard image | placeholder/mock | OpenRouter image | Recommended starting model: `openai/gpt-5.4-image-2`. |
 | Video clip | mock video | Seedance 2.0 | One clip per confirmed core storyboard group. |

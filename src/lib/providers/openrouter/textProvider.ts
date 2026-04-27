@@ -13,10 +13,13 @@ export type OpenRouterStructuredPrompt<Input> = {
 export type OpenRouterTextProviderOptions<Input, Output> = {
   apiKey: string;
   buildPrompt: (input: Input) => OpenRouterStructuredPrompt<Input>;
+  fallbackModels?: string[];
   generateObject?: StoryCamGenerateObject;
   maxAttempts?: number;
   model: string;
   outputSchema: z.ZodType<Output>;
+  schemaDescription?: string;
+  schemaName?: string;
 };
 
 export function createOpenRouterTextProvider<Input, Output>(
@@ -26,10 +29,12 @@ export function createOpenRouterTextProvider<Input, Output>(
     providerKind: "text" as const,
     providerName: "openrouter" as const
   };
-  const model = createOpenRouterChatModel({
-    apiKey: options.apiKey,
-    model: options.model
-  });
+  const models = [options.model, ...(options.fallbackModels ?? [])].map((modelId) =>
+    createOpenRouterChatModel({
+      apiKey: options.apiKey,
+      model: modelId
+    })
+  );
   const generate = options.generateObject ?? storyCamGenerateObject;
 
   return {
@@ -42,9 +47,11 @@ export function createOpenRouterTextProvider<Input, Output>(
         generate,
         identity,
         maxAttempts: options.maxAttempts ?? 2,
-        model,
+        models,
         outputSchema: options.outputSchema,
-        prompt
+        prompt,
+        schemaDescription: options.schemaDescription,
+        schemaName: options.schemaName
       });
     }
   };
@@ -55,18 +62,23 @@ async function generateValidatedObject<Output>(input: {
   generate: StoryCamGenerateObject;
   identity: { providerKind: "text"; providerName: "openrouter" };
   maxAttempts: number;
-  model: LanguageModel;
+  models: LanguageModel[];
   outputSchema: z.ZodType<Output>;
   prompt: OpenRouterStructuredPrompt<unknown>;
+  schemaDescription?: string;
+  schemaName?: string;
 }) {
   let lastError: unknown = new Error("OpenRouter returned no object.");
 
   for (let attempt = 0; attempt < input.maxAttempts; attempt += 1) {
     try {
+      const model = input.models[Math.min(attempt, input.models.length - 1)];
       const result = await input.generate({
-        model: input.model,
+        model,
         prompt: input.prompt.prompt,
         schema: input.outputSchema,
+        schemaDescription: input.schemaDescription,
+        schemaName: input.schemaName,
         system: input.prompt.system,
         temperature: input.prompt.temperature
       });

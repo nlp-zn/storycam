@@ -73,9 +73,10 @@ STORYCAM_FINAL_WORK_PROVIDER=mock
 
 OPENROUTER_API_KEY=<your-openrouter-key>
 OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash
 ```
 
-This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads.
+This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads. Story-world text uses AI SDK structured JSON output. The fallback list is optional, but useful when a primary OpenRouter model is available for plain chat while its structured-output endpoint is temporarily unavailable.
 
 To generate Step 2 character and scene asset boards from the asset cards, enable the image provider too:
 
@@ -219,6 +220,7 @@ Real provider smoke tests are opt-in and secret-gated. See `providers.md` for th
 ```text
 OPENROUTER_API_KEY=
 OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 SEEDANCE_API_KEY=

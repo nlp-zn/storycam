@@ -43,6 +43,7 @@ export type StoryCamConfig = {
   };
   openrouter?: {
     apiKey: string;
+    textFallbackModels?: string[];
     textModel?: string;
     multimodalModel?: string;
     imageModel?: string;
@@ -142,6 +143,9 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const openrouterTextModel = textProvider === "openrouter"
     ? required(env, "OPENROUTER_TEXT_MODEL", issues)
     : undefined;
+  const openrouterTextFallbackModels = textProvider === "openrouter"
+    ? optionalCsv(env, "OPENROUTER_TEXT_FALLBACK_MODELS")
+    : [];
   const openrouterMultimodalModel = multimodalProvider === "openrouter"
     ? required(env, "OPENROUTER_MULTIMODAL_MODEL", issues)
     : undefined;
@@ -160,6 +164,7 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const openrouter = needsOpenRouter
     ? {
         apiKey: openrouterApiKey ?? "",
+        ...(openrouterTextFallbackModels.length ? { textFallbackModels: openrouterTextFallbackModels } : {}),
         ...(openrouterTextModel ? { textModel: openrouterTextModel } : {}),
         ...(openrouterMultimodalModel ? { multimodalModel: openrouterMultimodalModel } : {}),
         ...(openrouterImageModel ? { imageModel: openrouterImageModel } : {})
@@ -245,6 +250,13 @@ function rejectNonMockProvider(variable: string, value: string, issues: ConfigIs
       message: `${variable} must be mock when STORYCAM_GENERATION_MODE=mock.`
     });
   }
+}
+
+function optionalCsv(env: Env, variable: string) {
+  return (env[variable] ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function isValidUrl(value: string) {

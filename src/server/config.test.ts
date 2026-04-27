@@ -28,6 +28,7 @@ describe("loadStoryCamConfig", () => {
     const config = loadStoryCamConfig({
       ...validMockEnv,
       OPENROUTER_API_KEY: "openrouter-key",
+      OPENROUTER_TEXT_FALLBACK_MODELS: "deepseek/deepseek-v4-flash, qwen/qwen3.6-flash",
       OPENROUTER_TEXT_MODEL: "deepseek/deepseek-v4-pro",
       STORYCAM_TEXT_PROVIDER: "openrouter"
     });
@@ -40,6 +41,7 @@ describe("loadStoryCamConfig", () => {
     });
     expect(config.openrouter).toEqual({
       apiKey: "openrouter-key",
+      textFallbackModels: ["deepseek/deepseek-v4-flash", "qwen/qwen3.6-flash"],
       textModel: "deepseek/deepseek-v4-pro"
     });
   });

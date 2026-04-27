@@ -20,7 +20,9 @@ describe("openrouter text provider", () => {
       }),
       generateObject,
       model: "deepseek/deepseek-v4-pro",
-      outputSchema
+      outputSchema,
+      schemaDescription: "A tiny test schema.",
+      schemaName: "storycam_test_output"
     });
 
     const result = await provider.generate({ idea: "雨夜便利店" });
@@ -35,6 +37,8 @@ describe("openrouter text provider", () => {
       expect.objectContaining({
         prompt: expect.stringContaining("雨夜便利店"),
         schema: outputSchema,
+        schemaDescription: "A tiny test schema.",
+        schemaName: "storycam_test_output",
         system: expect.stringContaining("structured")
       })
     );
@@ -65,6 +69,33 @@ describe("openrouter text provider", () => {
       retryable: true
     });
     expect(JSON.stringify(result)).not.toContain("openrouter-secret");
+  });
+
+  it("moves to a fallback model when the primary structured-output call fails", async () => {
+    const generateObject = vi.fn().mockRejectedValueOnce(new Error("primary model structured output failed")).mockResolvedValueOnce({
+      object: { title: "备用模型片名" }
+    });
+    const provider = createOpenRouterTextProvider({
+      apiKey: "openrouter-secret",
+      buildPrompt: () => ({
+        prompt: "Create a StoryCam script.",
+        system: "Return structured JSON."
+      }),
+      fallbackModels: ["deepseek/deepseek-v4-flash"],
+      generateObject,
+      maxAttempts: 2,
+      model: "deepseek/deepseek-v4-pro",
+      outputSchema
+    });
+
+    const result = await provider.generate({ idea: "structured fallback please" });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { title: "备用模型片名" }
+    });
+    expect(generateObject).toHaveBeenCalledTimes(2);
+    expect(generateObject.mock.calls[0]?.[0]?.model).not.toBe(generateObject.mock.calls[1]?.[0]?.model);
   });
 });
 

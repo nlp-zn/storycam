@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateImage, generateObject } from "ai";
+import { extractJsonMiddleware, generateImage, generateText, Output, wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
 import type { z } from "zod";
 
@@ -9,6 +9,8 @@ export type StoryCamGenerateObjectInput<T> = {
   model: LanguageModel;
   prompt: string;
   schema: z.ZodType<T>;
+  schemaDescription?: string;
+  schemaName?: string;
   system: string;
   temperature?: number;
 };
@@ -31,11 +33,18 @@ export type StoryCamGenerateImageInput = {
 export type StoryCamGenerateImage = (input: StoryCamGenerateImageInput) => Promise<{ image?: StoryCamGeneratedImage }>;
 
 export function createOpenRouterChatModel(input: { apiKey: string; model: string }) {
-  return createOpenRouter({
+  const openrouter = createOpenRouter({
     apiKey: input.apiKey,
     appName: "StoryCam",
     appUrl: "https://storycam.local"
-  }).chat(input.model);
+  });
+
+  return wrapLanguageModel({
+    model: openrouter.chat(input.model, {
+      plugins: [{ id: "response-healing" }]
+    }),
+    middleware: extractJsonMiddleware()
+  });
 }
 
 export function createOpenRouterImageModel(input: { apiKey: string; model: string }) {
@@ -47,16 +56,21 @@ export function createOpenRouterImageModel(input: { apiKey: string; model: strin
 }
 
 export const storyCamGenerateObject: StoryCamGenerateObject = async (input) => {
-  const result = await generateObject({
+  const result = await generateText({
     model: input.model,
+    output: Output.object({
+      description: input.schemaDescription,
+      name: input.schemaName,
+      schema: input.schema
+    }),
     prompt: input.prompt,
-    schema: input.schema,
     system: input.system,
-    temperature: input.temperature ?? 0.4
+    temperature: input.temperature ?? 0.4,
+    timeout: 90_000
   });
 
   return {
-    object: result.object
+    object: result.output
   };
 };
 

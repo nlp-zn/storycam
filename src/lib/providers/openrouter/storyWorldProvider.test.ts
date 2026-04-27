@@ -80,15 +80,15 @@ describe("openrouter story world provider", () => {
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
         prompt: expect.stringContaining("我想把暗恋拍成韩剧雨夜"),
+        schemaDescription: expect.stringContaining("StoryCam story world draft"),
+        schemaName: "storycam_story_world_draft",
         system: expect.stringContaining("私人故事剧本整理器")
       })
     );
   });
 
-  it("retries invalid model output and returns a redacted provider failure", async () => {
-    const generateObject = vi.fn().mockResolvedValueOnce({ object: { script: { title: "" } } }).mockRejectedValueOnce(
-      new Error("provider failed with openrouter-secret and full prompt")
-    );
+  it("retries provider failures and returns a redacted provider failure", async () => {
+    const generateObject = vi.fn().mockRejectedValue(new Error("provider failed with openrouter-secret and full prompt"));
     const provider = createOpenRouterStoryWorldProvider({
       apiKey: "openrouter-secret",
       generateObject,
