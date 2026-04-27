@@ -321,6 +321,17 @@ function messageForError(error: unknown) {
     if (error.message === "invalid_mime_type") {
       return "只支持 JPEG、PNG 或 WebP 图片。";
     }
+
+    if (
+      error.message === "OPENROUTER_TEXT_INVALID_OUTPUT" ||
+      error.message === "OPENROUTER_STORY_WORLD_INVALID_OUTPUT"
+    ) {
+      return "模型返回的故事格式不稳定，请再试一次。";
+    }
+
+    if (error.message === "STORYCAM_CONFIG_INVALID") {
+      return "文本模型配置暂时不可用，请检查本地 OpenRouter 配置。";
+    }
   }
 
   return "故事雏形生成失败，请稍后再试。";

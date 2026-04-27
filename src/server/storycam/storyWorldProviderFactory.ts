@@ -12,6 +12,7 @@ export function createConfiguredStoryWorldProvider(
 
   return createOpenRouterStoryWorldProvider({
     apiKey: config.openrouter?.apiKey ?? "",
+    maxAttempts: 3,
     model: config.openrouter?.textModel ?? ""
   });
 }
