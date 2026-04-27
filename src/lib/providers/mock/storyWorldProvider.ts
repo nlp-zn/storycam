@@ -3,28 +3,18 @@ import {
   sceneAssetSchema,
   storyScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
-import type { CharacterAsset, SceneAsset, StoryScript } from "@/features/storycam/domain/artifacts";
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
+import type {
+  StoryWorldProviderInput,
+  StoryWorldProviderOutput,
+  UploadedPhotoReference
+} from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { rainyKDramaStoryWorldFixture, type MockStoryWorldFixture } from "./fixtures/storyWorld";
 
-export type UploadedPhotoReference = {
-  mediaAssetId: string;
-  storageBucket?: string;
-  storagePath?: string;
-};
-
-export type MockStoryWorldInput = {
-  idea: string;
-  sessionId: string;
-  uploadedPhotoRefs?: UploadedPhotoReference[];
-};
-
-export type MockStoryWorldOutput = {
-  characterAssets: CharacterAsset[];
-  sceneAssets: SceneAsset[];
-  script: StoryScript;
-};
+export type { UploadedPhotoReference };
+export type MockStoryWorldInput = StoryWorldProviderInput;
+export type MockStoryWorldOutput = StoryWorldProviderOutput;
 
 export function createMockStoryWorldProvider(
   fixture: MockStoryWorldFixture = rainyKDramaStoryWorldFixture

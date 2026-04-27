@@ -211,7 +211,6 @@ export async function createStoryWorld(input: {
 }) {
   const response = await fetch("/api/story-world", {
     body: JSON.stringify({
-      generationMode: "mock",
       input: input.input,
       lightweightChoices: input.lightweightChoices,
       plannedDurationSeconds: input.plannedDurationSeconds ?? 12,

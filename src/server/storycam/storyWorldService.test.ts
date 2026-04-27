@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/server/db/types";
 import { createStoryWorld, parseStoryWorldRequest, StoryWorldRequestError } from "./storyWorldService";
@@ -66,6 +66,80 @@ describe("story world service", () => {
 
     expect(JSON.stringify(artifactWrites)).not.toContain("private.jpg");
     expect(artifactWrites.some((call) => JSON.stringify(call).includes("photo-1"))).toBe(true);
+  });
+
+  it("passes lightweight choices to the configured text provider", async () => {
+    const client = new FakeSupabaseClient();
+    const provider = {
+      providerKind: "text" as const,
+      providerName: "test-provider",
+      generate: vi.fn().mockResolvedValue({
+        ok: true,
+        providerKind: "text",
+        providerName: "test-provider",
+        value: {
+          characterAssets: [
+            {
+              consistencyNotes: ["动作克制"],
+              emotionalBaseline: "少说话，用停顿表达情绪",
+              id: "character-test-1",
+              name: "她",
+              props: ["手机"],
+              referenceMediaIds: [],
+              relationshipToUserStory: "承载用户的私人记忆",
+              role: "主角",
+              sessionId: "session-1",
+              stableVisualDescription: "浅色外套，低头握着手机",
+              state: "ready",
+              version: 1
+            }
+          ],
+          sceneAssets: [
+            {
+              atmosphere: "安静、克制",
+              id: "scene-test-1",
+              keyObjects: ["玻璃门"],
+              light: "冷白灯",
+              location: "街角店门口",
+              name: "街角店门口",
+              referenceMediaIds: [],
+              sessionId: "session-1",
+              spatialLogic: "她在门外停下，手机亮起",
+              state: "ready",
+              timeOfDay: "night",
+              version: 1
+            }
+          ],
+          script: {
+            beats: ["她停在门外", "手机屏幕亮起"],
+            id: "script-test-1",
+            logline: "她在门外删掉一条短信。",
+            sessionId: "session-1",
+            state: "ready",
+            summary: "手机光和玻璃反光让告别停住。",
+            title: "门外短信",
+            version: 1
+          }
+        }
+      })
+    };
+
+    await createStoryWorld(
+      client.asSupabaseClient(),
+      "user-1",
+      {
+        input: "我想把暗恋拍成韩剧雨夜",
+        lightweightChoices: ["少说话"]
+      },
+      provider
+    );
+
+    expect(provider.generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idea: "我想把暗恋拍成韩剧雨夜",
+        lightweightChoices: ["少说话"]
+      })
+    );
   });
 
   it("rejects empty and oversized input with redacted request errors", () => {

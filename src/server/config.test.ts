@@ -24,13 +24,33 @@ describe("loadStoryCamConfig", () => {
     expect(config.seedance).toBeUndefined();
   });
 
-  it("rejects non-mock providers in mock mode", () => {
+  it("allows an OpenRouter text provider in mock mode for mixed local verification", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      OPENROUTER_API_KEY: "openrouter-key",
+      OPENROUTER_TEXT_MODEL: "deepseek/deepseek-v4-pro",
+      STORYCAM_TEXT_PROVIDER: "openrouter"
+    });
+
+    expect(config.generation).toMatchObject({
+      mode: "mock",
+      textProvider: "openrouter",
+      imageProvider: "mock",
+      videoProvider: "mock"
+    });
+    expect(config.openrouter).toEqual({
+      apiKey: "openrouter-key",
+      textModel: "deepseek/deepseek-v4-pro"
+    });
+  });
+
+  it("rejects non-text real providers in mock mode", () => {
     expect(() =>
       loadStoryCamConfig({
         ...validMockEnv,
-        STORYCAM_TEXT_PROVIDER: "openrouter"
+        STORYCAM_VIDEO_PROVIDER: "seedance_2_0"
       })
-    ).toThrow(/INVALID_PROVIDER_FOR_MODE:STORYCAM_TEXT_PROVIDER/);
+    ).toThrow(/INVALID_PROVIDER_FOR_MODE:STORYCAM_VIDEO_PROVIDER/);
   });
 
   it("requires Seedance credentials for the Seedance video provider", () => {
@@ -75,16 +95,13 @@ describe("loadStoryCamConfig", () => {
     });
   });
 
-  it("requires OpenRouter credentials and model names in real mode", () => {
+  it("requires OpenRouter credentials and enabled provider model names", () => {
     expect(() =>
       loadStoryCamConfig({
         ...validMockEnv,
-        STORYCAM_GENERATION_MODE: "real",
         STORYCAM_TEXT_PROVIDER: "openrouter",
-        STORYCAM_MULTIMODAL_PROVIDER: "openrouter",
-        STORYCAM_IMAGE_PROVIDER: "openrouter",
         STORYCAM_VIDEO_PROVIDER: "mock",
-        STORYCAM_FINAL_WORK_PROVIDER: "ffmpeg"
+        STORYCAM_FINAL_WORK_PROVIDER: "mock"
       })
     ).toThrow(/MISSING_ENV:OPENROUTER_API_KEY/);
   });

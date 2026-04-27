@@ -1,10 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProviderFailure, TextGenerationProvider } from "@/lib/providers/types";
-import type {
-  MockStoryWorldInput,
-  MockStoryWorldOutput,
-  UploadedPhotoReference
-} from "@/lib/providers/mock/storyWorldProvider";
+import type { StoryWorldProviderInput, StoryWorldProviderOutput, UploadedPhotoReference } from "@/lib/providers/storyWorld";
 import { createMockStoryWorldProvider } from "@/lib/providers/mock/storyWorldProvider";
 import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -36,7 +32,7 @@ export type StoryWorldServiceOutput = {
     script: StoryWorldArtifactRef;
   };
   sessionId: string;
-  storyWorld: MockStoryWorldOutput;
+  storyWorld: StoryWorldProviderOutput;
 };
 
 export class StoryWorldRequestError extends Error {
@@ -50,7 +46,7 @@ export async function createStoryWorld(
   client: SupabaseClient<Database>,
   userId: string,
   body: StoryWorldRequestBody,
-  provider: TextGenerationProvider<MockStoryWorldInput, MockStoryWorldOutput> = createMockStoryWorldProvider()
+  provider: TextGenerationProvider<StoryWorldProviderInput, StoryWorldProviderOutput> = createMockStoryWorldProvider()
 ): Promise<ProviderFailure | { ok: true; value: StoryWorldServiceOutput }> {
   const input = parseStoryWorldRequest(body);
   const sessions = new StoryCamSessionRepository(client);
@@ -59,7 +55,7 @@ export async function createStoryWorld(
   const session = input.sessionId
     ? await sessions.findById(userId, input.sessionId)
     : await sessions.create(userId, {
-        generationMode: "mock",
+        generationMode: input.generationMode,
         plannedDurationSeconds: input.plannedDurationSeconds
       });
 
@@ -70,6 +66,7 @@ export async function createStoryWorld(
   const uploadedPhotoRefs = await resolveUploadedPhotoRefs(mediaAssets, userId, session.id, input.uploadedPhotoIds);
   const providerResult = await provider.generate({
     idea: input.input,
+    lightweightChoices: input.lightweightChoices,
     sessionId: session.id,
     uploadedPhotoRefs
   });
@@ -128,7 +125,7 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
   const input = typeof body.input === "string" ? body.input.trim() : "";
   const generationMode = body.generationMode ?? "mock";
 
-  if (generationMode !== "mock") {
+  if (generationMode !== "mock" && generationMode !== "real") {
     throw new StoryWorldRequestError("invalid_generation_mode");
   }
 

@@ -61,6 +61,22 @@ STORYCAM_FINAL_WORK_PROVIDER=mock
 
 For local UI/E2E smoke without real credentials, the test harness uses mocked HTTP routes.
 
+To verify only the real text model for Step 2 story-world generation while keeping images, video, and final work on mock providers, use:
+
+```text
+STORYCAM_GENERATION_MODE=mock
+STORYCAM_TEXT_PROVIDER=openrouter
+STORYCAM_MULTIMODAL_PROVIDER=mock
+STORYCAM_IMAGE_PROVIDER=mock
+STORYCAM_VIDEO_PROVIDER=mock
+STORYCAM_FINAL_WORK_PROVIDER=mock
+
+OPENROUTER_API_KEY=<your-openrouter-key>
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
+```
+
+This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads.
+
 For manual browser testing without a Google account, use a Supabase local stack and set:
 
 ```text

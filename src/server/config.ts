@@ -43,9 +43,9 @@ export type StoryCamConfig = {
   };
   openrouter?: {
     apiKey: string;
-    textModel: string;
-    multimodalModel: string;
-    imageModel: string;
+    textModel?: string;
+    multimodalModel?: string;
+    imageModel?: string;
   };
   seedance?: {
     apiKey: string;
@@ -131,7 +131,6 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   );
 
   if (mode === "mock") {
-    rejectNonMockProvider("STORYCAM_TEXT_PROVIDER", textProvider, issues);
     rejectNonMockProvider("STORYCAM_MULTIMODAL_PROVIDER", multimodalProvider, issues);
     rejectNonMockProvider("STORYCAM_IMAGE_PROVIDER", imageProvider, issues);
     rejectNonMockProvider("STORYCAM_VIDEO_PROVIDER", videoProvider, issues);
@@ -139,18 +138,15 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   }
 
   const needsOpenRouter =
-    mode === "real" ||
-    textProvider === "openrouter" ||
-    multimodalProvider === "openrouter" ||
-    imageProvider === "openrouter";
+    textProvider === "openrouter" || multimodalProvider === "openrouter" || imageProvider === "openrouter";
   const openrouterApiKey = needsOpenRouter ? required(env, "OPENROUTER_API_KEY", issues) : undefined;
-  const openrouterTextModel = needsOpenRouter
+  const openrouterTextModel = textProvider === "openrouter"
     ? required(env, "OPENROUTER_TEXT_MODEL", issues)
     : undefined;
-  const openrouterMultimodalModel = needsOpenRouter
+  const openrouterMultimodalModel = multimodalProvider === "openrouter"
     ? required(env, "OPENROUTER_MULTIMODAL_MODEL", issues)
     : undefined;
-  const openrouterImageModel = needsOpenRouter
+  const openrouterImageModel = imageProvider === "openrouter"
     ? required(env, "OPENROUTER_IMAGE_MODEL", issues)
     : undefined;
 
@@ -165,9 +161,9 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const openrouter = needsOpenRouter
     ? {
         apiKey: openrouterApiKey ?? "",
-        textModel: openrouterTextModel ?? "",
-        multimodalModel: openrouterMultimodalModel ?? "",
-        imageModel: openrouterImageModel ?? ""
+        ...(openrouterTextModel ? { textModel: openrouterTextModel } : {}),
+        ...(openrouterMultimodalModel ? { multimodalModel: openrouterMultimodalModel } : {}),
+        ...(openrouterImageModel ? { imageModel: openrouterImageModel } : {})
       }
     : undefined;
   const seedance = seedanceApiKey && seedanceModel ? { apiKey: seedanceApiKey, model: seedanceModel } : undefined;

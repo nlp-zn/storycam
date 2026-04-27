@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
+import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
+import { createConfiguredStoryWorldProvider } from "@/server/storycam/storyWorldProviderFactory";
 import { createStoryWorld, StoryWorldRequestError } from "@/server/storycam/storyWorldService";
 
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const result = await createStoryWorld(createSupabaseAdminClient(), user.id, await request.json());
+    const config = loadStoryCamConfig();
+    const provider = createConfiguredStoryWorldProvider(config);
+    const result = await createStoryWorld(createSupabaseAdminClient(), user.id, await request.json(), provider);
 
     if (!result.ok) {
       return NextResponse.json(
@@ -39,6 +43,19 @@ export async function POST(request: Request) {
           redactionApplied: true
         },
         { status: 400 }
+      );
+    }
+
+    if (error instanceof StoryCamConfigError) {
+      const redacted = redactConfigError(error);
+
+      return NextResponse.json(
+        {
+          error: redacted.code,
+          redactedError: redacted.message,
+          redactionApplied: true
+        },
+        { status: 500 }
       );
     }
 
