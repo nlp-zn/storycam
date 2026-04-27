@@ -178,7 +178,7 @@ test.describe("StoryCam final work", () => {
 
     await page.getByRole("button", { name: "生成最终作品" }).first().click();
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
-    await expect(page.getByText("播放账号内预览")).toBeVisible();
+    await expect(page.getByText("播放最终作品")).toBeVisible();
     await expect(page.getByText("分享")).toHaveCount(0);
     await expect(page.getByText("prompt packet")).toHaveCount(0);
     await expect(page.getByText("Shanyin")).toHaveCount(0);

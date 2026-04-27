@@ -77,12 +77,14 @@ test.describe("StoryCam expansion", () => {
     await expect(page.getByText("门外停住")).toBeVisible();
     await expect(page.getByText("听见门铃")).toBeVisible();
     await expect(page.getByText("删掉那句")).toBeVisible();
-    await expect(page.getByText(/等待槽/)).toHaveCount(5);
+    await expect(page.getByText("反应", { exact: true })).toBeVisible();
+    await expect(page.getByText("氛围", { exact: true })).toBeVisible();
+    await expect(page.getByText("动作", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "跳过扩展直接生成片段" })).toBeVisible();
     expect(expansionRequestedFor).toContain("/api/storyboard-groups/core-artifact-1/expand");
 
     await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
-    await expect(page.getByText("请确认是否发送这一组生成片段。")).toBeVisible();
+    await expect(page.getByText("用「未发送短信」生成一个约 4 秒的私人片段。")).toBeVisible();
     await expect(page.getByRole("button", { name: "确认发送生成片段" })).toBeVisible();
   });
 });

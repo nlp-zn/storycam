@@ -76,9 +76,10 @@ test.describe("StoryCam story world", () => {
     await expectStoryWorldLayoutScale(page);
 
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await expect(page.getByText("分镜已准备好：3 个核心分镜组。")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
 
+    await page.getByRole("button", { name: "转到故事世界" }).click();
     await page.getByRole("button", { name: "改剧本" }).click();
     await page.getByLabel("我的剧本内容").fill("她决定走进便利店，把伞递给他。");
     await page.getByRole("button", { name: "保存修改" }).click();

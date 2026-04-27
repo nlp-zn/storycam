@@ -367,6 +367,235 @@ button:disabled {
   -webkit-line-clamp: 2;
 }
 
+.storycam-core-stage,
+.storycam-expansion-stage,
+.storycam-generation-stage,
+.storycam-review-stage,
+.storycam-final-stage {
+  max-width: 1280px;
+}
+
+.storycam-send-confirm {
+  width: min(100%, 760px);
+  margin: 0 auto;
+}
+
+.storycam-core-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.storycam-core-card {
+  min-height: clamp(430px, 42vw, 580px);
+  border-radius: 48px;
+}
+
+.storycam-expansion-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 3fr) minmax(360px, 6fr) minmax(220px, 3fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.storycam-expansion-core {
+  max-width: 500px;
+  border-radius: 32px;
+  justify-self: center;
+}
+
+.storycam-expansion-message {
+  min-height: 300px;
+  border-radius: 24px;
+}
+
+.storycam-expansion-vector {
+  position: relative;
+  overflow: hidden;
+  border-radius: 32px;
+}
+
+.storycam-generation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 32px;
+  align-items: stretch;
+}
+
+.storycam-generation-viewer {
+  border-radius: 48px;
+}
+
+.storycam-generation-notes,
+.storycam-final-settings,
+.storycam-final-timeline {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 32px;
+  background: rgba(14, 14, 14, 0.72);
+  padding: 24px;
+  backdrop-filter: blur(24px);
+}
+
+.storycam-generation-notes,
+.storycam-final-settings {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.storycam-review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+}
+
+.storycam-review-card {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 48px;
+  background: rgba(31, 31, 31, 0.72);
+  box-shadow: 0 0 30px rgba(0, 240, 255, 0.08);
+}
+
+.storycam-review-frame {
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
+}
+
+.storycam-final-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 8fr) minmax(320px, 4fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.storycam-final-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.storycam-final-preview {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 48px;
+  background: #000;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+}
+
+.storycam-final-settings {
+  gap: 32px;
+}
+
+.storycam-icon-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+  background: rgba(31, 31, 31, 0.8);
+  color: var(--storycam-on-surface);
+}
+
+.storycam-timeline-track {
+  position: relative;
+  display: flex;
+  height: 80px;
+  gap: 4px;
+}
+
+.storycam-timeline-clip {
+  position: relative;
+  display: flex;
+  align-items: end;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(19, 19, 19, 0.9);
+  padding: 12px;
+  color: var(--storycam-on-surface-variant);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.storycam-timeline-clip:nth-child(2) {
+  width: 30%;
+}
+
+.storycam-timeline-clip:nth-child(3) {
+  width: 40%;
+}
+
+.storycam-timeline-clip:nth-child(4) {
+  width: 30%;
+}
+
+.storycam-timeline-clip.is-active {
+  border: 2px solid var(--storycam-primary);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15);
+  color: var(--storycam-primary-soft);
+}
+
+.storycam-timeline-playhead {
+  position: absolute;
+  top: -22px;
+  bottom: -16px;
+  left: 50%;
+  z-index: 5;
+  width: 2px;
+  background: var(--storycam-primary);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 1);
+}
+
+.storycam-audio-track {
+  display: flex;
+  height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  background: rgba(31, 31, 31, 0.65);
+  padding: 0 24px;
+}
+
+.storycam-audio-track span {
+  width: 4px;
+  border-radius: 9999px;
+  background: var(--storycam-primary);
+  opacity: 0.5;
+}
+
+.storycam-look-card,
+.storycam-transition-card {
+  min-height: 96px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(0, 240, 255, 0.12), transparent),
+    rgba(19, 19, 19, 0.9);
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.storycam-look-card.is-active,
+.storycam-transition-card.is-active {
+  border-color: var(--storycam-primary);
+  color: var(--storycam-primary-soft);
+  box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.12), 0 0 20px rgba(0, 240, 255, 0.12);
+}
+
+.storycam-transition-card {
+  width: 96px;
+  flex: 0 0 96px;
+  text-align: center;
+}
+
 .storycam-bottom-dock {
   position: fixed;
   z-index: 50;
@@ -475,5 +704,36 @@ button:disabled {
   .storycam-asset-card--character,
   .storycam-asset-card--scene {
     width: 100%;
+  }
+
+  .storycam-core-stage,
+  .storycam-expansion-stage,
+  .storycam-generation-stage,
+  .storycam-review-stage,
+  .storycam-final-stage {
+    max-width: none;
+  }
+
+  .storycam-core-grid,
+  .storycam-expansion-grid,
+  .storycam-generation-grid,
+  .storycam-review-grid,
+  .storycam-final-grid {
+    display: block;
+  }
+
+  .storycam-core-card,
+  .storycam-generation-viewer,
+  .storycam-review-card,
+  .storycam-final-preview {
+    margin-top: 20px;
+    min-height: auto;
+    border-radius: 28px;
+  }
+
+  .storycam-expansion-core,
+  .storycam-final-settings,
+  .storycam-generation-notes {
+    margin-top: 24px;
   }
 }

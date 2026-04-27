@@ -6,7 +6,6 @@ type CoreFramesStageProps = {
   isBusy?: boolean;
   onExpandGroup: (index: number) => void;
   onGenerateClip: (index: number) => void;
-  onOpenStoryWorldEditor: () => void;
   onSelectGroup: (index: number) => void;
   selectedIndex: number;
   storyboard: CreateStoryboardResponse;
@@ -17,7 +16,6 @@ export function CoreFramesStage({
   isBusy = false,
   onExpandGroup,
   onGenerateClip,
-  onOpenStoryWorldEditor,
   onSelectGroup,
   selectedIndex,
   storyboard
@@ -25,8 +23,8 @@ export function CoreFramesStage({
   const selectedGroup = storyboard.storyboard.coreStoryboardGroups[selectedIndex];
 
   return (
-    <section className="relative">
-      <header className="mb-12 max-w-3xl">
+    <section className="storycam-core-stage relative">
+      <header className="mb-16 max-w-3xl">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#00f0ff]/20 bg-[#00f0ff]/10 px-4 py-2">
           <span className="size-2 rounded-full bg-[#00f0ff]" />
           <span className="storycam-eyebrow">步骤 3</span>
@@ -35,28 +33,18 @@ export function CoreFramesStage({
         <p className="mt-6 text-lg leading-8 text-[#b9cacb]">
           锁定序列的视觉锚点。这些电影般的构图会决定片段的照明模型、大气深度和情感节奏。
         </p>
-        <div className="mt-6 rounded-[1.25rem] border border-[#00f0ff]/35 bg-[#00f0ff]/10 p-4">
-          <p className="text-sm font-bold text-[#dbfcff]">
-            {storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组，每组生成一个片段。
-          </p>
-          <p className="mt-2 text-xs leading-5 text-[#b9cacb]">扩展卡只补充当前组的拍法，不会单独生成视频。</p>
-        </div>
-        <button
-          className="storycam-secondary-button mt-4"
-          onClick={onOpenStoryWorldEditor}
-          type="button"
-        >
-          改剧本
-        </button>
+        <p className="mt-5 text-sm font-bold text-[#dbfcff]">
+          {storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组，每组生成一个片段。扩展卡只补充当前组的拍法，不会单独生成视频。
+        </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="storycam-core-grid">
         {storyboard.storyboard.coreStoryboardGroups.map((group, index) => {
           const isSelected = selectedIndex === index;
 
           return (
             <article
-              className={`group relative flex aspect-[4/5] min-h-[420px] flex-col justify-end overflow-hidden rounded-[3rem] border transition duration-500 xl:[&:nth-child(2)]:-translate-y-8 ${
+              className={`storycam-core-card group relative flex aspect-[4/5] flex-col justify-end overflow-hidden border transition duration-500 lg:[&:nth-child(2)]:-translate-y-8 ${
                 isSelected
                   ? "border-[#00f0ff] shadow-[0_0_34px_rgba(0,240,255,0.24)]"
                   : "border-white/10 shadow-[0_0_24px_rgba(0,0,0,0.35)]"
@@ -69,6 +57,7 @@ export function CoreFramesStage({
               <div className="relative z-10 p-6 md:p-8">
                 <div className="mb-3 flex items-center justify-between gap-4">
                   <span className="storycam-eyebrow">镜头 {String(index + 1).padStart(2, "0")}</span>
+                  <span className="text-xl text-[#e2e2e2]/70" aria-hidden="true">▣</span>
                   <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-xs font-black text-[#e2e2e2]">
                     {formatDuration(group.estimatedClipDurationSeconds)}
                   </span>

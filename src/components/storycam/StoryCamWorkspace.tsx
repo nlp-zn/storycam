@@ -2,11 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
 import { ClipReview } from "@/components/storycam/ClipReview";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
-import { CoreStoryboardGroups } from "@/components/storycam/CoreStoryboardGroups";
 import { ExpansionCanvas } from "@/components/storycam/ExpansionCanvas";
 import { FinalWorkPanel } from "@/components/storycam/FinalWorkPanel";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
@@ -170,14 +168,6 @@ export function StoryCamWorkspace() {
     } finally {
       setIsDeletingStory(false);
     }
-  }
-
-  async function generateStoryboard() {
-    if (!storyWorld || !storyWorldConfirmed || storyboardStatus === "generating") {
-      return;
-    }
-
-    await generateStoryboardFromStoryWorld(storyWorld);
   }
 
   async function generateStoryboardFromStoryWorld(currentStoryWorld: CreateStoryWorldResponse) {
@@ -367,7 +357,6 @@ export function StoryCamWorkspace() {
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
   const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld });
   const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
-  const showWorkflowSidebar = Boolean(storyWorld && activeStepIndex >= 2);
 
   useEffect(() => {
     function handlePopState() {
@@ -380,9 +369,7 @@ export function StoryCamWorkspace() {
 
     return () => window.removeEventListener("popstate", handlePopState);
   }, [reachedStepIndex]);
-  const generationPanel = activeStepIndex >= 4 && finalWork ? (
-    <FinalWorkPanel finalWork={finalWork} />
-  ) : activeStepIndex >= 5 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
+  const generationPanel = activeStepIndex >= 5 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
     <ClipReview
       clipArtifactId={clipJob.outputArtifactId}
       isSubmittingFinalWork={isFinalWorkSubmitting}
@@ -390,7 +377,13 @@ export function StoryCamWorkspace() {
       onRetake={retryClipGeneration}
     />
   ) : activeStepIndex >= 4 && clipJob ? (
-    <ClipGenerationStatus job={clipJob} onCancel={cancelClipJob} onRetry={retryClipGeneration} />
+    <ClipGenerationStatus
+      isDeletingStory={isDeletingStory}
+      job={clipJob}
+      onCancel={cancelClipJob}
+      onDeleteStory={deleteCurrentStory}
+      onRetry={retryClipGeneration}
+    />
   ) : activeStepIndex >= 4 && clipConfirmationSummary ? (
     <ProviderSendConfirm
       confirmationSummary={clipConfirmationSummary}
@@ -421,11 +414,14 @@ export function StoryCamWorkspace() {
       />
     </div>
   ) : storyWorld ? (
-    <div className={`grid gap-8 ${showWorkflowSidebar ? "lg:grid-cols-[minmax(0,1fr)_320px]" : ""}`}>
-      {activeStepIndex >= 3 && storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
+    <div>
+      {activeStepIndex >= 6 && finalWork ? (
+        <FinalWorkPanel finalWork={finalWork} />
+      ) : generationPanel ? (
+        generationPanel
+      ) : activeStepIndex >= 3 && storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
         <ExpansionCanvas
           expansion={expansion}
-          generationPanel={generationPanel}
           isLoading={isExpansionLoading}
           onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
           onSkipExpansion={() => prepareClipGeneration(selectedCoreGroupIndex ?? 0)}
@@ -438,7 +434,6 @@ export function StoryCamWorkspace() {
           isBusy={isExpansionLoading || isClipSubmitting}
           onExpandGroup={(index) => expandCoreGroup(index)}
           onGenerateClip={prepareClipGeneration}
-          onOpenStoryWorldEditor={() => setIsStoryWorldEditorOpen(true)}
           onSelectGroup={selectCoreGroup}
           selectedIndex={selectedCoreGroupIndex ?? 0}
           storyboard={storyboard}
@@ -455,23 +450,6 @@ export function StoryCamWorkspace() {
           storyWorld={storyWorld}
         />
       )}
-
-      {showWorkflowSidebar ? (
-        <StoryCamSidebar
-          activeStepIndex={activeStepIndex}
-          generateStoryboard={generateStoryboard}
-          isDeletingStory={isDeletingStory}
-          deleteCurrentStory={deleteCurrentStory}
-          selectedCoreGroupIndex={selectedCoreGroupIndex}
-          selectCoreGroup={selectCoreGroup}
-          storyboard={storyboard}
-          storyboardMessage={storyboardMessage}
-          storyboardStatus={storyboardStatus}
-          storyWorld={storyWorld}
-          storyWorldConfirmed={storyWorldConfirmed}
-          expandCoreGroup={expandCoreGroup}
-        />
-      ) : null}
     </div>
   ) : (
     <div className="flex w-full flex-col gap-6">
@@ -499,104 +477,6 @@ export function StoryCamWorkspace() {
         <div className="storycam-workspace-surface">{mainSurface}</div>
       </div>
     </main>
-  );
-}
-
-type StoryCamSidebarProps = {
-  activeStepIndex: number;
-  deleteCurrentStory: () => void;
-  expandCoreGroup: (index: number) => void;
-  generateStoryboard: () => void;
-  isDeletingStory: boolean;
-  selectedCoreGroupIndex: number | null;
-  selectCoreGroup: (index: number) => void;
-  storyboard: CreateStoryboardResponse | null;
-  storyboardMessage: string;
-  storyboardStatus: StoryboardStatus;
-  storyWorld: CreateStoryWorldResponse;
-  storyWorldConfirmed: boolean;
-};
-
-function StoryCamSidebar({
-  activeStepIndex,
-  deleteCurrentStory,
-  expandCoreGroup,
-  generateStoryboard,
-  isDeletingStory,
-  selectedCoreGroupIndex,
-  selectCoreGroup,
-  storyboard,
-  storyboardMessage,
-  storyboardStatus,
-  storyWorld,
-  storyWorldConfirmed
-}: StoryCamSidebarProps) {
-  return (
-    <aside className="space-y-5">
-      <GoogleSignInButton />
-
-      <section className="storycam-panel p-5">
-        <h2 className="text-lg font-extrabold text-[#e2e2e2]">当前流程</h2>
-        <ol className="mt-4 space-y-2">
-          {workflowStages.map((stage, index) => (
-            <li className="flex items-center gap-3 text-sm text-[#b9cacb]" key={stage}>
-              <span
-                className={`flex size-7 items-center justify-center rounded-full border text-xs font-bold ${
-                  index === activeStepIndex
-                    ? "border-[#00f0ff] text-[#00f0ff] shadow-[0_0_16px_rgba(0,240,255,0.25)]"
-                    : "border-[#3b494b] text-[#849495]"
-                }`}
-              >
-                {index + 1}
-              </span>
-              <span>{stage}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="storycam-panel p-5">
-        <h2 className="text-lg font-extrabold text-[#e2e2e2]">故事世界</h2>
-        <p
-          className={`mt-3 rounded-2xl border px-4 py-3 text-sm leading-6 ${
-            storyboardStatus === "stale" ? "border-[#ffcfbe]/80 text-[#ffcfbe]" : "border-[#3b494b] text-[#b9cacb]"
-          }`}
-          role="status"
-        >
-          {storyboardMessage}
-        </p>
-        <button
-          className="storycam-primary-button mt-4 w-full disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
-          disabled={!storyWorld || !storyWorldConfirmed || storyboardStatus === "generating" || isDeletingStory}
-          onClick={generateStoryboard}
-          type="button"
-        >
-          {storyboardStatus === "generating" ? "正在生成核心分镜" : "生成核心分镜"}
-        </button>
-        <button
-          className="storycam-secondary-button storycam-danger-button mt-2 w-full disabled:opacity-50"
-          disabled={isDeletingStory}
-          onClick={deleteCurrentStory}
-          type="button"
-        >
-          {isDeletingStory ? "正在删除" : "删除这个故事"}
-        </button>
-      </section>
-
-      <section className="storycam-panel p-5">
-        <h2 className="text-lg font-extrabold text-[#e2e2e2]">片段时间线</h2>
-        <CoreStoryboardGroups
-          isCompact
-          onExpandGroup={(index) => expandCoreGroup(index)}
-          onSelectGroup={selectCoreGroup}
-          selectedIndex={selectedCoreGroupIndex}
-          storyboard={storyboard}
-        />
-        <button className="mt-4 w-full rounded-full bg-[#353535] px-4 py-3 text-sm font-bold text-[#849495]" disabled type="button">
-          生成最终作品
-        </button>
-      </section>
-    </aside>
   );
 }
 

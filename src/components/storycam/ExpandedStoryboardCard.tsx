@@ -3,14 +3,17 @@ import type { ExpandStoryboardGroupResponse } from "@/features/storycam/client/s
 type ExpandedStoryboardCardProps = {
   card?: ExpandStoryboardGroupResponse["expansionCards"][number];
   index: number;
+  slotLabel?: string;
+  slotStatus?: string;
 };
 
-export function ExpandedStoryboardCard({ card, index }: ExpandedStoryboardCardProps) {
+export function ExpandedStoryboardCard({ card, index, slotLabel = `向量 ${index + 1}`, slotStatus = "合成中..." }: ExpandedStoryboardCardProps) {
   if (!card) {
     return (
-      <article className="storycam-glass flex min-h-44 flex-col justify-between rounded-[2rem] border-dashed border-[#3b494b] p-5">
+      <article className="storycam-expansion-vector storycam-glass flex min-h-44 flex-col justify-between border-dashed border-[#3b494b] p-5">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00f0ff] to-transparent opacity-60" />
         <div className="flex items-center justify-between gap-3">
-          <span className="text-[11px] font-bold uppercase text-[#b9cacb]">等待槽 {index + 1}</span>
+          <span className="text-[11px] font-bold uppercase text-[#b9cacb]">{slotLabel}</span>
           <span className="text-xl text-[#00f0ff]/70">⌛</span>
         </div>
         <div className="space-y-3">
@@ -18,15 +21,16 @@ export function ExpandedStoryboardCard({ card, index }: ExpandedStoryboardCardPr
           <div className="h-2 w-2/3 rounded-full bg-white/10" />
           <div className="storycam-cinematic-frame h-16 rounded-[1.25rem] opacity-60" />
         </div>
-        <p className="text-xs text-[#849495]">可继续补充，最多 8 张。</p>
+        <p className="text-xs text-[#849495]">{slotStatus}</p>
       </article>
     );
   }
 
   return (
-    <article className="storycam-glass flex min-h-44 flex-col justify-between rounded-[2rem] p-5 shadow-[0_0_18px_rgba(0,240,255,0.08)]">
+    <article className="storycam-expansion-vector storycam-glass flex min-h-44 flex-col justify-between p-5 shadow-[0_0_18px_rgba(0,240,255,0.08)]">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00f0ff] to-transparent opacity-60" />
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[11px] font-bold uppercase text-[#00f0ff]">{card.beatType}</span>
+        <span className="text-[11px] font-bold uppercase text-[#00f0ff]">{slotLabel}</span>
         <span className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-[#b9cacb]">#{card.sortOrder + 1}</span>
       </div>
       <div>

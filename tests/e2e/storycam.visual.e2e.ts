@@ -47,10 +47,10 @@ test.describe("StoryCam visual smoke", () => {
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
     await expect(page.getByText("任务 job-1")).toBeVisible();
     await page.getByRole("button", { name: "取消生成" }).click();
-    await expect(page.getByRole("heading", { name: "已取消" })).toBeVisible();
+    await expect(page.getByText("已取消", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "重试" }).click();
-    await expect(page.getByRole("heading", { name: "生成失败" })).toBeVisible();
+    await expect(page.getByText("生成失败", { exact: true })).toBeVisible();
     await expect(page.getByText("状态更新失败。")).toBeVisible();
 
     await page.getByRole("button", { name: "重试" }).click();
@@ -64,7 +64,7 @@ test.describe("StoryCam visual smoke", () => {
 
     await page.getByRole("button", { name: "生成最终作品" }).first().click();
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
-    await expect(page.getByText("播放账号内预览")).toBeVisible();
+    await expect(page.getByText("播放最终作品")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });
