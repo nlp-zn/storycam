@@ -71,6 +71,12 @@ Provider concepts are separate:
 
 Text, multimodal, and image providers are orchestrated through Vercel AI SDK with OpenRouter-backed adapters. Video generation uses a dedicated Seedance 2.0 adapter behind `VideoGenerationProvider`.
 
+Story-world text generation is a server-only OpenRouter text provider path. It must use AI SDK structured JSON output (`generateText` with `Output.object`) and validate the final `script`, `characterAssets`, and `sceneAssets` artifact schemas before returning data to the client. Provider draft output may be normalized at the provider boundary, but final artifacts must stay schema-valid.
+
+Provider selection is server configuration, not a client parameter. Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_TEXT_PROVIDER=openrouter`; other providers may remain mock. Runtime process environment takes precedence over `.env.local`, so stale exported values can force mock behavior. The story-world API exposes non-secret local diagnostics through `diagnostics.textProvider` and `x-storycam-text-provider`; use these to confirm whether Step 2 is using `mock` or `openrouter`.
+
+OpenRouter structured-output reliability is model-specific. Configure `OPENROUTER_TEXT_MODEL` plus a comma-separated `OPENROUTER_TEXT_FALLBACK_MODELS` chain for Step 2. See `docs/references/providers.md` for current gotchas and fallback guidance.
+
 ## Job Model
 
 Video generation and final work composition are async jobs. Jobs must support:
