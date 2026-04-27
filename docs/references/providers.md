@@ -55,6 +55,16 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 | Video clip | mock video | Seedance 2.0 | One clip per confirmed core storyboard group. |
 | Final work | mock/FFmpeg fixture | FFmpeg composer | Account-scoped preview only. |
 
+## OpenRouter Structured Output Gotchas
+
+Story-world text generation must use the AI SDK structured-output path, not hand-written JSON parsing. In AI SDK 6, prefer `generateText({ output: Output.object({ schema, name, description }) })` over the deprecated `generateObject` call. The OpenRouter model should be wrapped with `extractJsonMiddleware()` and the OpenRouter `response-healing` plugin so Markdown-wrapped or slightly malformed JSON has a chance to be repaired before schema validation.
+
+Do not rely on the primary model being equally reliable for plain chat and structured JSON. During local testing, `deepseek/deepseek-v4-pro` could answer plain text successfully while its `response_format` structured-output path returned provider `502` or timed out. Keep `OPENROUTER_TEXT_FALLBACK_MODELS` configured with a structured-output-capable fallback, currently `deepseek/deepseek-v4-flash`.
+
+Provider draft schemas should be tolerant at the provider boundary and strict at the StoryCam artifact boundary. For Step 2, the OpenRouter draft allows missing non-critical strings/lists and normalizes them server-side, then validates the final `script`, `characterAssets`, and `sceneAssets` against StoryCam artifact schemas. This avoids failing the whole request because a model omitted a supporting note, while still preventing malformed final artifacts from reaching the client.
+
+When reproducing local API behavior with `curl`, use `--noproxy '*'` for localhost if your shell has proxy env vars. Otherwise the request can be routed through a system proxy and return an empty `502`, which looks like a StoryCam/API failure but never reached the Next.js route.
+
 ## Safety Rules
 
 - Keep provider keys server-only.
