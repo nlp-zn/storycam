@@ -73,6 +73,7 @@ describe("POST /api/story-world", () => {
     );
 
     expect(response.status).toBe(201);
+    expect(response.headers.get("x-storycam-text-provider")).toBe("mock");
     await expect(response.json()).resolves.toMatchObject({
       artifacts: {
         characterAssets: [{ type: "character_asset", version: 1 }],
@@ -123,6 +124,7 @@ describe("POST /api/story-world", () => {
     );
 
     expect(response.status).toBe(201);
+    expect(response.headers.get("x-storycam-text-provider")).toBe("openrouter");
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       storyWorld: {

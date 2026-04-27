@@ -11,6 +11,9 @@ export async function POST(request: Request) {
     const config = loadStoryCamConfig();
     const provider = createConfiguredStoryWorldProvider(config);
     const result = await createStoryWorld(createSupabaseAdminClient(), user.id, await request.json(), provider);
+    const responseHeaders = {
+      "x-storycam-text-provider": provider?.providerName ?? "mock"
+    };
 
     if (!result.ok) {
       return NextResponse.json(
@@ -19,7 +22,7 @@ export async function POST(request: Request) {
           redactedError: result.redactedError,
           redactionApplied: true
         },
-        { status: 502 }
+        { headers: responseHeaders, status: 502 }
       );
     }
 
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
         ok: true,
         ...result.value
       },
-      { status: 201 }
+      { headers: responseHeaders, status: 201 }
     );
   } catch (error) {
     if (error instanceof UnauthorizedError) {

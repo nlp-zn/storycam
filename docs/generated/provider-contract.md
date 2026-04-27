@@ -161,7 +161,7 @@ STORYCAM_FINAL_WORK_PROVIDER=mock|ffmpeg
 
 OPENROUTER_API_KEY=
 OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
-OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash
+OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
 
