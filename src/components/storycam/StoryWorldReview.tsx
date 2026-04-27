@@ -32,8 +32,8 @@ export function StoryWorldReview({
   }
 
   return (
-    <section className="relative">
-      <div className="mb-12 flex flex-wrap items-end justify-between gap-4">
+    <section className="storycam-story-world relative" data-testid="story-world-review">
+      <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#00f0ff]/20 bg-[#00f0ff]/10 px-4 py-2">
             <span className="size-2 rounded-full bg-[#00f0ff]" />
@@ -51,9 +51,9 @@ export function StoryWorldReview({
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-12">
-        <div className="xl:col-span-5">
-          <div className="storycam-glass relative min-h-full overflow-hidden rounded-[3rem] p-6 md:p-8">
+      <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">
+        <div className="storycam-script-column">
+          <div className="storycam-glass storycam-script-card relative overflow-hidden p-6 md:p-8" data-testid="story-world-script-card">
             <div className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:18px_18px]" />
             <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
@@ -114,13 +114,13 @@ export function StoryWorldReview({
           </div>
         </div>
 
-        <div className="space-y-8 xl:col-span-7">
+        <div className="storycam-assets-column">
           <section>
             <div className="mb-4 flex items-center justify-between gap-4">
               <h2 className="text-2xl font-black text-[#e2e2e2]">角色资产</h2>
               <span className="storycam-eyebrow">{storyWorld.storyWorld.characterAssets.length} ready</span>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="storycam-asset-grid storycam-asset-grid--characters">
               {storyWorld.storyWorld.characterAssets.map((asset, index) => (
                 <AssetCard
                   eyebrow="人物"
@@ -143,7 +143,7 @@ export function StoryWorldReview({
               <h2 className="text-2xl font-black text-[#e2e2e2]">场景资产</h2>
               <span className="storycam-eyebrow">{storyWorld.storyWorld.sceneAssets.length} ready</span>
             </div>
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="storycam-asset-grid storycam-asset-grid--scenes">
               {storyWorld.storyWorld.sceneAssets.map((asset) => (
                 <AssetCard
                   eyebrow="地点"

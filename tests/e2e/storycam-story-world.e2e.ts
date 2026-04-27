@@ -73,6 +73,7 @@ test.describe("StoryCam story world", () => {
     await expect(page.getByText("我的剧本")).toBeVisible();
     await expect(page.getByText("人物", { exact: true })).toBeVisible();
     await expect(page.getByText("地点", { exact: true })).toBeVisible();
+    await expectStoryWorldLayoutScale(page);
 
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
     await expect(page.getByText("分镜已准备好：3 个核心分镜组。")).toBeVisible();
@@ -121,6 +122,18 @@ function storyWorldFixture() {
       version: 1
     }
   };
+}
+
+async function expectStoryWorldLayoutScale(page: import("@playwright/test").Page) {
+  const reviewBox = await page.getByTestId("story-world-review").boundingBox();
+  const scriptBox = await page.getByTestId("story-world-script-card").boundingBox();
+  const characterBox = await page.getByTestId("story-world-character-asset-card").first().boundingBox();
+  const sceneBox = await page.getByTestId("story-world-scene-asset-card").first().boundingBox();
+
+  expect(reviewBox?.width).toBeLessThanOrEqual(1284);
+  expect(scriptBox?.width).toBeGreaterThan(340);
+  expect(characterBox?.width).toBeLessThanOrEqual(240);
+  expect(sceneBox?.width).toBeLessThanOrEqual(440);
 }
 
 function storyboardFixture() {
