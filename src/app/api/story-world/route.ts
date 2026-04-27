@@ -11,13 +11,16 @@ export async function POST(request: Request) {
     const config = loadStoryCamConfig();
     const provider = createConfiguredStoryWorldProvider(config);
     const result = await createStoryWorld(createSupabaseAdminClient(), user.id, await request.json(), provider);
+    const providerName = provider?.providerName ?? "mock";
     const responseHeaders = {
-      "x-storycam-text-provider": provider?.providerName ?? "mock"
+      "x-storycam-text-provider": providerName
     };
+    const diagnostics = storyWorldDiagnostics(providerName);
 
     if (!result.ok) {
       return NextResponse.json(
         {
+          ...(diagnostics ? { diagnostics } : {}),
           error: result.errorCode,
           redactedError: result.redactedError,
           redactionApplied: true
@@ -28,6 +31,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
+        ...(diagnostics ? { diagnostics } : {}),
         ok: true,
         ...result.value
       },
@@ -71,4 +75,14 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+function storyWorldDiagnostics(providerName: string) {
+  if (process.env.NODE_ENV === "production") {
+    return undefined;
+  }
+
+  return {
+    textProvider: providerName
+  };
 }

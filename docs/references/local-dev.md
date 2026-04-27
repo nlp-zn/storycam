@@ -78,7 +78,20 @@ OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash
 
 This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads. Story-world text uses AI SDK structured JSON output. The fallback list is optional, but useful when a primary OpenRouter model is available for plain chat while its structured-output endpoint is temporarily unavailable.
 
-If `/api/story-world` returns the same instant fixture, inspect the response header `x-storycam-text-provider`; `mock` means the running dev server did not start with the OpenRouter text env. If `/api/story-world` returns `OPENROUTER_TEXT_INVALID_OUTPUT`, first check whether the same model can handle structured output, not just plain chat. OpenRouter may route plain text and `response_format` requests differently. Keep `OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash` during local real-text testing, restart `pnpm dev` after changing `.env.local`, and use `curl --noproxy '*'` for localhost smoke requests when proxy env vars are present.
+If `/api/story-world` returns the same instant fixture, inspect `diagnostics.textProvider` in the JSON response or the response header `x-storycam-text-provider`; `mock` means the running dev server did not start with the OpenRouter text env. Shell-exported variables take precedence over `.env.local`, so clear or override stale values before restarting:
+
+```bash
+unset STORYCAM_TEXT_PROVIDER
+pnpm dev --port 3000
+```
+
+You can also force the value for one run:
+
+```bash
+STORYCAM_TEXT_PROVIDER=openrouter pnpm dev --port 3000
+```
+
+If `/api/story-world` returns `OPENROUTER_TEXT_INVALID_OUTPUT`, first check whether the same model can handle structured output, not just plain chat. OpenRouter may route plain text and `response_format` requests differently. Keep `OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash` during local real-text testing, restart `pnpm dev` after changing `.env.local`, and use `curl --noproxy '*'` for localhost smoke requests when proxy env vars are present.
 
 To generate Step 2 character and scene asset boards from the asset cards, enable the image provider too:
 

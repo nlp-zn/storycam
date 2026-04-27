@@ -65,6 +65,8 @@ Provider draft schemas should be tolerant at the provider boundary and strict at
 
 When reproducing local API behavior with `curl`, use `--noproxy '*'` for localhost if your shell has proxy env vars. Otherwise the request can be routed through a system proxy and return an empty `502`, which looks like a StoryCam/API failure but never reached the Next.js route.
 
+When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_TEXT_PROVIDER=openrouter`, the dev shell likely exported `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
+
 ## Safety Rules
 
 - Keep provider keys server-only.

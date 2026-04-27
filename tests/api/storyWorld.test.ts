@@ -80,6 +80,9 @@ describe("POST /api/story-world", () => {
         sceneAssets: [{ type: "scene_asset", version: 1 }],
         script: { type: "script", version: 1 }
       },
+      diagnostics: {
+        textProvider: "mock"
+      },
       ok: true,
       sessionId: "session-1",
       storyWorld: {
@@ -126,6 +129,9 @@ describe("POST /api/story-world", () => {
     expect(response.status).toBe(201);
     expect(response.headers.get("x-storycam-text-provider")).toBe("openrouter");
     await expect(response.json()).resolves.toMatchObject({
+      diagnostics: {
+        textProvider: "openrouter"
+      },
       ok: true,
       storyWorld: {
         characterAssets: [expect.objectContaining({ name: "阿岚" })],
