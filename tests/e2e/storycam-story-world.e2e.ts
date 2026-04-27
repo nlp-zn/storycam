@@ -53,6 +53,35 @@ test.describe("StoryCam story world", () => {
         })
       });
     });
+    await page.route("**/api/story-world/assets/generate-image", async (route) => {
+      const body = route.request().postDataJSON() as {
+        assetArtifactId: string;
+        assetKind: "character" | "scene";
+        sessionId: string;
+      };
+
+      expect(body).toEqual({
+        assetArtifactId: "character-artifact-1",
+        assetKind: "character",
+        sessionId: "session-1"
+      });
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          assetArtifactId: "character-artifact-1",
+          assetKind: "character",
+          media: {
+            id: "media-character-image-1",
+            mimeType: "image/png",
+            signedUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%2300f0ff'/%3E%3C/svg%3E",
+            signedUrlExpiresIn: 300
+          },
+          ok: true
+        })
+      });
+    });
 
     await page.goto("/");
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
@@ -74,6 +103,11 @@ test.describe("StoryCam story world", () => {
     await expect(page.getByText("人物", { exact: true })).toBeVisible();
     await expect(page.getByText("地点", { exact: true })).toBeVisible();
     await expectStoryWorldLayoutScale(page);
+    await page.getByTestId("story-world-character-asset-card").first().click();
+    await expect(page.getByRole("dialog", { name: "她 资产生成" })).toBeVisible();
+    await page.getByRole("button", { name: "生成资产图" }).click();
+    await expect(page.getByAltText("她 生成资产")).toBeVisible();
+    await page.getByRole("button", { name: "关闭资产生成窗口" }).click();
 
     await page.getByRole("button", { name: "对，继续拍这一段" }).click();
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();

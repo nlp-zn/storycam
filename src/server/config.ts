@@ -132,7 +132,6 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
 
   if (mode === "mock") {
     rejectNonMockProvider("STORYCAM_MULTIMODAL_PROVIDER", multimodalProvider, issues);
-    rejectNonMockProvider("STORYCAM_IMAGE_PROVIDER", imageProvider, issues);
     rejectNonMockProvider("STORYCAM_VIDEO_PROVIDER", videoProvider, issues);
     rejectNonMockProvider("STORYCAM_FINAL_WORK_PROVIDER", finalWorkProvider, issues);
   }

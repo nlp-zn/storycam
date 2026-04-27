@@ -44,6 +44,26 @@ describe("loadStoryCamConfig", () => {
     });
   });
 
+  it("allows an OpenRouter image provider in mock mode for story-world asset generation", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      OPENROUTER_API_KEY: "openrouter-key",
+      OPENROUTER_IMAGE_MODEL: "openai/gpt-5.4-image-2",
+      STORYCAM_IMAGE_PROVIDER: "openrouter"
+    });
+
+    expect(config.generation).toMatchObject({
+      mode: "mock",
+      imageProvider: "openrouter",
+      textProvider: "mock",
+      videoProvider: "mock"
+    });
+    expect(config.openrouter).toEqual({
+      apiKey: "openrouter-key",
+      imageModel: "openai/gpt-5.4-image-2"
+    });
+  });
+
   it("rejects non-text real providers in mock mode", () => {
     expect(() =>
       loadStoryCamConfig({

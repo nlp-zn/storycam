@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { AssetCard } from "@/components/storycam/AssetCard";
-import type { CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
+import {
+  generateStoryWorldAssetImage,
+  type CreateStoryWorldResponse,
+  type GenerateStoryWorldAssetImageResponse
+} from "@/features/storycam/client/storycamApi";
 
 type StoryWorldReviewProps = {
   initiallyEditing?: boolean;
@@ -13,6 +17,22 @@ type StoryWorldReviewProps = {
   onEditSaved: (summary: string) => void;
   storyWorld: CreateStoryWorldResponse;
 };
+
+type SelectedAsset =
+  | {
+      artifactId: string;
+      kind: "character";
+      lines: string[];
+      title: string;
+    }
+  | {
+      artifactId: string;
+      kind: "scene";
+      lines: string[];
+      title: string;
+    };
+
+type AssetImageState = Record<string, GenerateStoryWorldAssetImageResponse["media"]>;
 
 export function StoryWorldReview({
   initiallyEditing = false,
@@ -25,10 +45,39 @@ export function StoryWorldReview({
 }: StoryWorldReviewProps) {
   const [isEditingScript, setIsEditingScript] = useState(initiallyEditing);
   const [scriptSummary, setScriptSummary] = useState(storyWorld.storyWorld.script.summary);
+  const [assetImages, setAssetImages] = useState<AssetImageState>({});
+  const [selectedAsset, setSelectedAsset] = useState<SelectedAsset | null>(null);
+  const [generatingAssetId, setGeneratingAssetId] = useState<string | null>(null);
+  const [assetImageError, setAssetImageError] = useState<string | null>(null);
 
   function saveScriptEdit() {
     setIsEditingScript(false);
     onEditSaved(scriptSummary.trim() || storyWorld.storyWorld.script.summary);
+  }
+
+  async function generateSelectedAssetImage() {
+    if (!selectedAsset || generatingAssetId) {
+      return;
+    }
+
+    try {
+      setAssetImageError(null);
+      setGeneratingAssetId(selectedAsset.artifactId);
+      const result = await generateStoryWorldAssetImage({
+        assetArtifactId: selectedAsset.artifactId,
+        assetKind: selectedAsset.kind,
+        sessionId: storyWorld.sessionId
+      });
+
+      setAssetImages((current) => ({
+        ...current,
+        [selectedAsset.artifactId]: result.media
+      }));
+    } catch (error) {
+      setAssetImageError(messageForAssetImageError(error));
+    } finally {
+      setGeneratingAssetId(null);
+    }
   }
 
   return (
@@ -124,6 +173,7 @@ export function StoryWorldReview({
               {storyWorld.storyWorld.characterAssets.map((asset, index) => (
                 <AssetCard
                   eyebrow="人物"
+                  imageUrl={imageUrlFor(storyWorld.artifacts.characterAssets[index]?.id, assetImages)}
                   key={asset.name}
                   lines={[
                     `${asset.role}：${asset.relationshipToUserStory}`,
@@ -131,6 +181,25 @@ export function StoryWorldReview({
                     `${asset.emotionalBaseline}${asset.wardrobe ? `；${asset.wardrobe}` : ""}`
                   ]}
                   meta={index === 0 ? "主要" : undefined}
+                  onOpen={() => {
+                    const artifactId = storyWorld.artifacts.characterAssets[index]?.id;
+
+                    if (artifactId) {
+                      setSelectedAsset({
+                        artifactId,
+                        kind: "character",
+                        lines: [
+                          `${asset.role}：${asset.relationshipToUserStory}`,
+                          asset.stableVisualDescription,
+                          `${asset.emotionalBaseline}${asset.wardrobe ? `；${asset.wardrobe}` : ""}`,
+                          asset.props.length ? `道具：${asset.props.join("、")}` : "道具：无"
+                        ],
+                        title: asset.name
+                      });
+                      setAssetImageError(null);
+                    }
+                  }}
+                  status={statusForAsset(storyWorld.artifacts.characterAssets[index]?.id, assetImages, generatingAssetId, assetImageError)}
                   title={asset.name}
                   tone="character"
                 />
@@ -144,12 +213,37 @@ export function StoryWorldReview({
               <span className="storycam-eyebrow">{storyWorld.storyWorld.sceneAssets.length} ready</span>
             </div>
             <div className="storycam-asset-grid storycam-asset-grid--scenes">
-              {storyWorld.storyWorld.sceneAssets.map((asset) => (
+              {storyWorld.storyWorld.sceneAssets.map((asset, index) => (
                 <AssetCard
                   eyebrow="地点"
+                  imageUrl={imageUrlFor(storyWorld.artifacts.sceneAssets[index]?.id, assetImages)}
                   key={asset.name}
                   lines={[`${asset.location}，${asset.timeOfDay}`, `${asset.light}；${asset.atmosphere}`, asset.spatialLogic]}
                   meta={asset.timeOfDay}
+                  onOpen={() => {
+                    const artifactId = storyWorld.artifacts.sceneAssets[index]?.id;
+
+                    if (artifactId) {
+                      setSelectedAsset({
+                        artifactId,
+                        kind: "scene",
+                        lines: [
+                          `${asset.location}，${asset.timeOfDay}`,
+                          `${asset.light}；${asset.atmosphere}`,
+                          `关键物件：${asset.keyObjects.join("、")}`,
+                          asset.spatialLogic
+                        ],
+                        title: asset.name
+                      });
+                      setAssetImageError(null);
+                    }
+                  }}
+                  status={statusForAsset(
+                    storyWorld.artifacts.sceneAssets[index]?.id,
+                    assetImages,
+                    generatingAssetId,
+                    assetImageError
+                  )}
                   title={asset.name}
                   tone="scene"
                 />
@@ -158,6 +252,17 @@ export function StoryWorldReview({
           </section>
         </div>
       </div>
+
+      {selectedAsset ? (
+        <AssetImageModal
+          asset={selectedAsset}
+          error={assetImageError}
+          imageUrl={assetImages[selectedAsset.artifactId]?.signedUrl}
+          isGenerating={generatingAssetId === selectedAsset.artifactId}
+          onClose={() => setSelectedAsset(null)}
+          onGenerate={generateSelectedAssetImage}
+        />
+      ) : null}
 
       <div className="storycam-bottom-dock">
         <button
@@ -184,4 +289,98 @@ export function StoryWorldReview({
       </div>
     </section>
   );
+}
+
+function AssetImageModal({
+  asset,
+  error,
+  imageUrl,
+  isGenerating,
+  onClose,
+  onGenerate
+}: {
+  asset: SelectedAsset;
+  error: string | null;
+  imageUrl?: string;
+  isGenerating: boolean;
+  onClose: () => void;
+  onGenerate: () => void;
+}) {
+  const isScene = asset.kind === "scene";
+
+  return (
+    <div className="storycam-asset-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${asset.title} 资产生成`}>
+      <div className={`storycam-asset-modal ${isScene ? "storycam-asset-modal--scene" : "storycam-asset-modal--character"}`}>
+        <button className="storycam-asset-modal-close" onClick={onClose} type="button" aria-label="关闭资产生成窗口">
+          ×
+        </button>
+        <div className="storycam-asset-modal-copy">
+          <p className="storycam-eyebrow">{isScene ? "场景资产" : "角色资产"}</p>
+          <h3>{asset.title}</h3>
+          <div className="mt-5 space-y-3">
+            {asset.lines.map((line) => (
+              <p key={line}>{line}</p>
+            ))}
+          </div>
+          {error ? <p className="storycam-asset-modal-error">{error}</p> : null}
+          <button className="storycam-primary-button mt-6" disabled={isGenerating} onClick={onGenerate} type="button">
+            {isGenerating ? "正在生成资产图" : imageUrl ? "重新生成资产图" : "生成资产图"}
+          </button>
+        </div>
+        <div className="storycam-asset-modal-visual">
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img alt={`${asset.title} 生成资产`} src={imageUrl} />
+          ) : (
+            <div className="storycam-asset-modal-placeholder">
+              <span>{isGenerating ? "生成中" : "等待生成"}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function imageUrlFor(assetArtifactId: string | undefined, assetImages: AssetImageState) {
+  return assetArtifactId ? assetImages[assetArtifactId]?.signedUrl : undefined;
+}
+
+function statusForAsset(
+  assetArtifactId: string | undefined,
+  assetImages: AssetImageState,
+  generatingAssetId: string | null,
+  error: string | null
+): "empty" | "generating" | "ready" | "error" {
+  if (!assetArtifactId) {
+    return "empty";
+  }
+
+  if (generatingAssetId === assetArtifactId) {
+    return "generating";
+  }
+
+  if (assetImages[assetArtifactId]) {
+    return "ready";
+  }
+
+  return error ? "error" : "empty";
+}
+
+function messageForAssetImageError(error: unknown) {
+  if (error instanceof Error) {
+    if (error.message === "image_provider_not_configured") {
+      return "请先把 STORYCAM_IMAGE_PROVIDER 设为 openrouter，并配置 OPENROUTER_IMAGE_MODEL。";
+    }
+
+    if (error.message === "OPENROUTER_IMAGE_INVALID_OUTPUT") {
+      return "图像模型返回不稳定，请再试一次。";
+    }
+
+    if (error.message === "authentication_required") {
+      return "请先登录，再生成资产图。";
+    }
+  }
+
+  return "资产图生成失败，请稍后再试。";
 }

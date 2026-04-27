@@ -168,6 +168,18 @@ export type FinalWorkResponse = {
   ok: true;
 };
 
+export type GenerateStoryWorldAssetImageResponse = {
+  assetArtifactId: string;
+  assetKind: "character" | "scene";
+  media: {
+    id: string;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  };
+  ok: true;
+};
+
 export async function getAuthStatus() {
   const response = await fetch("/api/auth/me");
 
@@ -247,6 +259,26 @@ export async function createStoryboard(input: { confirmedArtifactVersions: Recor
   }
 
   return (await response.json()) as CreateStoryboardResponse;
+}
+
+export async function generateStoryWorldAssetImage(input: {
+  assetArtifactId: string;
+  assetKind: "character" | "scene";
+  sessionId: string;
+}) {
+  const response = await fetch("/api/story-world/assets/generate-image", {
+    body: JSON.stringify(input),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "asset_image_failed"));
+  }
+
+  return (await response.json()) as GenerateStoryWorldAssetImageResponse;
 }
 
 export async function expandStoryboardGroup(input: { coreStoryboardGroupId: string; sessionId: string; targetCount?: number }) {

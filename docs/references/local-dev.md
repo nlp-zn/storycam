@@ -77,6 +77,15 @@ OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
 
 This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads.
 
+To generate Step 2 character and scene asset boards from the asset cards, enable the image provider too:
+
+```text
+STORYCAM_IMAGE_PROVIDER=openrouter
+OPENROUTER_IMAGE_MODEL=openai/gpt-5-image
+```
+
+OpenRouter currently lists `openai/gpt-5-image` as the OpenAI image generation model. If you have a newer image-capable model ID, use that value in `OPENROUTER_IMAGE_MODEL`.
+
 For manual browser testing without a Google account, use a Supabase local stack and set:
 
 ```text
