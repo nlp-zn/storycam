@@ -100,27 +100,27 @@ button:disabled {
 .storycam-stepper {
   position: sticky;
   top: 112px;
-  min-height: min(720px, calc(100vh - 160px));
-  padding: 10px 0;
+  min-height: min(360px, calc(100vh - 220px));
+  padding: 8px 0 8px 12px;
 }
 
 .storycam-stepper-line,
 .storycam-stepper-line-active {
   position: absolute;
-  bottom: 34px;
-  left: 24px;
-  top: 34px;
-  width: 2px;
+  bottom: 20px;
+  left: 16px;
+  top: 20px;
+  width: 1px;
 }
 
 .storycam-stepper-line {
-  background: linear-gradient(180deg, rgba(53, 53, 53, 0.1), var(--storycam-surface-highest) 12%, var(--storycam-surface-highest) 88%, rgba(53, 53, 53, 0.1));
+  background: linear-gradient(180deg, rgba(132, 148, 149, 0.08), rgba(132, 148, 149, 0.52) 12%, rgba(132, 148, 149, 0.52) 88%, rgba(132, 148, 149, 0.08));
 }
 
 .storycam-stepper-line-active {
   bottom: auto;
-  background: linear-gradient(180deg, #006970, var(--storycam-primary));
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.6);
+  background: rgba(0, 240, 255, 0.72);
+  box-shadow: none;
 }
 
 .storycam-stepper-items {
@@ -133,8 +133,8 @@ button:disabled {
 }
 
 .storycam-step {
-  min-height: 54px;
-  color: var(--storycam-outline);
+  min-height: 36px;
+  color: rgba(185, 202, 203, 0.54);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
@@ -154,36 +154,39 @@ button:disabled {
 }
 
 .storycam-step.is-reachable .storycam-step-button:hover {
-  color: var(--storycam-primary-soft);
+  color: rgba(219, 252, 255, 0.82);
 }
 
 .storycam-step.is-disabled {
-  opacity: 0.55;
+  opacity: 0.62;
 }
 
 .storycam-step-dot {
   display: flex;
-  width: 48px;
-  height: 48px;
+  width: 9px;
+  height: 9px;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--storycam-surface-highest);
+  border: 0;
   border-radius: 9999px;
-  background: var(--storycam-background);
-  font-weight: 800;
+  background: rgba(185, 202, 203, 0.62);
+  color: transparent;
   flex: 0 0 auto;
+  font-size: 0;
 }
 
 .storycam-step.is-active {
   color: var(--storycam-primary);
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .storycam-step.is-active .storycam-step-dot {
-  border: 2px solid var(--storycam-primary);
-  box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
-  color: var(--storycam-primary);
-  font-size: 20px;
+  width: 10px;
+  height: 10px;
+  background: var(--storycam-primary);
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.38);
+  color: transparent;
+  font-size: 0;
 }
 
 .storycam-glass {
@@ -747,7 +750,7 @@ button:disabled {
     margin-bottom: 44px;
     min-height: 0;
     overflow-x: auto;
-    padding-bottom: 8px;
+    padding: 0 0 8px;
   }
 
   .storycam-stepper-items {
@@ -761,16 +764,16 @@ button:disabled {
     bottom: auto;
     left: 0;
     right: 0;
-    top: 24px;
-    height: 2px;
+    top: 5px;
+    height: 1px;
     min-width: 760px;
     width: auto;
   }
 
   .storycam-stepper-line-active {
     width: var(--storycam-mobile-progress, 0%);
-    height: 2px !important;
-    background: linear-gradient(90deg, #006970, var(--storycam-primary));
+    height: 1px !important;
+    background: rgba(0, 240, 255, 0.72);
   }
 
   .storycam-step {
@@ -781,7 +784,7 @@ button:disabled {
 
   .storycam-step-button {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   .storycam-panel {
