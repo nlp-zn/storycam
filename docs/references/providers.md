@@ -59,10 +59,10 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 | StoryCam stage | Default | Real path | Notes |
 | --- | --- | --- | --- |
 | Story world text | mock | DeepSeek official strict tool calling | Uses `deepseek-v4-pro` through `/beta` Chat Completions, forces `submit_story_world`, parses tool arguments, and validates normalized StoryCam artifacts. Raw prompts stay server-side. |
-| Core storyboard text | mock | OpenRouter text | MVP creation uses structured JSON output to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. |
+| Core storyboard text | mock | OpenRouter text | MVP creation uses confirmed script, character assets, and scene asset to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. |
 | Photo understanding | mock | OpenRouter multimodal | Signed URLs and raw private photos must not appear in logs. |
 | Story-world asset image | placeholder/mock | Inference.sh app | Uses the official `@inferencesh/sdk` with `INFERENCE_IMAGE_APP=openai/gpt-image-2`; production routes submit async tasks with `wait:false`, poll `generation_jobs`, then download completed output server-side into private StoryCam storage. The app requires an Inference.sh API key and its required `OPENAI_KEY` secret configured in Inference.sh. |
-| Core/expanded storyboard image | placeholder/mock | Inference.sh app | Generates the main storyboard image and up to 8 expanded storyboard images per core group through async Inference.sh tasks. Single image failures return placeholders and do not block the rest of the group. |
+| Core/expanded storyboard image | placeholder/mock | Reference-image-capable image provider | Storyboard images must use ready character and scene asset images as visual references plus the stored frame prompt. Current pure-prompt providers return placeholders instead of generating off-text. |
 | Video clip | mock video | Seedance 2.0 | MVP creation generates one clip for the confirmed core storyboard group. |
 | Final work | mock/FFmpeg fixture | FFmpeg composer | Account-scoped preview only. |
 

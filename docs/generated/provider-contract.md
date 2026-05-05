@@ -72,6 +72,7 @@ Requirements:
 - core storyboard primary model name from `OPENROUTER_TEXT_MODEL`,
 - core storyboard optional comma-separated fallback chain from `OPENROUTER_TEXT_FALLBACK_MODELS`,
 - `/api/storyboard` creates one script and main-image prompt per core group.
+- storyboard scripts are adapted from confirmed script, character assets, and scene assets; they must not invent new people, locations, wardrobes, props, or spatial rules outside the story world.
 
 ## Multimodal Provider
 
@@ -112,6 +113,9 @@ Requirements:
 - output stored in `storycam-generated` bucket,
 - representative images are stored as `thumbnail` media linked to the core storyboard group,
 - expanded storyboard images are stored as `thumbnail` media linked to their expanded card artifact,
+- storyboard images must use ready story-world character and scene asset images as reference inputs; pure text fallback is not allowed for storyboard images,
+- providers that do not explicitly support reference images must return placeholders with `reference_images_unsupported`,
+- missing character or scene asset thumbnails return placeholders with `waiting_for_asset_images`,
 - failure may degrade to placeholder without blocking video generation.
 - recommended story-world asset app: `openai/gpt-image-2`.
 

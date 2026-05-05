@@ -162,6 +162,59 @@ test.describe("StoryCam core storyboard", () => {
     await expect(page.getByRole("button", { name: "打开 9 帧画布" })).toHaveCount(1);
     await expect(page.getByRole("button", { name: "用这一组生成片段" })).toHaveCount(1);
   });
+
+  test("shows an internal waiting state when storyboard images depend on unfinished story-world asset images", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+    await page.route("**/api/storyboard", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            coreStoryboardGroups: [
+              { id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }
+            ],
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [
+              { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+            ]
+          },
+          durationPlan: {
+            clipDurationTargets: [15],
+            coreGroupTargetCount: 1,
+            plannedDurationSeconds: 15
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyboard: storyboardFixture(1, "waiting_for_asset_images")
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+
+    await expect(page.getByText("等待角色/场景资产图")).toBeVisible();
+    await expect(page.getByTestId("core-storyboard-card")).toHaveCount(1);
+  });
 });
 
 function storyWorldFixture() {
@@ -198,13 +251,13 @@ function storyWorldFixture() {
   };
 }
 
-function storyboardFixture(count: 1 | 2 | 3, imageStatus: "generating" | "placeholder") {
+function storyboardFixture(count: 1 | 2 | 3, imageStatus: "generating" | "placeholder" | "waiting_for_asset_images") {
   const groups = [
     {
       emotionalTurn: "想说出口",
       estimatedClipDurationSeconds: 15,
       expandedStoryboardImages: [],
-      representativeImage: imageStatus === "generating" ? generatingImage("job-main-1") : placeholderImage(),
+      representativeImage: imageStatus === "generating" ? generatingImage("job-main-1") : placeholderImage(imageStatus),
       scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
       storyPurpose: "建立她和未发送短信之间的私人情绪。",
       title: "未发送短信",
@@ -214,7 +267,7 @@ function storyboardFixture(count: 1 | 2 | 3, imageStatus: "generating" | "placeh
       emotionalTurn: "靠近但错过",
       estimatedClipDurationSeconds: 15,
       expandedStoryboardImages: [],
-      representativeImage: imageStatus === "generating" ? generatingImage("job-main-2") : placeholderImage(),
+      representativeImage: imageStatus === "generating" ? generatingImage("job-main-2") : placeholderImage(imageStatus),
       scriptArtifact: { id: "storyboard-artifact-2", state: "ready", type: "storyboard_script", version: 1 },
       storyPurpose: "让对方靠近，但仍然不让告白真正发生。",
       title: "玻璃反光",
@@ -244,9 +297,10 @@ function storyboardFixture(count: 1 | 2 | 3, imageStatus: "generating" | "placeh
   };
 }
 
-function placeholderImage() {
+function placeholderImage(reason?: "placeholder" | "waiting_for_asset_images") {
   return {
     placeholder: true,
+    ...(reason === "waiting_for_asset_images" ? { reason } : {}),
     status: "placeholder"
   };
 }

@@ -218,6 +218,7 @@ type StoryboardImageState =
   | {
       status: "placeholder";
       placeholder: true;
+      reason?: "waiting_for_asset_images" | "reference_images_unsupported" | "provider_failed" | "storage_failed";
     };
 ```
 
@@ -308,7 +309,9 @@ Rules:
 
 - Reject if story world is not confirmed.
 - New MVP results contain exactly 1 group, targeting about 15 seconds and exactly 9 storyboard frames.
-- The representative core image is generated from frame 1.
+- The representative core image is generated from frame 1 only after all referenced story-world character and scene asset images have ready thumbnails.
+- If required asset images are not ready, `representativeImage` returns a placeholder with `reason: "waiting_for_asset_images"` and no storyboard image job is submitted.
+- If the configured storyboard image provider does not support reference images, image generation returns `reason: "reference_images_unsupported"` instead of falling back to pure text prompts.
 - Planned total duration is 15 seconds for new storyboard creation.
 - Downstream stale artifacts must be handled by service layer.
 
@@ -357,6 +360,7 @@ Rules:
 - Default target is 8 cards/images, derived from storyboard frames 2-9.
 - Maximum is 8 cards.
 - Expansion never creates a video job.
+- Expanded storyboard image jobs require the same ready story-world character and scene asset image references as the core frame.
 - Repeated expansion reuses existing expanded storyboard card artifacts instead of duplicating them.
 
 ### `POST /api/storyboard-groups/:id/frames/:frameNumber/regenerate-image`
@@ -388,6 +392,7 @@ Rules:
 
 - `frameNumber=1` creates a `storyboard_image` job linked to the core storyboard group artifact.
 - `frameNumber=2..9` creates an `expanded_storyboard_image` job linked to the corresponding expanded storyboard card artifact.
+- Regeneration never accepts a user prompt and never bypasses required story-world asset image references.
 - No free-form user prompt is accepted.
 
 ### `POST /api/storyboard-groups/:id/generate-clip`
