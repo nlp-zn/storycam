@@ -35,6 +35,7 @@ const task = await client.run(
     app: "openai/gpt-image-2",
     input: {
       prompt,
+      images: ["https://signed-character-reference", "https://signed-scene-reference"],
       width: 1536,
       height: 864,
       n: 1,
@@ -55,6 +56,17 @@ const current = await client.getTask(task.id);
 - `stream: true` for streaming progress when an app supports it.
 
 StoryCam should prefer `wait:false` for user-facing routes because character assets, scene assets, core storyboard images, and expanded storyboard images can all be submitted concurrently.
+
+For storyboard images, StoryCam uses Inference.sh's `openai/gpt-image-2` app with multi-image reference input. The official skill documents `images` as reference image URLs and shows multi-image reference with:
+
+```json
+{
+  "prompt": "combine these two characters into one scene",
+  "images": ["https://character1.jpg", "https://character2.jpg"]
+}
+```
+
+The StoryCam server maps ready character and scene asset signed URLs into that `images` array, while the frame-specific storyboard instruction remains in `prompt`.
 
 ## Task Status And Output
 

@@ -3,6 +3,7 @@ import type { ImageGenerationProvider, ProviderResult } from "@/lib/providers/ty
 
 export type InferenceShImagePrompt = {
   height?: number;
+  images?: string[];
   prompt: string;
   quality?: "auto" | "high" | "low" | "medium";
   width?: number;
@@ -35,6 +36,7 @@ export type InferenceShImageProviderOptions<Input> = {
   getTask?: InferenceShGetTask;
   maxAttempts?: number;
   runTask?: InferenceShRunTask;
+  supportsReferenceImages?: boolean;
 };
 
 export type InferenceShRunTask = (
@@ -42,6 +44,7 @@ export type InferenceShRunTask = (
     app: string;
     input: {
       height: number;
+      images?: string[];
       n: number;
       output_format: "png";
       prompt: string;
@@ -87,6 +90,7 @@ export function createInferenceShImageProvider<Input>(
 
   return {
     ...identity,
+    ...(options.supportsReferenceImages ? { supportsReferenceImages: true } : {}),
     async generateImage(input): Promise<ProviderResult<InferenceShImageProviderOutput>> {
       const prompt = options.buildPrompt(input);
 
@@ -140,6 +144,7 @@ async function generateValidatedImage(input: {
           app: input.app,
           input: {
             height: normalizeDimension(input.prompt.height ?? 864),
+            ...referenceImagesInput(input.prompt),
             n: 1,
             output_format: "png",
             prompt: input.prompt.prompt,
@@ -204,6 +209,7 @@ async function submitValidatedImageTask(input: {
         app: input.app,
         input: {
           height: normalizeDimension(input.prompt.height ?? 864),
+          ...referenceImagesInput(input.prompt),
           n: 1,
           output_format: "png",
           prompt: input.prompt.prompt,
@@ -297,6 +303,12 @@ function createSdkClient(apiKey: string): { getTask: InferenceShGetTask; runTask
       return client.run(input, options);
     }
   };
+}
+
+function referenceImagesInput(prompt: InferenceShImagePrompt) {
+  const images = prompt.images?.map((image) => image.trim()).filter(Boolean);
+
+  return images?.length ? { images } : {};
 }
 
 function parseTaskId(task: InferenceShTaskResult) {

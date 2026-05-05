@@ -119,6 +119,42 @@ describe("createInferenceShImageProvider", () => {
     );
   });
 
+  it("passes multiple reference image URLs to Inference.sh when provided", async () => {
+    const runTask = vi.fn().mockResolvedValue({
+      id: "task-refs",
+      status: "queued"
+    });
+    const provider = createInferenceShImageProvider({
+      apiKey: "inference-key",
+      app: "openai/gpt-image-2",
+      buildPrompt: () => ({
+        images: [" https://example.com/character.png ", "https://example.com/scene.png"],
+        prompt: "combine the references into one cinematic storyboard frame"
+      }),
+      getTask: vi.fn(),
+      runTask,
+      supportsReferenceImages: true
+    });
+
+    await expect(provider.submitImageTask({})).resolves.toMatchObject({
+      ok: true,
+      value: {
+        providerRequestId: "task-refs"
+      }
+    });
+    expect(provider.supportsReferenceImages).toBe(true);
+    expect(runTask).toHaveBeenCalledWith(
+      {
+        app: "openai/gpt-image-2",
+        input: expect.objectContaining({
+          images: ["https://example.com/character.png", "https://example.com/scene.png"],
+          prompt: "combine the references into one cinematic storyboard frame"
+        })
+      },
+      { stream: false, wait: false }
+    );
+  });
+
   it("resolves a running async image task without downloading", async () => {
     const fetchImage = vi.fn();
     const provider = createInferenceShImageProvider({

@@ -102,7 +102,7 @@ Used for:
 
 Real path:
 
-- Inference.sh SDK app provider for current story-world asset boards,
+- Inference.sh SDK app provider for current story-world asset boards and reference-image storyboard frames,
 - legacy OpenRouter image adapter remains available behind the same provider boundary.
 
 Requirements:
@@ -113,7 +113,7 @@ Requirements:
 - output stored in `storycam-generated` bucket,
 - representative images are stored as `thumbnail` media linked to the core storyboard group,
 - expanded storyboard images are stored as `thumbnail` media linked to their expanded card artifact,
-- storyboard images must use ready story-world character and scene asset images as reference inputs; pure text fallback is not allowed for storyboard images,
+- storyboard images must use ready story-world character and scene asset images as Inference.sh `images[]` reference inputs plus the frame prompt; pure text fallback is not allowed for storyboard images,
 - providers that do not explicitly support reference images must return placeholders with `reference_images_unsupported`,
 - missing character or scene asset thumbnails return placeholders with `waiting_for_asset_images`,
 - failure may degrade to placeholder without blocking video generation.

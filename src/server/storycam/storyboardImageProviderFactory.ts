@@ -1,3 +1,4 @@
+import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import type { StoryCamConfig } from "@/server/config";
 import type {
@@ -12,7 +13,23 @@ export function createConfiguredStoryboardImageProvider(
   config: StoryCamConfig
 ): ImageGenerationProvider<StoryboardImageInput, StoryboardRepresentativeImageOutput> | undefined {
   if (config.generation.imageProvider === "inference_sh") {
-    return undefined;
+    if (!config.inferenceSh?.apiKey || !config.inferenceSh.imageApp) {
+      return undefined;
+    }
+
+    return createInferenceShImageProvider<StoryboardImageInput>({
+      apiKey: config.inferenceSh.apiKey,
+      app: config.inferenceSh.imageApp,
+      buildPrompt: (input) => ({
+        height: 864,
+        images: input.referenceImages?.map((image) => image.signedUrl),
+        prompt: buildStoryboardImagePrompt(input),
+        quality: "high",
+        width: 1536
+      }),
+      maxAttempts: 2,
+      supportsReferenceImages: true
+    });
   }
 
   if (config.generation.imageProvider === "openrouter") {
