@@ -103,6 +103,36 @@ describe("story world service", () => {
               location: "街角店门口",
               name: "街角店门口",
               referenceMediaIds: [],
+              scenePanels: [
+                {
+                  description: "街角店门口的玻璃门、屋檐和路灯在夜色里连成一个小空间。",
+                  keyObjects: ["玻璃门", "屋檐", "路灯"],
+                  purpose: "建立故事发生的主场景。",
+                  shotType: "establishing",
+                  title: "街角店门口"
+                },
+                {
+                  description: "手机屏幕在门外亮起。",
+                  keyObjects: ["手机屏幕", "玻璃门"],
+                  purpose: "把未发送的情绪落到可见物件。",
+                  shotType: "detail",
+                  title: "亮起的手机"
+                },
+                {
+                  description: "冷白店灯落在门口地面。",
+                  keyObjects: ["冷白灯", "地面"],
+                  purpose: "固定场景光线。",
+                  shotType: "lighting",
+                  title: "门口灯光"
+                },
+                {
+                  description: "她在门外停下，手机亮起。",
+                  keyObjects: ["玻璃门", "手机"],
+                  purpose: "提供核心动作发生的位置。",
+                  shotType: "medium",
+                  title: "门外停顿"
+                }
+              ],
               sessionId: "session-1",
               spatialLogic: "她在门外停下，手机亮起",
               state: "ready",
@@ -140,6 +170,74 @@ describe("story world service", () => {
         lightweightChoices: ["少说话"]
       })
     );
+  });
+
+  it("rejects newly generated scene assets without multi-panel scene references", async () => {
+    const client = new FakeSupabaseClient();
+    const provider = {
+      providerKind: "text" as const,
+      providerName: "test-provider",
+      generate: vi.fn().mockResolvedValue({
+        ok: true,
+        providerKind: "text",
+        providerName: "test-provider",
+        value: {
+          characterAssets: [
+            {
+              consistencyNotes: ["动作克制"],
+              emotionalBaseline: "少说话，用停顿表达情绪",
+              id: "character-test-1",
+              name: "她",
+              props: ["手机"],
+              referenceMediaIds: [],
+              relationshipToUserStory: "承载用户的私人记忆",
+              role: "主角",
+              sessionId: "session-1",
+              stableVisualDescription: "浅色外套，低头握着手机",
+              state: "ready",
+              version: 1
+            }
+          ],
+          sceneAssets: [
+            {
+              atmosphere: "安静、克制",
+              id: "scene-test-1",
+              keyObjects: ["玻璃门"],
+              light: "冷白灯",
+              location: "街角店门口",
+              name: "街角店门口",
+              referenceMediaIds: [],
+              sessionId: "session-1",
+              spatialLogic: "她在门外停下，手机亮起",
+              state: "ready",
+              timeOfDay: "night",
+              version: 1
+            }
+          ],
+          script: {
+            beats: ["她停在门外", "手机屏幕亮起"],
+            id: "script-test-1",
+            logline: "她在门外删掉一条短信。",
+            sessionId: "session-1",
+            state: "ready",
+            summary: "手机光和玻璃反光让告别停住。",
+            title: "门外短信",
+            version: 1
+          }
+        }
+      })
+    };
+
+    await expect(
+      createStoryWorld(
+        client.asSupabaseClient(),
+        "user-1",
+        {
+          input: "我想把暗恋拍成韩剧雨夜"
+        },
+        provider
+      )
+    ).rejects.toThrow();
   });
 
   it("rejects empty and oversized input with redacted request errors", () => {

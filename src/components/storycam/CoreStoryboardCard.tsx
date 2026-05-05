@@ -35,7 +35,7 @@ export function CoreStoryboardCard({ group, index, isSelected = false, onExpand,
           onClick={onExpand ?? onSelect}
           type="button"
         >
-          扩展这一组
+          打开 9 帧画布
         </button>
         <button
           className="storycam-primary-button px-3 py-2 text-xs"

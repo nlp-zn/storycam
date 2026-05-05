@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetCard } from "@/components/storycam/AssetCard";
 import {
   generateStoryWorldAssetImage,
+  generateStoryWorldAssetImages,
+  getGenerationJob,
   type CreateStoryWorldResponse,
-  type GenerateStoryWorldAssetImageResponse
+  type GenerateStoryWorldAssetImageResponse,
+  type ScenePanel,
+  type StoryboardImageState
 } from "@/features/storycam/client/storycamApi";
+import {
+  imageGenerationPollingPolicy,
+  mapWithConcurrencyLimit,
+  nextImageGenerationPollDelayMs
+} from "@/features/storycam/client/jobPolling";
 
 type StoryWorldReviewProps = {
+  initialAssetImages?: AssetImageState;
   initiallyEditing?: boolean;
-  isDeleting?: boolean;
+  isGeneratingStoryboard?: boolean;
   isConfirmed: boolean;
-  onConfirm: () => void;
-  onDeleteStory: () => void;
+  onConfirm: (coreGroupTargetCount: 1 | 2 | 3) => void;
   onEditSaved: (summary: string) => void;
   storyWorld: CreateStoryWorldResponse;
 };
@@ -29,26 +38,129 @@ type SelectedAsset =
       artifactId: string;
       kind: "scene";
       lines: string[];
+      panels: ScenePanel[];
       title: string;
     };
 
-type AssetImageState = Record<string, GenerateStoryWorldAssetImageResponse["media"]>;
+type AssetImageState = Record<string, NonNullable<GenerateStoryWorldAssetImageResponse["media"]>>;
+type AssetImageJobState = Record<string, string>;
 
 export function StoryWorldReview({
+  initialAssetImages,
   initiallyEditing = false,
+  isGeneratingStoryboard = false,
   isConfirmed,
-  isDeleting = false,
   onConfirm,
-  onDeleteStory,
   onEditSaved,
   storyWorld
 }: StoryWorldReviewProps) {
   const [isEditingScript, setIsEditingScript] = useState(initiallyEditing);
   const [scriptSummary, setScriptSummary] = useState(storyWorld.storyWorld.script.summary);
-  const [assetImages, setAssetImages] = useState<AssetImageState>({});
+  const [assetImages, setAssetImages] = useState<AssetImageState>(() => initialAssetImages ?? {});
   const [selectedAsset, setSelectedAsset] = useState<SelectedAsset | null>(null);
-  const [generatingAssetId, setGeneratingAssetId] = useState<string | null>(null);
+  const [assetImageJobs, setAssetImageJobs] = useState<AssetImageJobState>({});
+  const [isBatchSubmitting, setIsBatchSubmitting] = useState(false);
   const [assetImageError, setAssetImageError] = useState<string | null>(null);
+  const assetImagePollAttemptsRef = useRef<Record<string, number>>({});
+  const assetArtifactIds = useMemo(
+    () => [
+      ...storyWorld.artifacts.characterAssets.map((artifact) => artifact.id),
+      ...storyWorld.artifacts.sceneAssets.slice(0, 1).map((artifact) => artifact.id)
+    ],
+    [storyWorld.artifacts.characterAssets, storyWorld.artifacts.sceneAssets]
+  );
+
+  useEffect(() => {
+    const jobEntries = Object.entries(assetImageJobs);
+
+    if (jobEntries.length === 0) {
+      assetImagePollAttemptsRef.current = {};
+      return;
+    }
+
+    const pendingJobIds = new Set(jobEntries.map(([, jobId]) => jobId));
+    assetImagePollAttemptsRef.current = Object.fromEntries(
+      Object.entries(assetImagePollAttemptsRef.current).filter(([jobId]) => pendingJobIds.has(jobId))
+    );
+
+    let canceled = false;
+    let isPolling = false;
+    let timer: number | undefined;
+
+    const pollJobs = async () => {
+      if (isPolling) {
+        return;
+      }
+
+      isPolling = true;
+      const results = await mapWithConcurrencyLimit(
+        jobEntries,
+        imageGenerationPollingPolicy.maxConcurrentRequests,
+        async ([artifactId, jobId]) => ({
+          artifactId,
+          jobId,
+          result: await getGenerationJob(jobId)
+        })
+      );
+      isPolling = false;
+
+      if (canceled) {
+        return;
+      }
+
+      for (const [index, result] of results.entries()) {
+        const fallbackJobId = jobEntries[index]?.[1];
+
+        if (!fallbackJobId) {
+          continue;
+        }
+
+        if (result.status !== "fulfilled") {
+          assetImagePollAttemptsRef.current[fallbackJobId] =
+            (assetImagePollAttemptsRef.current[fallbackJobId] ?? 0) + 1;
+          continue;
+        }
+
+        assetImagePollAttemptsRef.current[result.value.jobId] =
+          (assetImagePollAttemptsRef.current[result.value.jobId] ?? 0) + 1;
+        const image = result.value.result.image;
+
+        if (image?.status === "ready") {
+          delete assetImagePollAttemptsRef.current[result.value.jobId];
+          setAssetImages((current) => ({
+            ...current,
+            [result.value.artifactId]: mediaFromReadyImage(image)
+          }));
+          setAssetImageJobs((current) => removeJob(current, result.value.artifactId));
+          continue;
+        }
+
+        if (image?.status === "placeholder" || result.value.result.job.status === "failed") {
+          delete assetImagePollAttemptsRef.current[result.value.jobId];
+          setAssetImageJobs((current) => removeJob(current, result.value.artifactId));
+          setAssetImageError("部分资产图生成失败，可以单独重试。");
+        }
+      }
+
+      const remainingJobIds = jobEntries
+        .map(([, jobId]) => jobId)
+        .filter((jobId) => assetImagePollAttemptsRef.current[jobId] !== undefined);
+
+      if (remainingJobIds.length > 0) {
+        const completedAttempts = Math.min(
+          ...remainingJobIds.map((jobId) => assetImagePollAttemptsRef.current[jobId] ?? 0)
+        );
+        timer = window.setTimeout(pollJobs, nextImageGenerationPollDelayMs(completedAttempts));
+      }
+    };
+
+    timer = window.setTimeout(pollJobs, nextImageGenerationPollDelayMs(0));
+
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [assetImageJobs]);
 
   function saveScriptEdit() {
     setIsEditingScript(false);
@@ -56,38 +168,73 @@ export function StoryWorldReview({
   }
 
   async function generateSelectedAssetImage() {
-    if (!selectedAsset || generatingAssetId) {
+    if (!selectedAsset || assetImageJobs[selectedAsset.artifactId]) {
       return;
     }
 
     try {
       setAssetImageError(null);
-      setGeneratingAssetId(selectedAsset.artifactId);
       const result = await generateStoryWorldAssetImage({
         assetArtifactId: selectedAsset.artifactId,
         assetKind: selectedAsset.kind,
         sessionId: storyWorld.sessionId
       });
 
-      setAssetImages((current) => ({
-        ...current,
-        [selectedAsset.artifactId]: result.media
-      }));
+      applyAssetImageResult(selectedAsset.artifactId, result.image);
+    } catch (error) {
+      setAssetImageError(messageForAssetImageError(error));
+    }
+  }
+
+  async function generateAllAssetImages() {
+    if (isBatchSubmitting || Object.keys(assetImageJobs).length > 0) {
+      return;
+    }
+
+    try {
+      setIsBatchSubmitting(true);
+      setAssetImageError(null);
+      const result = await generateStoryWorldAssetImages({
+        assetArtifactIds,
+        sessionId: storyWorld.sessionId
+      });
+
+      for (const [artifactId, item] of Object.entries(result.imagesByArtifactId)) {
+        applyAssetImageResult(artifactId, item.image);
+      }
     } catch (error) {
       setAssetImageError(messageForAssetImageError(error));
     } finally {
-      setGeneratingAssetId(null);
+      setIsBatchSubmitting(false);
     }
+  }
+
+  function applyAssetImageResult(artifactId: string, image: StoryboardImageState) {
+    if (image.status === "ready") {
+      setAssetImages((current) => ({
+        ...current,
+        [artifactId]: mediaFromReadyImage(image)
+      }));
+      setAssetImageJobs((current) => removeJob(current, artifactId));
+      return;
+    }
+
+    if (image.status === "generating") {
+      setAssetImageJobs((current) => ({
+        ...current,
+        [artifactId]: image.jobId
+      }));
+      return;
+    }
+
+    setAssetImageJobs((current) => removeJob(current, artifactId));
+    setAssetImageError("资产图生成失败，可以稍后重试。");
   }
 
   return (
     <section className="storycam-story-world relative" data-testid="story-world-review">
       <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#00f0ff]/20 bg-[#00f0ff]/10 px-4 py-2">
-            <span className="size-2 rounded-full bg-[#00f0ff]" />
-            <span className="storycam-eyebrow">步骤 2</span>
-          </div>
           <h1 className="storycam-heading-lg">确认故事世界</h1>
           <p className="mt-3 text-lg leading-8 text-[#b9cacb]">审查你的生成资产和剧本组件。</p>
         </div>
@@ -155,7 +302,7 @@ export function StoryWorldReview({
             <ol className="relative mt-6 grid gap-3">
               {storyWorld.storyWorld.script.beats.map((beat, index) => (
                 <li className="rounded-[1.25rem] border border-white/10 bg-black/30 p-4 text-sm leading-6 text-[#b9cacb]" key={beat}>
-                  <span className="mb-1 block text-xs font-bold text-[#00f0ff]">第 {index + 1} 拍</span>
+                  <span className="mb-1 block text-xs font-bold text-[#00f0ff]">剧情 {index + 1}</span>
                   {beat}
                 </li>
               ))}
@@ -164,17 +311,32 @@ export function StoryWorldReview({
         </div>
 
         <div className="storycam-assets-column">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-[#00f0ff]/20 bg-[#001d21]/45 px-4 py-3">
+            <p className="text-sm font-bold text-[#b9cacb]">资产图会并发提交，完成后逐张出现。</p>
+            <button
+              className="storycam-secondary-button px-4 py-2 text-xs"
+              disabled={isBatchSubmitting || Object.keys(assetImageJobs).length > 0}
+              onClick={generateAllAssetImages}
+              type="button"
+            >
+              {isBatchSubmitting || Object.keys(assetImageJobs).length > 0 ? "资产图生成中" : "生成全部资产图"}
+            </button>
+          </div>
           <section>
             <div className="mb-4 flex items-center justify-between gap-4">
               <h2 className="text-2xl font-black text-[#e2e2e2]">角色资产</h2>
               <span className="storycam-eyebrow">{storyWorld.storyWorld.characterAssets.length} ready</span>
             </div>
-            <div className="storycam-asset-grid storycam-asset-grid--characters">
+            <div
+              className="storycam-asset-grid storycam-asset-grid--characters"
+              data-character-count={storyWorld.storyWorld.characterAssets.length}
+            >
               {storyWorld.storyWorld.characterAssets.map((asset, index) => (
                 <AssetCard
                   eyebrow="人物"
                   imageUrl={imageUrlFor(storyWorld.artifacts.characterAssets[index]?.id, assetImages)}
                   key={asset.name}
+                  layout={storyWorld.storyWorld.characterAssets.length === 1 ? "wide" : "standard"}
                   lines={[
                     `${asset.role}：${asset.relationshipToUserStory}`,
                     asset.stableVisualDescription,
@@ -199,7 +361,7 @@ export function StoryWorldReview({
                       setAssetImageError(null);
                     }
                   }}
-                  status={statusForAsset(storyWorld.artifacts.characterAssets[index]?.id, assetImages, generatingAssetId, assetImageError)}
+                  status={statusForAsset(storyWorld.artifacts.characterAssets[index]?.id, assetImages, assetImageJobs, assetImageError)}
                   title={asset.name}
                   tone="character"
                 />
@@ -213,41 +375,50 @@ export function StoryWorldReview({
               <span className="storycam-eyebrow">{storyWorld.storyWorld.sceneAssets.length} ready</span>
             </div>
             <div className="storycam-asset-grid storycam-asset-grid--scenes">
-              {storyWorld.storyWorld.sceneAssets.map((asset, index) => (
-                <AssetCard
-                  eyebrow="地点"
-                  imageUrl={imageUrlFor(storyWorld.artifacts.sceneAssets[index]?.id, assetImages)}
-                  key={asset.name}
-                  lines={[`${asset.location}，${asset.timeOfDay}`, `${asset.light}；${asset.atmosphere}`, asset.spatialLogic]}
-                  meta={asset.timeOfDay}
-                  onOpen={() => {
-                    const artifactId = storyWorld.artifacts.sceneAssets[index]?.id;
+              {storyWorld.storyWorld.sceneAssets.slice(0, 1).map((asset, index) => {
+                const panels = scenePanelsForAsset(asset, storyWorld.storyWorld.script.beats);
 
-                    if (artifactId) {
-                      setSelectedAsset({
-                        artifactId,
-                        kind: "scene",
-                        lines: [
-                          `${asset.location}，${asset.timeOfDay}`,
-                          `${asset.light}；${asset.atmosphere}`,
-                          `关键物件：${asset.keyObjects.join("、")}`,
-                          asset.spatialLogic
-                        ],
-                        title: asset.name
-                      });
-                      setAssetImageError(null);
-                    }
-                  }}
-                  status={statusForAsset(
-                    storyWorld.artifacts.sceneAssets[index]?.id,
-                    assetImages,
-                    generatingAssetId,
-                    assetImageError
-                  )}
-                  title={asset.name}
-                  tone="scene"
-                />
-              ))}
+                return (
+                  <AssetCard
+                    eyebrow="地点"
+                    imageUrl={imageUrlFor(storyWorld.artifacts.sceneAssets[index]?.id, assetImages)}
+                    key={asset.name}
+                    lines={[
+                      `${asset.location}，${asset.timeOfDay}`,
+                      `${asset.light}；${asset.atmosphere}`,
+                      `${panels.length} 个场景小切图：${panels.map((panel) => panel.title).join("、")}`
+                    ]}
+                    meta={`${panels.length} 切图`}
+                    onOpen={() => {
+                      const artifactId = storyWorld.artifacts.sceneAssets[index]?.id;
+
+                      if (artifactId) {
+                        setSelectedAsset({
+                          artifactId,
+                          kind: "scene",
+                          lines: [
+                            `${asset.location}，${asset.timeOfDay}`,
+                            `${asset.light}；${asset.atmosphere}`,
+                            `关键物件：${asset.keyObjects.join("、")}`,
+                            asset.spatialLogic
+                          ],
+                          panels,
+                          title: asset.name
+                        });
+                        setAssetImageError(null);
+                      }
+                    }}
+                    status={statusForAsset(
+                      storyWorld.artifacts.sceneAssets[index]?.id,
+                      assetImages,
+                      assetImageJobs,
+                      assetImageError
+                    )}
+                    title={asset.name}
+                    tone="scene"
+                  />
+                );
+              })}
             </div>
           </section>
         </div>
@@ -258,33 +429,23 @@ export function StoryWorldReview({
           asset={selectedAsset}
           error={assetImageError}
           imageUrl={assetImages[selectedAsset.artifactId]?.signedUrl}
-          isGenerating={generatingAssetId === selectedAsset.artifactId}
+          isGenerating={Boolean(assetImageJobs[selectedAsset.artifactId])}
           onClose={() => setSelectedAsset(null)}
           onGenerate={generateSelectedAssetImage}
         />
       ) : null}
 
       <div className="storycam-bottom-dock">
+        <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
+          1 组 · 约 15 秒内
+        </div>
         <button
           className="storycam-primary-button"
-          onClick={onConfirm}
+          disabled={isGeneratingStoryboard}
+          onClick={() => onConfirm(1)}
           type="button"
         >
-          对，继续拍这一段
-        </button>
-        <button
-          className="storycam-secondary-button"
-          type="button"
-        >
-          重新生成
-        </button>
-        <button
-          className="storycam-secondary-button storycam-danger-button hidden sm:inline-flex"
-          disabled={isDeleting}
-          onClick={onDeleteStory}
-          type="button"
-        >
-          {isDeleting ? "正在删除" : "删除这个故事"}
+          {isGeneratingStoryboard ? "正在生成核心分镜" : "对，生成核心分镜"}
         </button>
       </div>
     </section>
@@ -315,17 +476,32 @@ function AssetImageModal({
           ×
         </button>
         <div className="storycam-asset-modal-copy">
-          <p className="storycam-eyebrow">{isScene ? "场景资产" : "角色资产"}</p>
-          <h3>{asset.title}</h3>
-          <div className="mt-5 space-y-3">
-            {asset.lines.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
+          <div className="storycam-asset-modal-copy-body">
+            <p className="storycam-eyebrow">{isScene ? "场景资产" : "角色资产"}</p>
+            <h3>{asset.title}</h3>
+            <div className="mt-5 space-y-3">
+              {asset.lines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+            {isScene ? (
+              <ol className="mt-5 grid gap-2">
+                {asset.panels.map((panel, index) => (
+                  <li className="rounded-2xl border border-white/10 bg-black/25 p-3" key={`${panel.title}-${index}`}>
+                    <span className="storycam-eyebrow">切图 {index + 1} · {shotTypeLabel(panel.shotType)}</span>
+                    <p className="mt-1 text-sm font-black text-[#e2e2e2]">{panel.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-[#b9cacb]">{panel.description}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+            {error ? <p className="storycam-asset-modal-error">{error}</p> : null}
           </div>
-          {error ? <p className="storycam-asset-modal-error">{error}</p> : null}
-          <button className="storycam-primary-button mt-6" disabled={isGenerating} onClick={onGenerate} type="button">
-            {isGenerating ? "正在生成资产图" : imageUrl ? "重新生成资产图" : "生成资产图"}
-          </button>
+          <div className="storycam-asset-modal-actions">
+            <button className="storycam-primary-button" disabled={isGenerating} onClick={onGenerate} type="button">
+              {isGenerating ? "正在生成资产图" : imageUrl ? "重新生成资产图" : "生成资产图"}
+            </button>
+          </div>
         </div>
         <div className="storycam-asset-modal-visual">
           {imageUrl ? (
@@ -346,17 +522,80 @@ function imageUrlFor(assetArtifactId: string | undefined, assetImages: AssetImag
   return assetArtifactId ? assetImages[assetArtifactId]?.signedUrl : undefined;
 }
 
+function scenePanelsForAsset(
+  asset: {
+    keyObjects: string[];
+    light: string;
+    location: string;
+    name: string;
+    scenePanels?: ScenePanel[];
+    spatialLogic: string;
+  },
+  beats: string[]
+) {
+  if (asset.scenePanels?.length) {
+    return asset.scenePanels;
+  }
+
+  const keyObjects = asset.keyObjects.length ? asset.keyObjects : ["主空间", "关键物件", "光线"];
+
+  return [
+    {
+      description: `${asset.location} 的完整空间关系。`,
+      keyObjects: keyObjects.slice(0, 3),
+      purpose: "建立故事发生的主场景。",
+      shotType: "establishing" as const,
+      title: asset.name
+    },
+    {
+      description: asset.light,
+      keyObjects: keyObjects.slice(0, 3),
+      purpose: "固定整组场景的光线基调。",
+      shotType: "lighting" as const,
+      title: "光线关系"
+    },
+    {
+      description: keyObjects.join("、"),
+      keyObjects,
+      purpose: "明确后续分镜需要保持一致的关键物件。",
+      shotType: "detail" as const,
+      title: "关键物件"
+    },
+    {
+      description: beats[0] ?? asset.spatialLogic,
+      keyObjects: keyObjects.slice(0, 3),
+      purpose: "为后续角色入画预留空的动作空间。",
+      shotType: "medium" as const,
+      title: "动作空间"
+    }
+  ] satisfies ScenePanel[];
+}
+
+function shotTypeLabel(shotType: ScenePanel["shotType"]) {
+  const labels: Record<ScenePanel["shotType"], string> = {
+    detail: "细节",
+    establishing: "主场景",
+    lighting: "光线",
+    medium: "中景",
+    overhead: "俯视",
+    transition: "转场",
+    wide: "广角"
+  };
+
+  return labels[shotType];
+}
+
 function statusForAsset(
   assetArtifactId: string | undefined,
   assetImages: AssetImageState,
-  generatingAssetId: string | null,
+  assetImageJobs: AssetImageJobState,
   error: string | null
 ): "empty" | "generating" | "ready" | "error" {
   if (!assetArtifactId) {
     return "empty";
   }
 
-  if (generatingAssetId === assetArtifactId) {
+  if (assetImageJobs[assetArtifactId]) {
     return "generating";
   }
 
@@ -367,14 +606,46 @@ function statusForAsset(
   return error ? "error" : "empty";
 }
 
+function mediaFromReadyImage(image: Extract<StoryboardImageState, { status: "ready" }>): NonNullable<AssetImageState[string]> {
+  return {
+    id: image.mediaId,
+    mimeType: image.mimeType,
+    signedUrl: image.signedUrl,
+    signedUrlExpiresIn: image.signedUrlExpiresIn
+  };
+}
+
+function removeJob(current: AssetImageJobState, artifactId: string) {
+  const next = { ...current };
+  delete next[artifactId];
+
+  return next;
+}
+
 function messageForAssetImageError(error: unknown) {
   if (error instanceof Error) {
     if (error.message === "image_provider_not_configured") {
-      return "请先把 STORYCAM_IMAGE_PROVIDER 设为 openrouter，并配置 OPENROUTER_IMAGE_MODEL。";
+      return "请先把 STORYCAM_IMAGE_PROVIDER 设为 inference_sh，并配置 INFERENCE_API_KEY 和 INFERENCE_IMAGE_APP。";
     }
 
-    if (error.message === "OPENROUTER_IMAGE_INVALID_OUTPUT") {
+    if (error.message === "OPENROUTER_IMAGE_INVALID_OUTPUT" || error.message === "INFERENCE_SH_IMAGE_INVALID_OUTPUT") {
       return "图像模型返回不稳定，请再试一次。";
+    }
+
+    if (error.message === "OPENROUTER_IMAGE_REGION_UNAVAILABLE") {
+      return "当前代理出口暂不支持这个图像模型，请切换代理后再试。";
+    }
+
+    if (error.message === "OPENROUTER_IMAGE_PROVIDER_BLOCKED") {
+      return "图像模型被上游服务拒绝，请检查 OpenRouter 账号或模型使用条款。";
+    }
+
+    if (error.message === "INFERENCE_SH_IMAGE_AUTH_FAILED") {
+      return "Inference.sh 鉴权失败，请检查 INFERENCE_API_KEY。";
+    }
+
+    if (error.message === "INFERENCE_SH_IMAGE_REQUIREMENTS_NOT_MET") {
+      return "Inference.sh 应用缺少必需的模型密钥，请在 Inference.sh 配置 OPENAI_KEY。";
     }
 
     if (error.message === "authentication_required") {

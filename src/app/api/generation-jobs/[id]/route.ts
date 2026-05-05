@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
+import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { GenerationJobRequestError, getGenerationJob } from "@/server/storycam/generationJobService";
+import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
+import { createConfiguredStoryWorldAssetImageProvider } from "@/server/storycam/storyWorldAssetImageProviderFactory";
 
 type GenerationJobRouteContext = {
   params: Promise<{ id: string }> | { id: string };
@@ -11,7 +14,15 @@ export async function GET(_request: Request, context: GenerationJobRouteContext)
   try {
     const user = await requireUser();
     const params = await context.params;
-    const result = await getGenerationJob(createSupabaseAdminClient(), user.id, params.id);
+    const config = loadStoryCamConfig();
+    const storyboardImageProvider = createConfiguredStoryboardImageProvider(config);
+    const storyWorldImageProvider = createConfiguredStoryWorldAssetImageProvider(config);
+    const result = await getGenerationJob(
+      createSupabaseAdminClient(),
+      user.id,
+      params.id,
+      (storyboardImageProvider ?? storyWorldImageProvider) as Parameters<typeof getGenerationJob>[3]
+    );
 
     return NextResponse.json(
       {
@@ -33,6 +44,19 @@ export async function GET(_request: Request, context: GenerationJobRouteContext)
           redactionApplied: true
         },
         { status: error.code === "job_not_found" ? 404 : 400 }
+      );
+    }
+
+    if (error instanceof StoryCamConfigError) {
+      const redacted = redactConfigError(error);
+
+      return NextResponse.json(
+        {
+          error: redacted.code,
+          redactedError: redacted.message,
+          redactionApplied: true
+        },
+        { status: 500 }
       );
     }
 

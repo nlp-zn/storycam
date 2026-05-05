@@ -5,6 +5,41 @@ type ArtifactRef = {
   version: number;
 };
 
+export type ScenePanel = {
+  description: string;
+  keyObjects: string[];
+  purpose: string;
+  shotType: "establishing" | "wide" | "medium" | "detail" | "lighting" | "overhead" | "transition";
+  title: string;
+};
+
+export type StoryboardImageState =
+  | {
+      mediaId: string;
+      mimeType: string;
+      placeholder: false;
+      signedUrl: string;
+      signedUrlExpiresIn: number;
+      status: "ready";
+    }
+  | {
+      jobId: string;
+      mediaId?: undefined;
+      mimeType?: undefined;
+      placeholder: true;
+      signedUrl?: undefined;
+      signedUrlExpiresIn?: undefined;
+      status: "generating";
+    }
+  | {
+      mediaId?: undefined;
+      mimeType?: undefined;
+      placeholder: true;
+      signedUrl?: undefined;
+      signedUrlExpiresIn?: undefined;
+      status: "placeholder";
+    };
+
 export type AuthStatusResponse =
   | {
       authenticated: true;
@@ -33,6 +68,15 @@ export type UploadStoryCamPhotoResponse = {
 
 export type CreateStoryWorldResponse = {
   ok: true;
+  assetImagesByArtifactId?: Record<
+    string,
+    {
+      id: string;
+      mimeType: string;
+      signedUrl: string;
+      signedUrlExpiresIn: number;
+    }
+  >;
   artifacts: {
     characterAssets: ArtifactRef[];
     sceneAssets: ArtifactRef[];
@@ -55,6 +99,7 @@ export type CreateStoryWorldResponse = {
       light: string;
       location: string;
       name: string;
+      scenePanels: ScenePanel[];
       spatialLogic: string;
       timeOfDay: string;
     }>;
@@ -64,6 +109,7 @@ export type CreateStoryWorldResponse = {
       summary: string;
       title: string;
       version: number;
+      visualStyle?: string;
     };
   };
 };
@@ -73,6 +119,7 @@ export type CreateStoryboardResponse = {
   artifacts: {
     coreStoryboardGroups: ArtifactRef[];
     storyboardScript: ArtifactRef;
+    storyboardScripts: ArtifactRef[];
   };
   durationPlan: {
     clipDurationTargets: number[];
@@ -84,31 +131,73 @@ export type CreateStoryboardResponse = {
     coreStoryboardGroups: Array<{
       emotionalTurn: string;
       estimatedClipDurationSeconds: number;
+      expandedStoryboardImages: StoryboardImageState[];
+      representativeImage: StoryboardImageState;
+      scriptArtifact: ArtifactRef;
       storyPurpose: string;
       title: string;
       version: number;
     }>;
     storyboardScript: {
+      frames?: StoryboardFrame[];
       planSummary: string;
       plannedDurationSeconds: number;
       rhythm: string;
       tone: string;
       version: number;
     };
+    storyboardScripts?: Array<{
+      frames: StoryboardFrame[];
+      mainImagePrompt?: string;
+      planSummary: string;
+      plannedDurationSeconds: number;
+      rhythm: string;
+      tone: string;
+      version: number;
+    }>;
   };
+};
+
+export type StoryboardFrame = {
+  beatType: string;
+  cameraAngle: string;
+  canvasPosition: string;
+  durationSeconds: number;
+  frameNumber: number;
+  imagePrompt: string;
+  narrativePurpose: string;
+  scene: string;
+  shotSize: string;
+  sound: string;
+  technicalNotes: string;
+  timeRange: string;
+  title: string;
+  visualContent: string;
 };
 
 export type ExpandStoryboardGroupResponse = {
   ok: true;
   expansionCards: Array<{
     beatType: string;
+    canvasPosition?: string;
     description: string;
+    frameNumber?: number;
     guidance: string;
+    image: StoryboardImageState;
+    imagePrompt?: string;
     sortOrder: number;
     title: string;
     version: number;
   }>;
+  expandedStoryboardImages: StoryboardImageState[];
   expandedStoryboardCards: Array<ArtifactRef & { parentArtifactId: string | null }>;
+  sessionId: string;
+};
+
+export type RegenerateStoryboardFrameImageResponse = {
+  frameNumber: number;
+  image: StoryboardImageState;
+  ok: true;
   sessionId: string;
 };
 
@@ -134,6 +223,7 @@ export type GenerationJobSummary = {
 };
 
 export type GenerationJobResponse = {
+  image?: StoryboardImageState;
   job: GenerationJobSummary;
   ok: true;
 };
@@ -171,13 +261,63 @@ export type FinalWorkResponse = {
 export type GenerateStoryWorldAssetImageResponse = {
   assetArtifactId: string;
   assetKind: "character" | "scene";
-  media: {
+  image: StoryboardImageState;
+  media?: {
     id: string;
     mimeType: string;
     signedUrl: string;
     signedUrlExpiresIn: number;
   };
   ok: true;
+};
+
+export type GenerateStoryWorldAssetImagesResponse = {
+  imagesByArtifactId: Record<
+    string,
+    {
+      assetArtifactId: string;
+      assetKind: "character" | "scene";
+      image: StoryboardImageState;
+      media?: GenerateStoryWorldAssetImageResponse["media"];
+    }
+  >;
+  ok: true;
+};
+
+export type RestoreStoryCamSessionResponse =
+  | {
+      ok: true;
+      restored: false;
+    }
+  | {
+      coreGroupTargetCount: 1 | 2 | 3;
+      currentStep: "core-storyboard" | "story-world";
+      ok: true;
+      restored: true;
+      sessionId: string;
+      storyboard: CreateStoryboardResponse | null;
+      storyWorld: CreateStoryWorldResponse;
+      storyWorldConfirmed: boolean;
+    };
+
+export type RecentStoryCamProject = {
+  coreGroupTargetCount: 1 | 2 | 3;
+  currentStep: "core-storyboard" | "story-world";
+  sessionId: string;
+  summary: string;
+  thumbnail: {
+    id: string;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  } | null;
+  title: string;
+  updatedAt: string;
+};
+
+export type RecentStoryCamProjectsResponse = {
+  ok: true;
+  projects: RecentStoryCamProject[];
 };
 
 export async function getAuthStatus() {
@@ -192,6 +332,44 @@ export async function getAuthStatus() {
   }
 
   return (await response.json()) as AuthStatusResponse;
+}
+
+export async function restoreCurrentStoryCamSession() {
+  const response = await fetch("/api/storycam-sessions/current");
+
+  if (response.status === 401) {
+    return { ok: true, restored: false } satisfies RestoreStoryCamSessionResponse;
+  }
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "session_restore_failed"));
+  }
+
+  return (await response.json()) as RestoreStoryCamSessionResponse;
+}
+
+export async function listRecentStoryCamProjects(limit = 5) {
+  const response = await fetch(`/api/storycam-sessions/recent?limit=${encodeURIComponent(String(limit))}`);
+
+  if (response.status === 401) {
+    return { ok: true, projects: [] } satisfies RecentStoryCamProjectsResponse;
+  }
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "recent_projects_failed"));
+  }
+
+  return (await response.json()) as RecentStoryCamProjectsResponse;
+}
+
+export async function restoreStoryCamSession(sessionId: string) {
+  const response = await fetch(`/api/storycam-sessions/${encodeURIComponent(sessionId)}/restore`);
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), response.status === 404 ? "not_found" : "session_restore_failed"));
+  }
+
+  return (await response.json()) as RestoreStoryCamSessionResponse;
 }
 
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {
@@ -242,10 +420,15 @@ export async function createStoryWorld(input: {
   return (await response.json()) as CreateStoryWorldResponse;
 }
 
-export async function createStoryboard(input: { confirmedArtifactVersions: Record<string, number>; sessionId: string }) {
+export async function createStoryboard(input: {
+  confirmedArtifactVersions: Record<string, number>;
+  coreGroupTargetCount?: 1 | 2 | 3;
+  sessionId: string;
+}) {
   const response = await fetch("/api/storyboard", {
     body: JSON.stringify({
       confirmedArtifactVersions: input.confirmedArtifactVersions,
+      ...(input.coreGroupTargetCount ? { coreGroupTargetCount: input.coreGroupTargetCount } : {}),
       sessionId: input.sessionId
     }),
     headers: {
@@ -281,6 +464,25 @@ export async function generateStoryWorldAssetImage(input: {
   return (await response.json()) as GenerateStoryWorldAssetImageResponse;
 }
 
+export async function generateStoryWorldAssetImages(input: {
+  assetArtifactIds?: string[];
+  sessionId: string;
+}) {
+  const response = await fetch("/api/story-world/assets/generate-images", {
+    body: JSON.stringify(input),
+    headers: {
+      "content-type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "asset_image_failed"));
+  }
+
+  return (await response.json()) as GenerateStoryWorldAssetImagesResponse;
+}
+
 export async function expandStoryboardGroup(input: { coreStoryboardGroupId: string; sessionId: string; targetCount?: number }) {
   const response = await fetch(`/api/storyboard-groups/${input.coreStoryboardGroupId}/expand`, {
     body: JSON.stringify({
@@ -298,6 +500,31 @@ export async function expandStoryboardGroup(input: { coreStoryboardGroupId: stri
   }
 
   return (await response.json()) as ExpandStoryboardGroupResponse;
+}
+
+export async function regenerateStoryboardFrameImage(input: {
+  coreStoryboardGroupId: string;
+  frameNumber: number;
+  sessionId: string;
+}) {
+  const response = await fetch(
+    `/api/storyboard-groups/${input.coreStoryboardGroupId}/frames/${input.frameNumber}/regenerate-image`,
+    {
+      body: JSON.stringify({
+        sessionId: input.sessionId
+      }),
+      headers: {
+        "content-type": "application/json"
+      },
+      method: "POST"
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(errorCode(await response.json(), "storyboard_frame_image_failed"));
+  }
+
+  return (await response.json()) as RegenerateStoryboardFrameImageResponse;
 }
 
 export async function generateClipJob(input: {

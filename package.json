@@ -8,6 +8,7 @@
     "build": "next build",
     "lint": "eslint .",
     "storycam:seed": "tsx scripts/storycam-seed.ts",
+    "storycam:smoke:deepseek": "tsx scripts/storycam-smoke-deepseek.ts",
     "storycam:smoke:openrouter": "tsx scripts/storycam-smoke-openrouter.ts",
     "storycam:smoke:seedance": "tsx scripts/storycam-smoke-seedance.ts",
     "storycam:verify:mock": "tsx scripts/storycam-verify-mock.ts",
@@ -19,6 +20,7 @@
     "qa:visual": "playwright test tests/e2e/storycam.visual.e2e.ts"
   },
   "dependencies": {
+    "@inferencesh/sdk": "0.5.16",
     "@openrouter/ai-sdk-provider": "^2.8.1",
     "@supabase/ssr": "0.10.2",
     "@supabase/supabase-js": "2.104.1",
@@ -29,6 +31,7 @@
     "react-dom": "19.2.5",
     "server-only": "0.0.1",
     "tailwindcss": "4.2.4",
+    "undici": "^8.1.0",
     "zod": "4.3.6"
   },
   "devDependencies": {

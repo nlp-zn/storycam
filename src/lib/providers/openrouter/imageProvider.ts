@@ -97,11 +97,55 @@ async function generateValidatedImage(input: {
       lastError = new Error("OpenRouter returned an unsupported image.");
     } catch (error) {
       lastError = error;
+
+      if (isNonRetryableOpenRouterImageError(error)) {
+        break;
+      }
     }
   }
 
+  const classifiedFailure = classifyOpenRouterImageError(lastError);
+
   return providerFailure(input.identity, lastError, {
+    errorCode: classifiedFailure.errorCode,
+    retryable: classifiedFailure.retryable
+  });
+}
+
+function classifyOpenRouterImageError(error: unknown) {
+  const message = providerErrorMessage(error).toLowerCase();
+  const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === "number"
+    ? (error as { statusCode: number }).statusCode
+    : undefined;
+
+  if (message.includes("not available in your region")) {
+    return {
+      errorCode: "OPENROUTER_IMAGE_REGION_UNAVAILABLE",
+      retryable: false
+    };
+  }
+
+  if (statusCode === 403 || message.includes("terms of service") || message.includes("prohibited")) {
+    return {
+      errorCode: "OPENROUTER_IMAGE_PROVIDER_BLOCKED",
+      retryable: false
+    };
+  }
+
+  return {
     errorCode: "OPENROUTER_IMAGE_INVALID_OUTPUT",
     retryable: true
-  });
+  };
+}
+
+function isNonRetryableOpenRouterImageError(error: unknown) {
+  return !classifyOpenRouterImageError(error).retryable;
+}
+
+function providerErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
 }

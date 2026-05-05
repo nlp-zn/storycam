@@ -87,7 +87,12 @@ describe("POST /api/story-world", () => {
       sessionId: "session-1",
       storyWorld: {
         characterAssets: [expect.objectContaining({ name: "她" })],
-        sceneAssets: [expect.objectContaining({ name: "便利店外的玻璃反光" })],
+        sceneAssets: [
+          expect.objectContaining({
+            name: "便利店外的玻璃反光",
+            scenePanels: expect.arrayContaining([expect.objectContaining({ title: "便利店外景" })])
+          })
+        ],
         script: expect.objectContaining({ title: "雨夜未发送" })
       }
     });
@@ -110,7 +115,7 @@ describe("POST /api/story-world", () => {
       mockTextConfig({
         openrouter: {
           apiKey: "openrouter-key",
-          textModel: "deepseek/deepseek-v4-pro"
+          textModel: "deepseek/deepseek-v4-flash"
         },
         textProvider: "openrouter"
       })
@@ -135,7 +140,12 @@ describe("POST /api/story-world", () => {
       ok: true,
       storyWorld: {
         characterAssets: [expect.objectContaining({ name: "阿岚" })],
-        sceneAssets: [expect.objectContaining({ name: "教学楼背后的照片墙" })],
+        sceneAssets: [
+          expect.objectContaining({
+            name: "教学楼背后的照片墙",
+            scenePanels: expect.arrayContaining([expect.objectContaining({ title: "照片墙全景" })])
+          })
+        ],
         script: expect.objectContaining({ title: "照片背面的再见" })
       }
     });
@@ -143,7 +153,7 @@ describe("POST /api/story-world", () => {
       expect.objectContaining({
         openrouter: {
           apiKey: "openrouter-key",
-          textModel: "deepseek/deepseek-v4-pro"
+          textModel: "deepseek/deepseek-v4-flash"
         }
       })
     );
@@ -153,6 +163,120 @@ describe("POST /api/story-world", () => {
         lightweightChoices: ["少说话"]
       })
     );
+  });
+
+  it("uses the DeepSeek story-world provider when text provider is configured for strict tool mode", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const provider = {
+      providerKind: "text" as const,
+      providerName: "deepseek",
+      generate: vi.fn().mockResolvedValue({
+        ok: true,
+        providerKind: "text",
+        providerName: "deepseek",
+        value: dynamicStoryWorld()
+      })
+    };
+
+    loadStoryCamConfigMock.mockReturnValue(
+      mockTextConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textFallbackModels: ["deepseek-v4-flash"],
+          textModel: "deepseek-v4-pro"
+        },
+        textProvider: "deepseek"
+      })
+    );
+    createConfiguredStoryWorldProviderMock.mockReturnValue(provider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        input: "我想把暗恋拍成韩剧雨夜",
+        lightweightChoices: ["像私人回忆"]
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.headers.get("x-storycam-text-provider")).toBe("deepseek");
+    await expect(response.json()).resolves.toMatchObject({
+      diagnostics: {
+        textProvider: "deepseek"
+      },
+      ok: true,
+      storyWorld: {
+        characterAssets: [expect.objectContaining({ name: "阿岚" })],
+        sceneAssets: [
+          expect.objectContaining({
+            name: "教学楼背后的照片墙",
+            scenePanels: expect.arrayContaining([expect.objectContaining({ title: "照片墙全景" })])
+          })
+        ],
+        script: expect.objectContaining({ title: "照片背面的再见" })
+      }
+    });
+    expect(createConfiguredStoryWorldProviderMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textFallbackModels: ["deepseek-v4-flash"],
+          textModel: "deepseek-v4-pro"
+        }
+      })
+    );
+  });
+
+  it("returns redacted DeepSeek provider failures without leaking private input or keys", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const provider = {
+      errorCode: "DEEPSEEK_TOOL_CALL_MISSING",
+      generate: vi.fn().mockResolvedValue({
+        errorCode: "DEEPSEEK_TOOL_CALL_MISSING",
+        ok: false,
+        providerKind: "text",
+        providerName: "deepseek",
+        redactedError: "Provider request failed.",
+        redactionApplied: true,
+        retryable: true
+      }),
+      providerKind: "text" as const,
+      providerName: "deepseek"
+    };
+
+    loadStoryCamConfigMock.mockReturnValue(
+      mockTextConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textModel: "deepseek-v4-pro"
+        },
+        textProvider: "deepseek"
+      })
+    );
+    createConfiguredStoryWorldProviderMock.mockReturnValue(provider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        input: "这是非常私密的一句话，不应该出现在错误响应里",
+        lightweightChoices: ["少说话"]
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body).toMatchObject({
+      error: "DEEPSEEK_TOOL_CALL_MISSING",
+      redactedError: "Provider request failed.",
+      redactionApplied: true
+    });
+    expect(JSON.stringify(body)).not.toContain("非常私密");
+    expect(JSON.stringify(body)).not.toContain("deepseek-key");
   });
 });
 
@@ -167,7 +291,8 @@ function jsonRequest(body: unknown) {
 function mockTextConfig(
   options: {
     openrouter?: { apiKey: string; textModel: string };
-    textProvider?: "mock" | "openrouter";
+    deepseek?: { apiKey: string; textBaseUrl: string; textFallbackModels?: string[]; textModel: string };
+    textProvider?: "deepseek" | "mock" | "openrouter";
   } = {}
 ) {
   return {
@@ -179,6 +304,7 @@ function mockTextConfig(
       textProvider: options.textProvider ?? "mock",
       videoProvider: "mock"
     },
+    deepseek: options.deepseek,
     openrouter: options.openrouter,
     supabase: {
       anonKey: "anon-key",
@@ -216,6 +342,36 @@ function dynamicStoryWorld() {
         location: "旧教学楼后侧走廊",
         name: "教学楼背后的照片墙",
         referenceMediaIds: [],
+        scenePanels: [
+          {
+            description: "旧教学楼后侧走廊和照片墙在傍晚侧光里连成一条安静动线。",
+            keyObjects: ["照片墙", "走廊窗户", "傍晚光斑"],
+            purpose: "建立毕业告别发生的主空间。",
+            shotType: "establishing",
+            title: "照片墙全景"
+          },
+          {
+            description: "旧照片被夹在书页里，边角泛黄。",
+            keyObjects: ["旧照片", "书页"],
+            purpose: "让没说出口的告别落到可见物件上。",
+            shotType: "detail",
+            title: "书页里的照片"
+          },
+          {
+            description: "傍晚侧光穿过窗户落在照片墙和课桌边缘。",
+            keyObjects: ["走廊窗户", "傍晚光斑", "旧课桌"],
+            purpose: "固定怀旧、安静的光线基调。",
+            shotType: "lighting",
+            title: "傍晚侧光"
+          },
+          {
+            description: "她站在照片墙前，把照片翻到背面，又放回书页里。",
+            keyObjects: ["照片墙", "旧照片", "帆布包"],
+            purpose: "提供核心动作发生的空间关系。",
+            shotType: "medium",
+            title: "照片墙前"
+          }
+        ],
         sessionId: "session-1",
         spatialLogic: "她站在照片墙前，把照片翻到背面，又放回书页里",
         state: "ready",

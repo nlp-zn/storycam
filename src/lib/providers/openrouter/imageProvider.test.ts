@@ -73,6 +73,51 @@ describe("openrouter-image-provider", () => {
     expect(JSON.stringify(result)).not.toContain("signedUrl");
   });
 
+  it("classifies OpenRouter image provider policy or account blocks without retrying", async () => {
+    const providerError = Object.assign(new Error("The request is prohibited due to a violation of provider Terms Of Service."), {
+      statusCode: 403
+    });
+    const generateImage = vi.fn().mockRejectedValue(providerError);
+    const provider = createOpenRouterImageProvider({
+      apiKey: "openrouter-secret",
+      buildPrompt: () => ({
+        prompt: "Create a StoryCam character reference sheet."
+      }),
+      generateImage,
+      model: "openai/gpt-5.4-image-2"
+    });
+
+    const result = await provider.generateImage({ coreGroupTitle: "blocked image" });
+
+    expect(generateImage).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      errorCode: "OPENROUTER_IMAGE_PROVIDER_BLOCKED",
+      ok: false,
+      retryable: false
+    });
+  });
+
+  it("classifies OpenRouter image region blocks without retrying", async () => {
+    const generateImage = vi.fn().mockRejectedValue(new Error("This model is not available in your region."));
+    const provider = createOpenRouterImageProvider({
+      apiKey: "openrouter-secret",
+      buildPrompt: () => ({
+        prompt: "Create a StoryCam character reference sheet."
+      }),
+      generateImage,
+      model: "openai/gpt-5.4-image-2"
+    });
+
+    const result = await provider.generateImage({ coreGroupTitle: "region blocked image" });
+
+    expect(generateImage).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      errorCode: "OPENROUTER_IMAGE_REGION_UNAVAILABLE",
+      ok: false,
+      retryable: false
+    });
+  });
+
   it("stores representative storyboard images in the private generated bucket", async () => {
     const client = new FakeSupabaseClient();
     const provider = {

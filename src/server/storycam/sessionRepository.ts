@@ -47,6 +47,18 @@ export class StoryCamSessionRepository {
     return unwrapRepositoryResult("find_session", data, error);
   }
 
+  async listRecentRestorableCandidates(userId: string, limit = 10) {
+    const { data, error } = await this.client
+      .from("storycam_sessions")
+      .select(sessionColumns)
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+
+    return unwrapRepositoryResult("list_recent_sessions", data, error);
+  }
+
   async update(userId: string, sessionId: string, input: UpdateStoryCamSessionInput) {
     const { data, error } = await this.client
       .from("storycam_sessions")

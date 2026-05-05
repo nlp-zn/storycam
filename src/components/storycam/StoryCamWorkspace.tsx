@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
 import { ClipReview } from "@/components/storycam/ClipReview";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
@@ -25,20 +25,28 @@ import {
   expandStoryboardGroup,
   generateClipJob,
   getGenerationJob,
+  regenerateStoryboardFrameImage,
+  restoreCurrentStoryCamSession,
+  restoreStoryCamSession,
   type CreateStoryboardResponse,
   type CreateStoryWorldResponse,
   type FinalWorkResponse,
+  type StoryboardImageState,
   type GenerationJobSummary,
   type ExpandStoryboardGroupResponse
 } from "@/features/storycam/client/storycamApi";
-import { shouldPollGenerationJob } from "@/features/storycam/client/jobPolling";
+import {
+  imageGenerationPollingPolicy,
+  mapWithConcurrencyLimit,
+  nextImageGenerationPollDelayMs,
+  shouldPollGenerationJob
+} from "@/features/storycam/client/jobPolling";
 import { workflowStages } from "@/features/storycam/domain/shellContent";
 
 const stepPaths = [
   "/storycam/input",
   "/storycam/story-world",
   "/storycam/core-storyboard",
-  "/storycam/expansion",
   "/storycam/clip-generation",
   "/storycam/clip-review",
   "/storycam/export"
@@ -49,8 +57,10 @@ export function StoryCamWorkspace() {
   const [storyWorldConfirmed, setStoryWorldConfirmed] = useState(false);
   const [storyboard, setStoryboard] = useState<CreateStoryboardResponse | null>(null);
   const [selectedCoreGroupIndex, setSelectedCoreGroupIndex] = useState<number | null>(null);
+  const [expansionModalIndex, setExpansionModalIndex] = useState<number | null>(null);
   const [expansion, setExpansion] = useState<ExpandStoryboardGroupResponse | null>(null);
   const [isExpansionLoading, setIsExpansionLoading] = useState(false);
+  const [regeneratingFrameKey, setRegeneratingFrameKey] = useState<string | null>(null);
   const [clipConfirmationSummary, setClipConfirmationSummary] = useState<string | null>(null);
   const [clipJob, setClipJob] = useState<GenerationJobSummary | null>(null);
   const [isClipSubmitting, setIsClipSubmitting] = useState(false);
@@ -59,17 +69,179 @@ export function StoryCamWorkspace() {
   const [isDeletingStory, setIsDeletingStory] = useState(false);
   const [isStoryWorldEditorOpen, setIsStoryWorldEditorOpen] = useState(false);
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
   const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(() =>
     typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname)
   );
   const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["像私人回忆"] });
+  const [coreGroupTargetCount, setCoreGroupTargetCount] = useState<1 | 2 | 3>(1);
+  const imagePollAttemptsRef = useRef<Record<string, number>>({});
+
+  function replaceStoryboardImage(jobId: string, nextImage: StoryboardImageState) {
+    setStoryboard((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        storyboard: {
+          ...current.storyboard,
+          coreStoryboardGroups: current.storyboard.coreStoryboardGroups.map((group) => ({
+            ...group,
+            representativeImage:
+              shouldReplaceGeneratingImage(group.representativeImage, jobId) ? nextImage : group.representativeImage,
+            expandedStoryboardImages: group.expandedStoryboardImages.map((image) =>
+              shouldReplaceGeneratingImage(image, jobId) ? nextImage : image
+            )
+          }))
+        }
+      };
+    });
+
+    setExpansion((current) =>
+      current
+        ? {
+            ...current,
+            expandedStoryboardImages: current.expandedStoryboardImages.map((image) =>
+              shouldReplaceGeneratingImage(image, jobId) ? nextImage : image
+            ),
+            expansionCards: current.expansionCards.map((card) => ({
+              ...card,
+              image: shouldReplaceGeneratingImage(card.image, jobId) ? nextImage : card.image
+            }))
+          }
+        : current
+    );
+  }
+
+  function applyStoryboardFrameImage(coreGroupIndex: number, frameNumber: number, nextImage: StoryboardImageState) {
+    setStoryboard((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        storyboard: {
+          ...current.storyboard,
+          coreStoryboardGroups: current.storyboard.coreStoryboardGroups.map((group, groupIndex) => {
+            if (groupIndex !== coreGroupIndex) {
+              return group;
+            }
+
+            if (frameNumber === 1) {
+              return {
+                ...group,
+                representativeImage: nextImage
+              };
+            }
+
+            const imageIndex = frameNumber - 2;
+            const expandedStoryboardImages = [...group.expandedStoryboardImages];
+            expandedStoryboardImages[imageIndex] = nextImage;
+
+            return {
+              ...group,
+              expandedStoryboardImages
+            };
+          })
+        }
+      };
+    });
+
+    setExpansion((current) => {
+      if (!current || frameNumber === 1) {
+        return current;
+      }
+
+      const imageIndex = frameNumber - 2;
+      const expandedStoryboardImages = [...current.expandedStoryboardImages];
+      expandedStoryboardImages[imageIndex] = nextImage;
+
+      return {
+        ...current,
+        expandedStoryboardImages,
+        expansionCards: current.expansionCards.map((card) =>
+          (card.frameNumber ?? card.sortOrder + 2) === frameNumber
+            ? {
+                ...card,
+                image: nextImage
+              }
+            : card
+        )
+      };
+    });
+  }
+
+  function hydrateRestoredProject(restored: Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>) {
+    setStoryWorld(restored.storyWorld);
+    setStoryWorldConfirmed(restored.storyWorldConfirmed);
+    setStoryboard(restored.storyboard);
+    setCoreGroupTargetCount(1);
+    setSelectedCoreGroupIndex(restored.storyboard ? 0 : null);
+    setExpansion(null);
+    setExpansionModalIndex(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
+    setFinalWork(null);
+    setIsStoryWorldEditorOpen(false);
+    setSelectedStepIndex(null);
+    setWorkspaceNotice(null);
+    setStoryboardStatus(restored.storyboard ? "ready" : "idle");
+    setStoryboardMessage(
+      restored.storyboard
+        ? "已恢复核心分镜：1 个 15 秒内核心分镜组。"
+        : "已恢复上次生成的故事世界，请确认后继续。"
+    );
+    syncStepPath(restored.currentStep === "core-storyboard" ? 2 : 1);
+  }
 
   useEffect(() => {
     if (window.location.pathname === "/" || window.location.pathname === "/storycam") {
       window.history.replaceState(null, "", stepPaths[0]);
     }
+  }, []);
+
+  useEffect(() => {
+    let isCanceled = false;
+
+    async function restoreSession() {
+      if (!shouldAutoRestoreFromPath(window.location.pathname)) {
+        setIsRestoringSession(false);
+        return;
+      }
+
+      try {
+        const restored = await restoreCurrentStoryCamSession();
+
+        if (isCanceled) {
+          return;
+        }
+
+        if (!restored.restored) {
+          return;
+        }
+
+        hydrateRestoredProject(restored);
+      } catch {
+        if (!isCanceled) {
+          setWorkspaceNotice("恢复失败，可以重新开始或稍后刷新。");
+        }
+      } finally {
+        if (!isCanceled) {
+          setIsRestoringSession(false);
+        }
+      }
+    }
+
+    void restoreSession();
+
+    return () => {
+      isCanceled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -91,6 +263,82 @@ export function StoryCamWorkspace() {
     return () => window.clearTimeout(timer);
   }, [clipJob]);
 
+  useEffect(() => {
+    const imageJobIds = collectStoryboardImageJobIds(storyboard, expansion);
+
+    if (imageJobIds.length === 0) {
+      imagePollAttemptsRef.current = {};
+      return;
+    }
+
+    const pendingJobIds = new Set(imageJobIds);
+    imagePollAttemptsRef.current = Object.fromEntries(
+      Object.entries(imagePollAttemptsRef.current).filter(([jobId]) => pendingJobIds.has(jobId))
+    );
+
+    let canceled = false;
+    let isPolling = false;
+    let timer: number | undefined;
+
+    const pollImages = async () => {
+      if (isPolling) {
+        return;
+      }
+
+      isPolling = true;
+      const results = await mapWithConcurrencyLimit(
+        imageJobIds,
+        imageGenerationPollingPolicy.maxConcurrentRequests,
+        async (jobId) => ({
+          jobId,
+          result: await getGenerationJob(jobId)
+        })
+      );
+      isPolling = false;
+
+      if (canceled) {
+        return;
+      }
+
+      for (const [index, result] of results.entries()) {
+        const fallbackJobId = imageJobIds[index];
+
+        if (!fallbackJobId) {
+          continue;
+        }
+
+        if (result.status !== "fulfilled") {
+          imagePollAttemptsRef.current[fallbackJobId] = (imagePollAttemptsRef.current[fallbackJobId] ?? 0) + 1;
+          continue;
+        }
+
+        const { jobId } = result.value;
+        imagePollAttemptsRef.current[jobId] = (imagePollAttemptsRef.current[jobId] ?? 0) + 1;
+
+        if (!result.value.result.image || result.value.result.image.status === "generating") {
+          continue;
+        }
+
+        delete imagePollAttemptsRef.current[jobId];
+        replaceStoryboardImage(result.value.result.job.id, result.value.result.image);
+      }
+
+      const remainingJobIds = imageJobIds.filter((jobId) => imagePollAttemptsRef.current[jobId] !== undefined);
+
+      if (remainingJobIds.length > 0) {
+        const completedAttempts = Math.min(...remainingJobIds.map((jobId) => imagePollAttemptsRef.current[jobId] ?? 0));
+        timer = window.setTimeout(pollImages, nextImageGenerationPollDelayMs(completedAttempts));
+      }
+    };
+
+    timer = window.setTimeout(pollImages, nextImageGenerationPollDelayMs(0));
+
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [storyboard, expansion]);
+
   function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) {
     setInputDraft(draft);
     setWorkspaceNotice(null);
@@ -98,6 +346,7 @@ export function StoryCamWorkspace() {
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
+    setExpansionModalIndex(null);
     setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
@@ -109,20 +358,30 @@ export function StoryCamWorkspace() {
     syncStepPath(1);
   }
 
-  async function confirmStoryWorld() {
+  async function restoreSelectedProject(sessionId: string) {
+    const restored = await restoreStoryCamSession(sessionId);
+
+    if (restored.restored) {
+      hydrateRestoredProject(restored);
+    }
+  }
+
+  async function confirmStoryWorld(_nextCoreGroupTargetCount: 1 | 2 | 3 = 1) {
     if (!storyWorld || storyboardStatus === "generating") {
       return;
     }
 
     setStoryWorldConfirmed(true);
     setIsStoryWorldEditorOpen(false);
-    await generateStoryboardFromStoryWorld(storyWorld);
+    setCoreGroupTargetCount(1);
+    await generateStoryboardFromStoryWorld(storyWorld, 1);
   }
 
   function handleStoryWorldEdit() {
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
+    setExpansionModalIndex(null);
     setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
@@ -154,6 +413,7 @@ export function StoryCamWorkspace() {
       setStoryWorldConfirmed(false);
       setStoryboard(null);
       setSelectedCoreGroupIndex(null);
+      setExpansionModalIndex(null);
       setExpansion(null);
       setClipConfirmationSummary(null);
       setClipJob(null);
@@ -170,7 +430,10 @@ export function StoryCamWorkspace() {
     }
   }
 
-  async function generateStoryboardFromStoryWorld(currentStoryWorld: CreateStoryWorldResponse) {
+  async function generateStoryboardFromStoryWorld(
+    currentStoryWorld: CreateStoryWorldResponse,
+    _nextCoreGroupTargetCount: 1 | 2 | 3
+  ) {
     if (storyboardStatus === "generating") {
       return;
     }
@@ -180,6 +443,7 @@ export function StoryCamWorkspace() {
       setStoryboardMessage("正在生成核心分镜。");
       const storyboard = await createStoryboard({
         confirmedArtifactVersions: confirmedArtifactVersionsFromStoryWorld(currentStoryWorld),
+        coreGroupTargetCount: 1,
         sessionId: currentStoryWorld.sessionId
       });
 
@@ -192,7 +456,9 @@ export function StoryCamWorkspace() {
       setIsStoryWorldEditorOpen(false);
       setSelectedStepIndex(null);
       setStoryboardStatus("ready");
-      setStoryboardMessage(`分镜已准备好：${storyboard.durationPlan.coreGroupTargetCount} 个核心分镜组。`);
+      setStoryboardMessage(
+        `分镜已准备好：1 个核心分镜组，控制在 ${storyboard.durationPlan.plannedDurationSeconds} 秒内。`
+      );
       syncStepPath(2);
     } catch {
       setStoryboardStatus("error");
@@ -200,7 +466,7 @@ export function StoryCamWorkspace() {
     }
   }
 
-  async function expandCoreGroup(index: number, targetCount = 3) {
+  async function expandCoreGroup(index: number, targetCount = 8) {
     if (!storyboard || isExpansionLoading) {
       return;
     }
@@ -222,16 +488,65 @@ export function StoryCamWorkspace() {
       });
 
       setExpansion(nextExpansion);
+      setStoryboard((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          storyboard: {
+            ...current.storyboard,
+            coreStoryboardGroups: current.storyboard.coreStoryboardGroups.map((group, groupIndex) =>
+              groupIndex === index
+                ? {
+                    ...group,
+                    expandedStoryboardImages: nextExpansion.expandedStoryboardImages
+                  }
+                : group
+            )
+          }
+        };
+      });
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
       setSelectedStepIndex(null);
-      setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展卡。`);
-      syncStepPath(3);
+      setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展分镜图。`);
     } catch {
-      setStoryboardMessage("扩展卡生成失败，可以跳过扩展直接生成片段。");
+      setStoryboardMessage("扩展分镜生成失败，可以直接用中心主图生成片段。");
     } finally {
       setIsExpansionLoading(false);
+    }
+  }
+
+  async function regenerateFrameImage(index: number, frameNumber: number) {
+    if (!storyboard) {
+      return;
+    }
+
+    const coreArtifact = storyboard.artifacts.coreStoryboardGroups[index];
+
+    if (!coreArtifact) {
+      return;
+    }
+
+    const frameKey = `${index}:${frameNumber}`;
+
+    try {
+      setRegeneratingFrameKey(frameKey);
+      const result = await regenerateStoryboardFrameImage({
+        coreStoryboardGroupId: coreArtifact.id,
+        frameNumber,
+        sessionId: storyboard.sessionId
+      });
+
+      applyStoryboardFrameImage(index, frameNumber, result.image);
+      setStoryboardMessage(`已重新提交第 ${String(frameNumber).padStart(2, "0")} 帧生成。`);
+    } catch {
+      setStoryboardMessage("这一帧重生成失败，请稍后再试。");
+    } finally {
+      setRegeneratingFrameKey(null);
     }
   }
 
@@ -241,7 +556,6 @@ export function StoryCamWorkspace() {
     }
 
     setSelectedCoreGroupIndex(index);
-    setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
@@ -262,7 +576,7 @@ export function StoryCamWorkspace() {
       `用「${group.title}」生成一个约 ${group.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
     );
     setStoryboardMessage("请确认是否发送这一组生成片段。");
-    syncStepPath(4);
+    syncStepPath(3);
   }
 
   async function confirmClipGeneration() {
@@ -297,7 +611,7 @@ export function StoryCamWorkspace() {
       });
       setSelectedStepIndex(null);
       setStoryboardMessage("片段生成任务已创建。");
-      syncStepPath(4);
+      syncStepPath(3);
     } catch {
       setStoryboardMessage("片段生成任务创建失败，请重试。");
     } finally {
@@ -345,7 +659,7 @@ export function StoryCamWorkspace() {
       setFinalWork(nextFinalWork);
       setSelectedStepIndex(null);
       setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
-      syncStepPath(6);
+      syncStepPath(5);
     } catch {
       setStoryboardMessage("最终作品生成失败，请稍后再试。");
     } finally {
@@ -355,6 +669,8 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
+  const expansionModalGroup =
+    storyboard && expansionModalIndex !== null ? storyboard.storyboard.coreStoryboardGroups[expansionModalIndex] : undefined;
   const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld });
   const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
 
@@ -369,14 +685,14 @@ export function StoryCamWorkspace() {
 
     return () => window.removeEventListener("popstate", handlePopState);
   }, [reachedStepIndex]);
-  const generationPanel = activeStepIndex >= 5 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
+  const generationPanel = activeStepIndex >= 4 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
     <ClipReview
       clipArtifactId={clipJob.outputArtifactId}
       isSubmittingFinalWork={isFinalWorkSubmitting}
       onCreateFinalWork={createFinalWorkFromAcceptedClip}
       onRetake={retryClipGeneration}
     />
-  ) : activeStepIndex >= 4 && clipJob ? (
+  ) : activeStepIndex >= 3 && clipJob ? (
     <ClipGenerationStatus
       isDeletingStory={isDeletingStory}
       job={clipJob}
@@ -384,7 +700,7 @@ export function StoryCamWorkspace() {
       onDeleteStory={deleteCurrentStory}
       onRetry={retryClipGeneration}
     />
-  ) : activeStepIndex >= 4 && clipConfirmationSummary ? (
+  ) : activeStepIndex >= 3 && clipConfirmationSummary ? (
     <ProviderSendConfirm
       confirmationSummary={clipConfirmationSummary}
       isSubmitting={isClipSubmitting}
@@ -405,50 +721,71 @@ export function StoryCamWorkspace() {
     }
   }
 
-  const mainSurface = storyWorld && activeStepIndex === 0 ? (
+  function goHome() {
+    setSelectedStepIndex(0);
+    setIsStoryWorldEditorOpen(false);
+    syncStepPath(0);
+  }
+
+  const mainSurface = isRestoringSession ? (
+    <div className="storycam-glass p-8 text-sm font-bold text-[#dbfcff]" role="status">
+      正在恢复你上次生成的故事。
+    </div>
+  ) : storyWorld && activeStepIndex === 0 ? (
     <div className="flex w-full flex-col gap-6">
       <IdeaInputPanel
         initialChoices={inputDraft.selectedChoices}
         initialIdea={inputDraft.idea}
+        onProjectSelected={restoreSelectedProject}
         onStoryWorldCreated={handleStoryWorldCreated}
       />
     </div>
   ) : storyWorld ? (
     <div>
-      {activeStepIndex >= 6 && finalWork ? (
+      {activeStepIndex >= 5 && finalWork ? (
         <FinalWorkPanel finalWork={finalWork} />
       ) : generationPanel ? (
         generationPanel
-      ) : activeStepIndex >= 3 && storyboard && selectedGroup && !isStoryWorldEditorOpen && (expansion || isExpansionLoading) ? (
-        <ExpansionCanvas
-          expansion={expansion}
-          isLoading={isExpansionLoading}
-          onGenerateMore={() => expandCoreGroup(selectedCoreGroupIndex ?? 0, 8)}
-          onSkipExpansion={() => prepareClipGeneration(selectedCoreGroupIndex ?? 0)}
-          selectedGroup={selectedGroup}
-          selectedIndex={selectedCoreGroupIndex ?? 0}
-        />
       ) : activeStepIndex >= 2 && storyboard && !isStoryWorldEditorOpen ? (
-        <CoreFramesStage
-          generationPanel={generationPanel}
-          isBusy={isExpansionLoading || isClipSubmitting}
-          onExpandGroup={(index) => expandCoreGroup(index)}
-          onGenerateClip={prepareClipGeneration}
-          onSelectGroup={selectCoreGroup}
-          selectedIndex={selectedCoreGroupIndex ?? 0}
-          storyboard={storyboard}
-        />
+        <>
+          <CoreFramesStage
+            generationPanel={generationPanel}
+            isBusy={isExpansionLoading || isClipSubmitting}
+            onExpandGroup={(index) => {
+              setSelectedCoreGroupIndex(index);
+              setExpansionModalIndex(index);
+            }}
+            onGenerateClip={prepareClipGeneration}
+            onSelectGroup={selectCoreGroup}
+            selectedIndex={selectedCoreGroupIndex ?? 0}
+            storyboard={storyboard}
+          />
+          {expansionModalIndex !== null && expansionModalGroup ? (
+            <ExpansionCanvas
+              expansion={expansion}
+              isLoading={isExpansionLoading}
+              isRegeneratingFrame={(frameNumber) => regeneratingFrameKey === `${expansionModalIndex}:${frameNumber}`}
+              onClose={() => setExpansionModalIndex(null)}
+              onConfirmExpansion={() => expandCoreGroup(expansionModalIndex, 8)}
+              onGenerateClip={() => prepareClipGeneration(expansionModalIndex)}
+              onRegenerateFrame={(frameNumber) => regenerateFrameImage(expansionModalIndex, frameNumber)}
+              selectedGroup={expansionModalGroup}
+              selectedIndex={expansionModalIndex}
+              selectedScript={storyboard.storyboard.storyboardScripts?.[expansionModalIndex] ?? storyboard.storyboard.storyboardScript}
+            />
+          ) : null}
+        </>
       ) : (
-        <StoryWorldReview
-          initiallyEditing={isStoryWorldEditorOpen}
-          isDeleting={isDeletingStory}
-          isConfirmed={storyWorldConfirmed}
-          key={storyWorld.artifacts.script.id}
-          onConfirm={confirmStoryWorld}
-          onDeleteStory={deleteCurrentStory}
-          onEditSaved={handleStoryWorldEdit}
-          storyWorld={storyWorld}
-        />
+          <StoryWorldReview
+            initiallyEditing={isStoryWorldEditorOpen}
+            isGeneratingStoryboard={storyboardStatus === "generating"}
+            isConfirmed={storyWorldConfirmed}
+            initialAssetImages={storyWorld.assetImagesByArtifactId}
+            key={storyWorld.artifacts.script.id}
+            onConfirm={confirmStoryWorld}
+            onEditSaved={handleStoryWorldEdit}
+            storyWorld={storyWorld}
+          />
       )}
     </div>
   ) : (
@@ -461,6 +798,7 @@ export function StoryCamWorkspace() {
       <IdeaInputPanel
         initialChoices={inputDraft.selectedChoices}
         initialIdea={inputDraft.idea}
+        onProjectSelected={restoreSelectedProject}
         onStoryWorldCreated={handleStoryWorldCreated}
       />
     </div>
@@ -469,7 +807,7 @@ export function StoryCamWorkspace() {
 
   return (
     <main className="storycam-page">
-      <StoryCamTopBar />
+      <StoryCamTopBar onHome={goHome} />
       <div className={`storycam-shell ${isInputStep ? "storycam-shell--centered" : ""}`}>
         {isInputStep ? null : (
           <StoryCamProgress activeIndex={activeStepIndex} onSelectStep={navigateToStep} reachedIndex={reachedStepIndex} />
@@ -491,22 +829,18 @@ type CurrentStepInput = {
 
 function currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld }: CurrentStepInput) {
   if (finalWork) {
-    return 6;
-  }
-
-  if (clipJob?.status === "succeeded") {
     return 5;
   }
 
-  if (clipJob) {
+  if (clipJob?.status === "succeeded") {
     return 4;
+  }
+
+  if (clipJob) {
+    return 3;
   }
 
   if (clipConfirmationSummary) {
-    return 4;
-  }
-
-  if (expansion) {
     return 3;
   }
 
@@ -537,10 +871,44 @@ function stepIndexFromPath(pathname: string) {
   return index >= 0 ? index : null;
 }
 
-function StoryCamTopBar() {
+function shouldAutoRestoreFromPath(pathname: string) {
+  return pathname !== "/" && pathname !== "/storycam" && pathname !== "/storycam/input";
+}
+
+function collectStoryboardImageJobIds(storyboard: CreateStoryboardResponse | null, expansion: ExpandStoryboardGroupResponse | null) {
+  const jobIds = new Set<string>();
+
+  for (const group of storyboard?.storyboard.coreStoryboardGroups ?? []) {
+    if (group.representativeImage.status === "generating") {
+      jobIds.add(group.representativeImage.jobId);
+    }
+
+    for (const image of group.expandedStoryboardImages) {
+      if (image.status === "generating") {
+        jobIds.add(image.jobId);
+      }
+    }
+  }
+
+  for (const image of expansion?.expandedStoryboardImages ?? []) {
+    if (image.status === "generating") {
+      jobIds.add(image.jobId);
+    }
+  }
+
+  return Array.from(jobIds);
+}
+
+function shouldReplaceGeneratingImage(current: StoryboardImageState, jobId: string) {
+  return current.status === "generating" && current.jobId === jobId;
+}
+
+function StoryCamTopBar({ onHome }: { onHome: () => void }) {
   return (
     <header className="storycam-topbar">
-      <div className="storycam-brand">StoryCam 导演工作台</div>
+      <button aria-label="返回首页" className="storycam-brand" onClick={onHome} type="button">
+        StoryCam 导演工作台
+      </button>
       <div className="flex items-center gap-4 text-[#00f0ff]">
         <span className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] bg-[#1f1f1f]">●</span>
         <span className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] bg-[#1f1f1f]">人</span>
@@ -558,7 +926,10 @@ function StoryCamProgress({
   onSelectStep: (index: number) => void;
   reachedIndex: number;
 }) {
-  const activeHeight = workflowStages.length > 1 ? `${(reachedIndex / (workflowStages.length - 1)) * 100}%` : "0%";
+  const progressStages = workflowStages.slice(1);
+  const progressReachedIndex = Math.max(0, Math.min(progressStages.length - 1, reachedIndex - 1));
+  const activeHeight =
+    progressStages.length > 1 ? `${(progressReachedIndex / (progressStages.length - 1)) * 100}%` : "0%";
   const activeStyle = {
     "--storycam-mobile-progress": activeHeight,
     height: activeHeight
@@ -569,23 +940,24 @@ function StoryCamProgress({
       <div className="storycam-stepper-line" />
       <div className="storycam-stepper-line-active" style={activeStyle} />
       <ol className="storycam-stepper-items">
-        {workflowStages.map((stage, index) => {
-          const isReachable = index <= reachedIndex;
+        {progressStages.map((stage, index) => {
+          const stepIndex = index + 1;
+          const isReachable = stepIndex <= reachedIndex;
 
           return (
             <li
-              className={`storycam-step ${index === activeIndex ? "is-active" : ""} ${isReachable ? "is-reachable" : "is-disabled"}`}
+              className={`storycam-step ${stepIndex === activeIndex ? "is-active" : ""} ${isReachable ? "is-reachable" : "is-disabled"}`}
               key={stage}
             >
               <button
-                aria-current={index === activeIndex ? "step" : undefined}
+                aria-current={stepIndex === activeIndex ? "step" : undefined}
                 aria-label={`转到${stage}`}
                 className="storycam-step-button"
                 disabled={!isReachable}
-                onClick={() => onSelectStep(index)}
+                onClick={() => onSelectStep(stepIndex)}
                 type="button"
               >
-                <span className="storycam-step-dot">{index + 1}</span>
+                <span className="storycam-step-dot">{stepIndex}</span>
                 <span>{stage}</span>
               </button>
             </li>

@@ -73,7 +73,14 @@ export type GenerationJobRow = {
   id: string;
   user_id: string;
   session_id: string;
-  type: "story_world" | "storyboard" | "video_clip" | "final_work";
+  type:
+    | "story_world"
+    | "story_world_asset_image"
+    | "storyboard"
+    | "storyboard_image"
+    | "expanded_storyboard_image"
+    | "video_clip"
+    | "final_work";
   status: "queued" | "running" | "succeeded" | "failed" | "cancel_requested" | "canceled" | "expired";
   idempotency_key_hash: string;
   generation_mode: "mock" | "real";

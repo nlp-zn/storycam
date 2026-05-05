@@ -3,6 +3,12 @@ import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { Database, GenerationJobRow } from "@/server/db/types";
 import { createClipPromptPacket, ClipPromptPacketRequestError } from "./clipPromptPacketService";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
+import {
+  resolveImageGenerationJob,
+  type AsyncImageProviderOutput,
+  type ImageJobState
+} from "./imageGenerationJobService";
+import type { ImageGenerationProvider } from "@/lib/providers/types";
 
 export type GenerateClipRequestBody = {
   confirmedArtifactVersions?: unknown;
@@ -24,6 +30,8 @@ export type GenerationJobSummary = {
   status: GenerationJobRow["status"];
   type: GenerationJobRow["type"];
 };
+
+export type GenerationJobServiceImageProvider = ImageGenerationProvider<unknown, AsyncImageProviderOutput>;
 
 export type GenerateClipServiceOutput = {
   confirmationSummary: string;
@@ -109,8 +117,9 @@ export async function createGenerateClipJob(
 export async function getGenerationJob(
   client: SupabaseClient<Database>,
   userId: string,
-  jobId: string
-): Promise<{ ok: true; value: { job: GenerationJobSummary } }> {
+  jobId: string,
+  imageProvider?: GenerationJobServiceImageProvider
+): Promise<{ ok: true; value: { image?: ImageJobState; job: GenerationJobSummary } }> {
   if (!jobId) {
     throw new GenerationJobRequestError("invalid_input");
   }
@@ -121,10 +130,20 @@ export async function getGenerationJob(
     throw new GenerationJobRequestError("job_not_found");
   }
 
+  const image = isImageJobType(job.type)
+    ? await resolveImageGenerationJob(client, userId, {
+        job,
+        provider: imageProvider
+      })
+    : undefined;
+
+  const refreshedJob = await new StoryCamGenerationJobRepository(client).findById(userId, jobId);
+
   return {
     ok: true,
     value: {
-      job: toJobSummary(job)
+      ...(image ? { image } : {}),
+      job: toJobSummary(refreshedJob ?? job)
     }
   };
 }
@@ -214,4 +233,8 @@ function toJobSummary(job: GenerationJobRow): GenerationJobSummary {
     status: job.status,
     type: job.type
   };
+}
+
+function isImageJobType(type: GenerationJobRow["type"]) {
+  return type === "story_world_asset_image" || type === "storyboard_image" || type === "expanded_storyboard_image";
 }

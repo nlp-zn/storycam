@@ -49,24 +49,29 @@ type ProviderFailure = {
 Used for:
 
 - story world generation,
-- storyboard script,
-- core storyboard groups,
-- expanded storyboard cards,
+- per-group storyboard scripts,
+- the MVP's single core storyboard group at about 15 seconds,
+- expanded storyboard card text for the 9-image canvas,
 - stitch suggestion.
 
 Real path:
 
-- Vercel AI SDK
-- OpenRouter text model
+- Story world: DeepSeek official Chat Completions strict function calling,
+- Core storyboard and other structured text: Vercel AI SDK with OpenRouter text model.
 
 Requirements:
 
 - structured or schema-validated output,
 - malformed JSON handling,
 - no raw prompt exposure in API responses,
-- primary model name from `OPENROUTER_TEXT_MODEL`.
-- optional comma-separated fallback chain from `OPENROUTER_TEXT_FALLBACK_MODELS`.
-- recommended starting model: `deepseek/deepseek-v4-pro`.
+- story world primary model name from `DEEPSEEK_TEXT_MODEL`, recommended `deepseek-v4-pro`,
+- story world strict tool name `submit_story_world` with forced `tool_choice`,
+- story world optional comma-separated fallback chain from `DEEPSEEK_TEXT_FALLBACK_MODELS`,
+- story world model output must be parsed only from tool call `function.arguments`,
+- server normalizes and owns `id`, `sessionId`, `state`, `version`, and `referenceMediaIds`,
+- core storyboard primary model name from `OPENROUTER_TEXT_MODEL`,
+- core storyboard optional comma-separated fallback chain from `OPENROUTER_TEXT_FALLBACK_MODELS`,
+- `/api/storyboard` creates one script and main-image prompt per core group.
 
 ## Multimodal Provider
 
@@ -92,20 +97,23 @@ Requirements:
 Used for:
 
 - core storyboard representative images,
-- optionally expanded storyboard card images.
+- expanded storyboard card images.
 
 Real path:
 
-- Vercel AI SDK
-- OpenRouter image model
+- Inference.sh SDK app provider for current story-world asset boards,
+- legacy OpenRouter image adapter remains available behind the same provider boundary.
 
 Requirements:
 
-- model name from `OPENROUTER_IMAGE_MODEL`,
+- `INFERENCE_API_KEY` and `INFERENCE_IMAGE_APP=openai/gpt-image-2` for Inference.sh,
+- the Inference.sh app's required `OPENAI_KEY` secret must be configured in Inference.sh,
+- model name from `OPENROUTER_IMAGE_MODEL` for the legacy OpenRouter path,
 - output stored in `storycam-generated` bucket,
 - representative images are stored as `thumbnail` media linked to the core storyboard group,
+- expanded storyboard images are stored as `thumbnail` media linked to their expanded card artifact,
 - failure may degrade to placeholder without blocking video generation.
-- recommended storyboard image model: `openai/gpt-5.4-image-2`.
+- recommended story-world asset app: `openai/gpt-image-2`.
 
 ## Video Provider
 
@@ -135,7 +143,7 @@ Requirements:
 
 Used for:
 
-- composing 1-3 clips into final work.
+- composing the confirmed clip into the final work. Historical multi-clip data may still be restored, but the MVP creation path generates one clip.
 
 Possible implementation:
 
@@ -153,17 +161,24 @@ Requirements:
 
 ```text
 STORYCAM_GENERATION_MODE=mock|real
-STORYCAM_TEXT_PROVIDER=mock|openrouter
+STORYCAM_TEXT_PROVIDER=mock|openrouter|deepseek
 STORYCAM_MULTIMODAL_PROVIDER=mock|openrouter
-STORYCAM_IMAGE_PROVIDER=mock|openrouter
+STORYCAM_IMAGE_PROVIDER=mock|openrouter|inference_sh
 STORYCAM_VIDEO_PROVIDER=mock|seedance_2_0
 STORYCAM_FINAL_WORK_PROVIDER=mock|ffmpeg
 
+DEEPSEEK_API_KEY=
+DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
+DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
+DEEPSEEK_TEXT_FALLBACK_MODELS=deepseek-v4-flash
+
 OPENROUTER_API_KEY=
-OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
-OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_TEXT_FALLBACK_MODELS=qwen/qwen3.6-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
+INFERENCE_API_KEY=
+INFERENCE_IMAGE_APP=openai/gpt-image-2
 
 SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128

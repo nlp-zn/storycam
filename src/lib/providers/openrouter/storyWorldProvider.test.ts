@@ -23,6 +23,7 @@ const storyWorldDraft = {
       light: "冷白便利店灯混合暖色街灯",
       location: "雨夜街角便利店门口",
       name: "便利店外的玻璃反光",
+      scenePanels: scenePanels(),
       spatialLogic: "她在门外低头删短信，他从店里出来，倒影在玻璃上短暂重叠",
       timeOfDay: "night"
     }
@@ -31,7 +32,8 @@ const storyWorldDraft = {
     beats: ["她在雨声里删掉短信", "便利店门铃响起", "两人的倒影短暂重叠"],
     logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
     summary: "冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的那一秒。",
-    title: "雨夜未发送"
+    title: "雨夜未发送",
+    visualStyle: "写实韩剧电影感，雨夜冷暖混合光，低饱和色彩"
   }
 };
 
@@ -41,7 +43,7 @@ describe("openrouter story world provider", () => {
     const provider = createOpenRouterStoryWorldProvider({
       apiKey: "openrouter-secret",
       generateObject,
-      model: "deepseek/deepseek-v4-pro"
+      model: "deepseek/deepseek-v4-flash"
     });
 
     const result = await provider.generate({
@@ -67,13 +69,20 @@ describe("openrouter story world provider", () => {
           expect.objectContaining({
             id: "scene-session-1-1",
             referenceMediaIds: ["photo-1"],
+            scenePanels: expect.arrayContaining([
+              expect.objectContaining({
+                shotType: "establishing",
+                title: "便利店外景"
+              })
+            ]),
             sessionId: "session-1"
           })
         ],
         script: expect.objectContaining({
           id: "script-session-1",
           sessionId: "session-1",
-          title: "雨夜未发送"
+          title: "雨夜未发送",
+          visualStyle: "写实韩剧电影感，雨夜冷暖混合光，低饱和色彩"
         })
       }
     });
@@ -92,7 +101,7 @@ describe("openrouter story world provider", () => {
     const provider = createOpenRouterStoryWorldProvider({
       apiKey: "openrouter-secret",
       generateObject,
-      model: "deepseek/deepseek-v4-pro"
+      model: "deepseek/deepseek-v4-flash"
     });
 
     const result = await provider.generate({
@@ -113,6 +122,43 @@ describe("openrouter story world provider", () => {
     expect(JSON.stringify(result)).not.toContain("full prompt");
   });
 
+  it("normalizes a story-world draft when the model omits the script object", async () => {
+    const generateObject = vi.fn().mockResolvedValue({
+      object: {
+        characterAssets: [],
+        sceneAssets: []
+      }
+    });
+    const provider = createOpenRouterStoryWorldProvider({
+      apiKey: "openrouter-secret",
+      generateObject,
+      model: "deepseek/deepseek-v4-flash"
+    });
+
+    const result = await provider.generate({
+      idea: "我想把雨夜错过的人拍成短片",
+      sessionId: "session-1"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        characterAssets: [expect.objectContaining({ name: "主角" })],
+        sceneAssets: [
+          expect.objectContaining({
+            name: "故事发生的地方",
+            scenePanels: expect.arrayContaining([expect.objectContaining({ shotType: "establishing" })])
+          })
+        ],
+        script: expect.objectContaining({
+          logline: "我想把雨夜错过的人拍成短片",
+          title: "私人短片",
+          visualStyle: "写实电影感，普通人质感，克制表演，低饱和色彩和自然光线"
+        })
+      }
+    });
+  });
+
   it("builds prompts from text and lightweight choices without leaking uploaded storage paths", () => {
     const prompt = buildOpenRouterStoryWorldPrompt({
       idea: "把旧照片里的毕业告别拍成短片",
@@ -130,7 +176,48 @@ describe("openrouter story world provider", () => {
     expect(prompt.prompt).toContain("把旧照片里的毕业告别拍成短片");
     expect(prompt.prompt).toContain("少说话");
     expect(prompt.prompt).toContain("photo-1");
+    expect(prompt.prompt).toContain("不是分镜拆解阶段");
+    expect(prompt.prompt).toContain("script.beats 是剧情节点");
+    expect(prompt.prompt).toContain("不是镜头列表");
+    expect(prompt.prompt).toContain("场景资产必须且只能生成 1 个");
+    expect(prompt.prompt).toContain("script.visualStyle");
+    expect(prompt.prompt).toContain("scenePanels 生成 4-6 个小切图描述");
+    expect(prompt.prompt).toContain("不要写可见人物");
+    expect(prompt.system).toContain("beats 是剧情节点，不是分镜");
     expect(prompt.prompt).not.toContain("private.jpg");
     expect(prompt.prompt).not.toContain("storycam-uploads");
   });
 });
+
+function scenePanels() {
+  return [
+    {
+      description: "雨夜街角便利店门口，屋檐、玻璃门和街灯在同一个空间中。",
+      keyObjects: ["便利店玻璃门", "屋檐", "街灯"],
+      purpose: "建立整个故事发生的主场景。",
+      shotType: "establishing",
+      title: "便利店外景"
+    },
+    {
+      description: "玻璃门上留出两道可供角色后续入画的冷白反光区域。",
+      keyObjects: ["玻璃门", "冷白反光"],
+      purpose: "预留两人靠近但没有真正相认的空间关系。",
+      shotType: "medium",
+      title: "玻璃倒影"
+    },
+    {
+      description: "手机屏幕放在便利店窗边，停在未发送短信界面，雨滴落在玻璃边缘。",
+      keyObjects: ["手机屏幕", "雨滴", "窗边"],
+      purpose: "把暗恋情绪落到可见物件上。",
+      shotType: "detail",
+      title: "未发送短信"
+    },
+    {
+      description: "冷白便利店灯和暖色街灯在湿地面上反光。",
+      keyObjects: ["便利店灯", "街灯", "湿地面"],
+      purpose: "固定整段短片的光线质感。",
+      shotType: "lighting",
+      title: "灯光反射"
+    }
+  ];
+}

@@ -1,11 +1,12 @@
 import {
   coreStoryboardGroupSchema,
-  expandedStoryboardCardSchema,
+  storyboardFrameSchema,
   storyboardScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
 import type {
   CoreStoryboardGroup,
   ExpandedStoryboardCard,
+  StoryboardFrame,
   StoryboardScript
 } from "@/features/storycam/domain/artifacts";
 import {
@@ -16,9 +17,10 @@ import {
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import type { MockStoryWorldOutput } from "./storyWorldProvider";
-import { rainyKDramaExpansionCards, rainyKDramaStoryboardTitles } from "./fixtures/storyboards";
+import { rainyKDramaStoryboardTitles } from "./fixtures/storyboards";
 
 export type MockStoryboardInput = {
+  coreGroupTargetCount?: 1 | 2 | 3;
   durationPreset?: DurationPreset;
   expansionCardTargetCount?: number;
   plannedDurationSeconds: number;
@@ -31,6 +33,7 @@ export type MockStoryboardOutput = {
   coreStoryboardGroups: CoreStoryboardGroup[];
   expandedStoryboardCards: ExpandedStoryboardCard[];
   storyboardScript: StoryboardScript;
+  storyboardScripts: StoryboardScript[];
 };
 
 export function createMockStoryboardProvider(): TextGenerationProvider<MockStoryboardInput, MockStoryboardOutput> {
@@ -54,8 +57,13 @@ function generateMockStoryboard(input: MockStoryboardInput): Promise<ProviderRes
     }
 
     const storyboardScript = storyboardScriptSchema.parse({
+      frames: buildMockStoryboardFrames(input.sessionId, {
+        emotionalTurn: "想说出口",
+        storyPurpose: "建立她和未发送短信之间的私人情绪。",
+        title: "未发送的短信"
+      }),
       id: "storyboard-script-rainy-kdrama",
-      planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
+      planSummary: `用 ${durationPlan.coreGroupTargetCount} 组各 15 秒的克制雨夜时刻讲完一次没有说出口的暗恋。`,
       plannedDurationSeconds: durationPlan.plannedDurationSeconds,
       rhythm: "慢进入，短暂停顿，安静离开",
       sessionId: input.sessionId,
@@ -78,7 +86,22 @@ function generateMockStoryboard(input: MockStoryboardInput): Promise<ProviderRes
         version: 1
       })
     );
-    const expandedStoryboardCards = createExpansionCards(input, coreStoryboardGroups);
+    const storyboardScripts = coreStoryboardGroups.map((group, index) => {
+      const frames = buildMockStoryboardFrames(input.sessionId, group);
+
+      return storyboardScriptSchema.parse({
+        frames,
+        id: `storyboard-script-rainy-kdrama-${index + 1}`,
+        mainImagePrompt: frames[0]?.imagePrompt,
+        planSummary: group.storyPurpose,
+        plannedDurationSeconds: 15,
+        rhythm: index === 0 ? "停顿进入，手部小动作推进" : index === 1 ? "人物靠近，视线错开" : "动作收束，情绪留白",
+        sessionId: input.sessionId,
+        state: "ready",
+        tone: "韩剧雨夜，克制真实",
+        version: 1
+      });
+    });
 
     return Promise.resolve(
       providerSuccess(
@@ -89,12 +112,11 @@ function generateMockStoryboard(input: MockStoryboardInput): Promise<ProviderRes
         {
           coreStoryboardGroups: coreStoryboardGroups.map((group) => ({
             ...group,
-            expandedCardIds: expandedStoryboardCards
-              .filter((card) => card.coreGroupId === group.id)
-              .map((card) => card.id)
+            expandedCardIds: []
           })),
-          expandedStoryboardCards,
-          storyboardScript
+          expandedStoryboardCards: [],
+          storyboardScript,
+          storyboardScripts
         }
       )
     );
@@ -108,26 +130,110 @@ function generateMockStoryboard(input: MockStoryboardInput): Promise<ProviderRes
   }
 }
 
-function createExpansionCards(input: MockStoryboardInput, groups: CoreStoryboardGroup[]) {
-  const targetCount = Math.min(8, Math.max(0, input.expansionCardTargetCount ?? 3));
+function buildMockStoryboardFrames(
+  sessionId: string,
+  group: Pick<CoreStoryboardGroup, "emotionalTurn" | "storyPurpose" | "title">
+): StoryboardFrame[] {
+  const frames = [
+    {
+      beatType: "core",
+      cameraAngle: "平视",
+      canvasPosition: "center",
+      durationSeconds: 3,
+      title: group.title,
+      visualContent: `${group.title}：雨夜便利店窗边，人物和核心道具在同一画面中形成中心构图。`
+    },
+    {
+      beatType: "enter",
+      cameraAngle: "平视",
+      canvasPosition: "top-left",
+      durationSeconds: 1.5,
+      title: "环境建立",
+      visualContent: "雨夜街角便利店外景，湿地反光拉开私人回忆的空间。"
+    },
+    {
+      beatType: "action",
+      cameraAngle: "微俯拍",
+      canvasPosition: "top",
+      durationSeconds: 1.5,
+      title: "手指停顿",
+      visualContent: "手机屏幕亮起，未发送的短信停在输入框里。"
+    },
+    {
+      beatType: "reaction",
+      cameraAngle: "平视",
+      canvasPosition: "top-right",
+      durationSeconds: 1.5,
+      title: "门铃响起",
+      visualContent: "便利店门被推开，玻璃倒影中出现另一个身影。"
+    },
+    {
+      beatType: "atmosphere",
+      cameraAngle: "低机位",
+      canvasPosition: "left",
+      durationSeconds: 1.5,
+      title: "雨水落下",
+      visualContent: "伞尖雨滴落在湿地，冷暖灯光在水面晕开。"
+    },
+    {
+      beatType: "transition",
+      cameraAngle: "平视",
+      canvasPosition: "right",
+      durationSeconds: 1.5,
+      title: "擦肩靠近",
+      visualContent: "人物从便利店门口经过，两人靠近却没有对视。"
+    },
+    {
+      beatType: "emotion",
+      cameraAngle: "近景",
+      canvasPosition: "bottom-left",
+      durationSeconds: 1.5,
+      title: "表情收住",
+      visualContent: "主角抬眼又低头，把情绪压回手里的手机。"
+    },
+    {
+      beatType: "continuation",
+      cameraAngle: "远景",
+      canvasPosition: "bottom",
+      durationSeconds: 1.5,
+      title: "距离拉开",
+      visualContent: "街道纵深里人影走远，便利店灯光留在雨幕里。"
+    },
+    {
+      beatType: "reaction",
+      cameraAngle: "特写",
+      canvasPosition: "bottom-right",
+      durationSeconds: 1.5,
+      title: "屏幕暗下",
+      visualContent: "手机屏幕暗下去，只剩雨声和玻璃反光。"
+    }
+  ] as const;
 
-  return Array.from({ length: targetCount }, (_, index) => {
-    const fixture = rainyKDramaExpansionCards[index % rainyKDramaExpansionCards.length];
-    const group = groups[index % groups.length];
+  return frames.map((frame, index) =>
+    storyboardFrameSchema.parse({
+      ...frame,
+      frameNumber: index + 1,
+      imagePrompt:
+        index === 0
+          ? buildMockMainImagePrompt(group.title, group.storyPurpose, group.emotionalTurn)
+          : `Cinematic storyboard still frame ${index + 1} for "${group.title}", ${frame.visualContent}, ordinary people, rainy Korean drama realism, consistent character wardrobe and convenience-store location, 16:9, no text.`,
+      narrativePurpose: index === 0 ? group.storyPurpose : "作为中心主图周围的连续分镜，补足动作、反应和氛围。",
+      scene: `session ${sessionId} rainy convenience-store story world`,
+      shotSize: index === 0 ? "中景" : index % 3 === 0 ? "近景" : "全景",
+      sound: "雨声、便利店门铃和轻微脚步声",
+      technicalNotes: "保持同一角色造型、便利店空间、雨夜冷暖混合光。",
+      timeRange: `00:${String(index).padStart(2, "0")}-00:${String(index + 1).padStart(2, "0")}`
+    })
+  );
+}
 
-    return expandedStoryboardCardSchema.parse({
-      beatType: fixture.beatType,
-      coreGroupId: group.id,
-      description: fixture.description,
-      guidance: fixture.guidance,
-      id: `expanded-card-rainy-kdrama-${index + 1}`,
-      sessionId: input.sessionId,
-      sortOrder: index,
-      state: "ready",
-      title: fixture.title,
-      version: 1
-    });
-  });
+function buildMockMainImagePrompt(title: string, storyPurpose: string, emotionalTurn: string) {
+  return [
+    `Core storyboard still: ${title}.`,
+    storyPurpose,
+    `Emotional turn: ${emotionalTurn}.`,
+    "A cinematic 16:9 frame, restrained Korean drama rain-night realism, ordinary people, expressive small gestures, no text."
+  ].join(" ");
 }
 
 function groupStoryPurpose(index: number) {

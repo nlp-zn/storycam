@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProviderFailure, TextGenerationProvider } from "@/lib/providers/types";
-import type { StoryWorldProviderInput, StoryWorldProviderOutput, UploadedPhotoReference } from "@/lib/providers/storyWorld";
+import {
+  storyWorldProviderOutputSchema,
+  type StoryWorldProviderInput,
+  type StoryWorldProviderOutput,
+  type UploadedPhotoReference
+} from "@/lib/providers/storyWorld";
 import { createMockStoryWorldProvider } from "@/lib/providers/mock/storyWorldProvider";
 import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -75,17 +80,18 @@ export async function createStoryWorld(
     return providerResult;
   }
 
+  const storyWorld = storyWorldProviderOutputSchema.parse(providerResult.value);
   const script = requireArtifactRow(
     await artifacts.createVersion(userId, {
-      dataJson: providerResult.value.script,
+      dataJson: storyWorld.script,
       sessionId: session.id,
       state: "ready",
       type: "script",
-      version: providerResult.value.script.version
+      version: storyWorld.script.version
     })
   );
   const characterAssets = await Promise.all(
-    providerResult.value.characterAssets.map((asset) =>
+    storyWorld.characterAssets.map((asset) =>
       artifacts.createVersion(userId, {
         dataJson: asset,
         sessionId: session.id,
@@ -96,7 +102,7 @@ export async function createStoryWorld(
     )
   );
   const sceneAssets = await Promise.all(
-    providerResult.value.sceneAssets.map((asset) =>
+    storyWorld.sceneAssets.map((asset) =>
       artifacts.createVersion(userId, {
         dataJson: asset,
         sessionId: session.id,
@@ -116,7 +122,7 @@ export async function createStoryWorld(
         script: toArtifactRef(script)
       },
       sessionId: session.id,
-      storyWorld: providerResult.value
+      storyWorld
     }
   };
 }

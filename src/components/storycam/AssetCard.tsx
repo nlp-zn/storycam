@@ -1,6 +1,7 @@
 type AssetCardProps = {
   eyebrow: string;
   imageUrl?: string;
+  layout?: "standard" | "wide";
   lines: string[];
   meta?: string;
   onOpen?: () => void;
@@ -9,14 +10,24 @@ type AssetCardProps = {
   title: string;
 };
 
-export function AssetCard({ eyebrow, imageUrl, lines, meta, onOpen, status = "empty", title, tone = "character" }: AssetCardProps) {
+export function AssetCard({
+  eyebrow,
+  imageUrl,
+  layout = "standard",
+  lines,
+  meta,
+  onOpen,
+  status = "empty",
+  title,
+  tone = "character"
+}: AssetCardProps) {
   const isScene = tone === "scene";
-  const previewLines = lines.slice(0, 2);
+  const previewLines = lines.slice(0, isScene ? 3 : 2);
   const Tag = onOpen ? "button" : "article";
 
   return (
     <Tag
-      className={`storycam-glass storycam-asset-card ${isScene ? "storycam-asset-card--scene" : "storycam-asset-card--character"} group overflow-hidden p-2 text-left transition hover:border-[#00f0ff]/50 focus-visible:border-[#00f0ff] focus-visible:outline-none`}
+      className={`storycam-glass storycam-asset-card ${isScene ? "storycam-asset-card--scene" : "storycam-asset-card--character"} ${layout === "wide" ? "storycam-asset-card--wide" : ""} group overflow-hidden p-2 text-left transition hover:border-[#00f0ff]/50 focus-visible:border-[#00f0ff] focus-visible:outline-none`}
       data-testid={`story-world-${tone}-asset-card`}
       onClick={onOpen}
       type={onOpen ? "button" : undefined}

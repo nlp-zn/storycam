@@ -8,7 +8,9 @@ import type {
   expandedStoryboardCardSchema,
   finalWorkSchema,
   generatedClipSchema,
+  scenePanelSchema,
   sceneAssetSchema,
+  storyboardFrameSchema,
   storyboardScriptSchema,
   storyScriptSchema,
   versionedArtifactSchema
@@ -36,7 +38,9 @@ export type ArtifactState = z.infer<typeof artifactStateSchema>;
 export type VersionedArtifact = z.infer<typeof versionedArtifactSchema>;
 export type StoryScript = z.infer<typeof storyScriptSchema>;
 export type CharacterAsset = z.infer<typeof characterAssetSchema>;
+export type ScenePanel = z.infer<typeof scenePanelSchema>;
 export type SceneAsset = z.infer<typeof sceneAssetSchema>;
+export type StoryboardFrame = z.infer<typeof storyboardFrameSchema>;
 export type StoryboardScript = z.infer<typeof storyboardScriptSchema>;
 export type CoreStoryboardGroup = z.infer<typeof coreStoryboardGroupSchema>;
 export type ExpandedStoryboardCard = z.infer<typeof expandedStoryboardCardSchema>;

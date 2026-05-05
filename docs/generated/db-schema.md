@@ -1,6 +1,6 @@
 # Generated DB Schema Summary
 
-Source: `supabase/migrations/20260426033600_storycam_phase1_schema.sql`
+Source: `supabase/migrations/20260426033600_storycam_phase1_schema.sql` plus follow-up migrations in `supabase/migrations/`.
 
 Status: static migration summary, not introspected from a live database yet.
 
@@ -17,6 +17,11 @@ Status: static migration summary, not introspected from a live database yet.
 - `created_at`
 - `updated_at`
 - `deleted_at`
+
+Current duration constraints:
+
+- `planned_duration_seconds`: database allows 8-45 seconds; the MVP creation flow writes 15 seconds.
+- `core_group_target_count`: database allows 1-3 groups for historical compatibility; the MVP creation flow writes 1 group.
 
 ### `storycam_artifacts`
 

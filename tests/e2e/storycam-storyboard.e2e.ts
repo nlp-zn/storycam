@@ -2,7 +2,104 @@ import { expect, test } from "@playwright/test";
 import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam core storyboard", () => {
-  test("core storyboard groups show the duration plan and one clip per group", async ({ page }) => {
+  test("single core group polls its main storyboard image until ready", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard", async (route) => {
+      const body = route.request().postDataJSON() as { coreGroupTargetCount: number };
+
+      expect(body.coreGroupTargetCount).toBe(1);
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            coreStoryboardGroups: [
+              { id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }
+            ],
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [
+              { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+            ]
+          },
+          durationPlan: {
+            clipDurationTargets: [15],
+            coreGroupTargetCount: 1,
+            plannedDurationSeconds: 15
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyboard: storyboardFixture(1, "generating")
+        })
+      });
+    });
+
+    const pollCounts = new Map<string, number>();
+    await page.route("**/api/generation-jobs/job-main-*", async (route) => {
+      const jobId = route.request().url().split("/").at(-1) ?? "";
+      const nextCount = (pollCounts.get(jobId) ?? 0) + 1;
+      pollCounts.set(jobId, nextCount);
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          image:
+            nextCount === 1
+              ? { jobId, placeholder: true, status: "generating" }
+              : {
+                  mediaId: `media-${jobId}`,
+                  mimeType: "image/png",
+                  placeholder: false,
+                  signedUrl:
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%2300f0ff'/%3E%3C/svg%3E",
+                  signedUrlExpiresIn: 300,
+                  status: "ready"
+                },
+          job: {
+            attempts: 0,
+            id: jobId,
+            outputArtifactId: "core-artifact-1",
+            providerKind: "image",
+            providerName: "inference_sh",
+            sessionId: "session-1",
+            status: nextCount === 1 ? "running" : "succeeded",
+            type: "storyboard_image"
+          },
+          ok: true
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await expect(page.getByRole("button", { name: /2 组/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /3 组/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toBeVisible({ timeout: 12_000 });
+    expect(pollCounts.get("job-main-1")).toBeGreaterThanOrEqual(2);
+    await expect(page.getByTestId("core-storyboard-card")).toHaveCount(1);
+  });
+
+  test("legacy multi-group responses render only the first MVP core group", async ({ page }) => {
     await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
       await route.fulfill({
@@ -32,16 +129,21 @@ test.describe("StoryCam core storyboard", () => {
               { id: "core-artifact-2", state: "ready", type: "core_storyboard_group", version: 1 },
               { id: "core-artifact-3", state: "ready", type: "core_storyboard_group", version: 1 }
             ],
-            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [
+              { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+              { id: "storyboard-artifact-2", state: "ready", type: "storyboard_script", version: 1 },
+              { id: "storyboard-artifact-3", state: "ready", type: "storyboard_script", version: 1 }
+            ]
           },
           durationPlan: {
-            clipDurationTargets: [4, 4, 4],
+            clipDurationTargets: [15, 15, 15],
             coreGroupTargetCount: 3,
-            plannedDurationSeconds: 12
+            plannedDurationSeconds: 45
           },
           ok: true,
           sessionId: "session-1",
-          storyboard: storyboardFixture()
+          storyboard: storyboardFixture(3, "placeholder")
         })
       });
     });
@@ -49,16 +151,16 @@ test.describe("StoryCam core storyboard", () => {
     await page.goto("/");
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
-    await page.getByRole("button", { name: "对，继续拍这一段" }).click();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
 
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
-    await expect(page.getByText("3 个核心分镜组，每组生成一个片段。")).toBeVisible();
-    await expect(page.getByText("扩展卡只补充当前组的拍法，不会单独生成视频。")).toBeVisible();
+    await expect(page.getByText("1 个核心分镜组，控制在 45 秒内。")).toHaveCount(0);
+    await expect(page.getByText("1 个核心分镜组，控制在 15 秒内。")).toBeVisible();
     await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
-    await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toBeVisible();
-    await expect(page.getByRole("heading", { exact: true, name: "擦肩而过" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "扩展这一组" })).toHaveCount(3);
-    await expect(page.getByRole("button", { name: "用这一组生成片段" })).toHaveCount(3);
+    await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { exact: true, name: "擦肩而过" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "打开 9 帧画布" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "用这一组生成片段" })).toHaveCount(1);
   });
 });
 
@@ -96,37 +198,63 @@ function storyWorldFixture() {
   };
 }
 
-function storyboardFixture() {
+function storyboardFixture(count: 1 | 2 | 3, imageStatus: "generating" | "placeholder") {
+  const groups = [
+    {
+      emotionalTurn: "想说出口",
+      estimatedClipDurationSeconds: 15,
+      expandedStoryboardImages: [],
+      representativeImage: imageStatus === "generating" ? generatingImage("job-main-1") : placeholderImage(),
+      scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+      storyPurpose: "建立她和未发送短信之间的私人情绪。",
+      title: "未发送短信",
+      version: 1
+    },
+    {
+      emotionalTurn: "靠近但错过",
+      estimatedClipDurationSeconds: 15,
+      expandedStoryboardImages: [],
+      representativeImage: imageStatus === "generating" ? generatingImage("job-main-2") : placeholderImage(),
+      scriptArtifact: { id: "storyboard-artifact-2", state: "ready", type: "storyboard_script", version: 1 },
+      storyPurpose: "让对方靠近，但仍然不让告白真正发生。",
+      title: "玻璃反光",
+      version: 1
+    },
+    {
+      emotionalTurn: "把话收回去",
+      estimatedClipDurationSeconds: 15,
+      expandedStoryboardImages: [],
+      representativeImage: placeholderImage(),
+      scriptArtifact: { id: "storyboard-artifact-3", state: "ready", type: "storyboard_script", version: 1 },
+      storyPurpose: "用删除短信完成这段记忆的收束。",
+      title: "擦肩而过",
+      version: 1
+    }
+  ].slice(0, count);
+
   return {
-    coreStoryboardGroups: [
-      {
-        emotionalTurn: "想说出口",
-        estimatedClipDurationSeconds: 4,
-        storyPurpose: "建立她和未发送短信之间的私人情绪。",
-        title: "未发送短信",
-        version: 1
-      },
-      {
-        emotionalTurn: "靠近但错过",
-        estimatedClipDurationSeconds: 4,
-        storyPurpose: "让对方靠近，但仍然不让告白真正发生。",
-        title: "玻璃反光",
-        version: 1
-      },
-      {
-        emotionalTurn: "把话收回去",
-        estimatedClipDurationSeconds: 4,
-        storyPurpose: "用删除短信完成这段记忆的收束。",
-        title: "擦肩而过",
-        version: 1
-      }
-    ],
+    coreStoryboardGroups: groups,
     storyboardScript: {
       planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
-      plannedDurationSeconds: 12,
+      plannedDurationSeconds: count * 15,
       rhythm: "慢进入，短暂停顿，安静离开",
       tone: "韩剧雨夜，私人回忆",
       version: 1
     }
+  };
+}
+
+function placeholderImage() {
+  return {
+    placeholder: true,
+    status: "placeholder"
+  };
+}
+
+function generatingImage(jobId: string) {
+  return {
+    jobId,
+    placeholder: true,
+    status: "generating"
   };
 }

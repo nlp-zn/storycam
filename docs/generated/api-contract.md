@@ -125,6 +125,7 @@ type StoryWorldResponse = {
       title: string;
       logline: string;
       summary: string;
+      visualStyle?: string;
       beats: string[];
       version: number;
     };
@@ -144,6 +145,13 @@ type StoryWorldResponse = {
       light: string;
       atmosphere: string;
       keyObjects: string[];
+      scenePanels: Array<{
+        title: string;
+        shotType: "establishing" | "wide" | "medium" | "detail" | "lighting" | "overhead" | "transition";
+        description: string;
+        purpose: string;
+        keyObjects: string[];
+      }>;
       spatialLogic: string;
     }>;
   };
@@ -154,11 +162,64 @@ Rules:
 
 - Does not generate storyboard.
 - Does not start video generation.
+- Returns 1-3 key character assets and exactly 1 scene asset. The single scene asset carries 4-6 `scenePanels` for the multi-panel environment asset image.
+- `script.visualStyle` is the shared style anchor for character and scene asset images; older restored stories may omit it.
 - Uploaded photos must belong to current user.
 
 ### `POST /api/storyboard`
 
-Generate storyboard script and 1-3 core storyboard groups from confirmed story world artifacts.
+Generate the MVP 15-second storyboard: one 9-frame storyboard script plus one core storyboard group from confirmed story world artifacts.
+
+### `GET /api/storycam-sessions/recent?limit=5`
+
+List current user's recent restorable StoryCam projects for the homepage drawer. Empty drafts and upload-only sessions are skipped.
+
+```ts
+type RecentProjectsResponse = {
+  ok: true;
+  projects: Array<{
+    sessionId: string;
+    title: string;
+    summary: string;
+    currentStep: "story-world" | "core-storyboard";
+    updatedAt: string;
+    coreGroupTargetCount: 1 | 2 | 3;
+    thumbnail: null | {
+      id: string;
+      mimeType: string;
+      signedUrl: string;
+      signedUrlExpiresIn: number;
+    };
+  }>;
+};
+```
+
+### `GET /api/storycam-sessions/:id/restore`
+
+Restore a specific current-user project selected from recent projects. Returns the same restored shape as `/api/storycam-sessions/current`; missing, deleted, unauthorized, or non-restorable sessions return `404 not_found`.
+
+Storyboard image state:
+
+```ts
+type StoryboardImageState =
+  | {
+      status: "ready";
+      placeholder: false;
+      mediaId: string;
+      mimeType: string;
+      signedUrl: string;
+      signedUrlExpiresIn: number;
+    }
+  | {
+      status: "generating";
+      placeholder: true;
+      jobId: string;
+    }
+  | {
+      status: "placeholder";
+      placeholder: true;
+    };
+```
 
 Auth: required.
 
@@ -168,9 +229,12 @@ Request:
 type StoryboardRequest = {
   sessionId: string;
   confirmedArtifactVersions: Record<string, number>;
-  plannedDurationSeconds: number;
+  coreGroupTargetCount?: 1 | 2 | 3;
+  plannedDurationSeconds?: number;
 };
 ```
+
+Compatibility: `coreGroupTargetCount` and `plannedDurationSeconds` remain accepted for older clients and restored data, but new MVP storyboard creation normalizes all requests to `coreGroupTargetCount: 1`, `plannedDurationSeconds: 15`, and `clipDurationTargets: [15]`.
 
 Success:
 
@@ -182,6 +246,7 @@ type StoryboardResponse = {
   coreStoryboardGroups: VersionedArtifact[];
   artifacts: {
     storyboardScript: VersionedArtifact;
+    storyboardScripts: VersionedArtifact[];
     coreStoryboardGroups: VersionedArtifact[];
   };
   storyboard: {
@@ -190,13 +255,27 @@ type StoryboardResponse = {
       tone: string;
       rhythm: string;
       plannedDurationSeconds: number;
+      mainImagePrompt?: string;
+      frames: StoryboardFrame[];
       version: number;
     };
+    storyboardScripts: Array<{
+      planSummary: string;
+      tone: string;
+      rhythm: string;
+      plannedDurationSeconds: number;
+      mainImagePrompt?: string;
+      frames: StoryboardFrame[];
+      version: number;
+    }>;
     coreStoryboardGroups: Array<{
       title: string;
       storyPurpose: string;
       emotionalTurn: string;
       estimatedClipDurationSeconds: number;
+      scriptArtifact: VersionedArtifact;
+      representativeImage: StoryboardImageState;
+      expandedStoryboardImages: StoryboardImageState[];
       version: number;
     }>;
   };
@@ -206,17 +285,36 @@ type StoryboardResponse = {
     clipDurationTargets: number[];
   };
 };
+
+type StoryboardFrame = {
+  frameNumber: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  canvasPosition: "center" | "top-left" | "top" | "top-right" | "left" | "right" | "bottom-left" | "bottom" | "bottom-right";
+  timeRange: string;
+  durationSeconds: number;
+  cameraAngle: string;
+  shotSize: string;
+  visualContent: string;
+  scene: string;
+  sound: string;
+  technicalNotes: string;
+  narrativePurpose: string;
+  title: string;
+  beatType: string;
+  imagePrompt: string;
+};
 ```
 
 Rules:
 
 - Reject if story world is not confirmed.
-- Group count is derived from planned duration.
+- New MVP results contain exactly 1 group, targeting about 15 seconds and exactly 9 storyboard frames.
+- The representative core image is generated from frame 1.
+- Planned total duration is 15 seconds for new storyboard creation.
 - Downstream stale artifacts must be handled by service layer.
 
 ### `POST /api/storyboard-groups/:id/expand`
 
-Generate expanded storyboard cards for one core group.
+Generate expanded storyboard cards for one core group from that group's stored frames 2-9.
 
 Auth: required.
 
@@ -239,21 +337,58 @@ type ExpansionResponse = {
   sessionId: string;
   expansionCards: Array<{
     beatType: string;
+    frameNumber: number;
+    canvasPosition: string;
     title: string;
     description: string;
     guidance: string;
+    imagePrompt?: string;
+    image: StoryboardImageState;
     sortOrder: number;
     version: number;
   }>;
+  expandedStoryboardImages: StoryboardImageState[];
   expandedStoryboardCards: VersionedArtifact[];
 };
 ```
 
 Rules:
 
-- Default target is 3 cards.
+- Default target is 8 cards/images, derived from storyboard frames 2-9.
 - Maximum is 8 cards.
 - Expansion never creates a video job.
+- Repeated expansion reuses existing expanded storyboard card artifacts instead of duplicating them.
+
+### `POST /api/storyboard-groups/:id/frames/:frameNumber/regenerate-image`
+
+Regenerate one storyboard frame image without accepting a user prompt. The server reuses the stored `imagePrompt` for that frame.
+
+Auth: required.
+
+Request:
+
+```ts
+type RegenerateStoryboardFrameImageRequest = {
+  sessionId: string;
+};
+```
+
+Success:
+
+```ts
+type RegenerateStoryboardFrameImageResponse = {
+  ok: true;
+  sessionId: string;
+  frameNumber: number;
+  image: StoryboardImageState;
+};
+```
+
+Rules:
+
+- `frameNumber=1` creates a `storyboard_image` job linked to the core storyboard group artifact.
+- `frameNumber=2..9` creates an `expanded_storyboard_image` job linked to the corresponding expanded storyboard card artifact.
+- No free-form user prompt is accepted.
 
 ### `POST /api/storyboard-groups/:id/generate-clip`
 

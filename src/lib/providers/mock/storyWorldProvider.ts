@@ -9,6 +9,7 @@ import type {
   StoryWorldProviderOutput,
   UploadedPhotoReference
 } from "@/lib/providers/storyWorld";
+import { storyWorldProviderOutputSchema } from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { rainyKDramaStoryWorldFixture, type MockStoryWorldFixture } from "./fixtures/storyWorld";
 
@@ -34,7 +35,7 @@ function generateMockStoryWorld(
 ): Promise<ProviderResult<MockStoryWorldOutput>> {
   try {
     const referenceMediaIds = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
-    const output = {
+    const output = storyWorldProviderOutputSchema.parse({
       script: storyScriptSchema.parse({
         ...fixture.script,
         sessionId: input.sessionId
@@ -53,7 +54,7 @@ function generateMockStoryWorld(
           sessionId: input.sessionId
         })
       )
-    };
+    });
 
     return Promise.resolve(providerSuccess({ providerKind: "text", providerName: "mock" }, output));
   } catch (error) {

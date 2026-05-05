@@ -4,6 +4,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { extractJsonMiddleware, generateImage, generateText, Output, wrapLanguageModel } from "ai";
 import type { ImageModel, LanguageModel } from "ai";
 import type { z } from "zod";
+import { createOpenRouterFetch } from "./openrouterProxyFetch";
 
 export type StoryCamGenerateObjectInput<T> = {
   model: LanguageModel;
@@ -36,12 +37,16 @@ export function createOpenRouterChatModel(input: { apiKey: string; model: string
   const openrouter = createOpenRouter({
     apiKey: input.apiKey,
     appName: "StoryCam",
-    appUrl: "https://storycam.local"
+    appUrl: "https://storycam.local",
+    ...openRouterFetchOption()
   });
 
   return wrapLanguageModel({
     model: openrouter.chat(input.model, {
-      plugins: [{ id: "response-healing" }]
+      plugins: [{ id: "response-healing" }],
+      provider: {
+        require_parameters: true
+      }
     }),
     middleware: extractJsonMiddleware()
   });
@@ -51,8 +56,15 @@ export function createOpenRouterImageModel(input: { apiKey: string; model: strin
   return createOpenRouter({
     apiKey: input.apiKey,
     appName: "StoryCam",
-    appUrl: "https://storycam.local"
+    appUrl: "https://storycam.local",
+    ...openRouterFetchOption()
   }).imageModel(input.model);
+}
+
+function openRouterFetchOption() {
+  const proxiedFetch = createOpenRouterFetch();
+
+  return proxiedFetch ? { fetch: proxiedFetch } : {};
 }
 
 export const storyCamGenerateObject: StoryCamGenerateObject = async (input) => {

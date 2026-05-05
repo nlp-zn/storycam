@@ -13,7 +13,7 @@ A new developer should be able to run StoryCam in mock mode in about 10 minutes 
 - Next.js App Router
 - Supabase local dev or a dedicated Supabase test project
 - mock AI providers by default
-- optional secret-gated OpenRouter and Seedance smoke tests
+- optional secret-gated DeepSeek, OpenRouter, Inference.sh, and Seedance smoke tests
 
 ## Commands
 
@@ -61,24 +61,27 @@ STORYCAM_FINAL_WORK_PROVIDER=mock
 
 For local UI/E2E smoke without real credentials, the test harness uses mocked HTTP routes.
 
-To verify only the real text model for Step 2 story-world generation while keeping images, video, and final work on mock providers, use:
+To verify only the real text model for Step 2 story-world generation while keeping images, video, and final work on mock providers, use DeepSeek strict tool calling:
 
 ```text
 STORYCAM_GENERATION_MODE=mock
-STORYCAM_TEXT_PROVIDER=openrouter
+STORYCAM_TEXT_PROVIDER=deepseek
 STORYCAM_MULTIMODAL_PROVIDER=mock
 STORYCAM_IMAGE_PROVIDER=mock
 STORYCAM_VIDEO_PROVIDER=mock
 STORYCAM_FINAL_WORK_PROVIDER=mock
 
-OPENROUTER_API_KEY=<your-openrouter-key>
-OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
-OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash
+DEEPSEEK_API_KEY=<your-deepseek-key>
+DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
+DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
+DEEPSEEK_TEXT_FALLBACK_MODELS=deepseek-v4-flash
 ```
 
-This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads. Story-world text uses AI SDK structured JSON output. The fallback list is optional, but useful when a primary OpenRouter model is available for plain chat while its structured-output endpoint is temporarily unavailable.
+This mixed mode only changes the server-side text provider behind `/api/story-world`; the client should not send provider names or prompt payloads. Story-world text uses DeepSeek Chat Completions with beta strict function calling and forces the `submit_story_world` tool. The fallback list is optional; it lets the provider try `deepseek-v4-flash` if `deepseek-v4-pro` fails before producing a valid tool call.
 
-If `/api/story-world` returns the same instant fixture, inspect `diagnostics.textProvider` in the JSON response or the response header `x-storycam-text-provider`; `mock` means the running dev server did not start with the OpenRouter text env. Shell-exported variables take precedence over `.env.local`, so clear or override stale values before restarting:
+StoryCam disables DeepSeek thinking mode for this one strict story-world request. If thinking stays enabled, DeepSeek can route the request as a reasoner-style call and reject the forced `tool_choice`.
+
+If `/api/story-world` returns the same instant fixture, inspect `diagnostics.textProvider` in the JSON response or the response header `x-storycam-text-provider`; `mock` means the running dev server did not start with the DeepSeek text env. Shell-exported variables take precedence over `.env.local`, so clear or override stale values before restarting:
 
 ```bash
 unset STORYCAM_TEXT_PROVIDER
@@ -88,19 +91,31 @@ pnpm dev --port 3000
 You can also force the value for one run:
 
 ```bash
-STORYCAM_TEXT_PROVIDER=openrouter pnpm dev --port 3000
+STORYCAM_TEXT_PROVIDER=deepseek pnpm dev --port 3000
 ```
 
-If `/api/story-world` returns `OPENROUTER_TEXT_INVALID_OUTPUT`, first check whether the same model can handle structured output, not just plain chat. OpenRouter may route plain text and `response_format` requests differently. Keep `OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash` during local real-text testing, restart `pnpm dev` after changing `.env.local`, and use `curl --noproxy '*'` for localhost smoke requests when proxy env vars are present.
+If `/api/story-world` returns `DEEPSEEK_TOOL_CALL_MISSING`, `DEEPSEEK_TOOL_ARGUMENTS_INVALID_JSON`, `DEEPSEEK_STORY_WORLD_INVALID_OUTPUT`, or `DEEPSEEK_TEXT_PROVIDER_FAILED`, check that the model is one that supports DeepSeek strict function calling, that `DEEPSEEK_TEXT_BASE_URL` points to `https://api.deepseek.com/beta`, and that the API key has access to `deepseek-v4-pro`. Restart `pnpm dev` after changing `.env.local`, and use `curl --noproxy '*'` for localhost smoke requests when proxy env vars are present.
+
+Server-side DeepSeek and OpenRouter calls use a proxy-aware fetch wrapper. If your local network requires a proxy, set one of these before starting `pnpm dev`: `HTTPS_PROXY`, `HTTP_PROXY`, or `ALL_PROXY`. Node's default `fetch` does not automatically honor shell proxy variables, so StoryCam explicitly wires them through `undici.ProxyAgent`.
+
+OpenRouter remains available for core storyboard text and fallback experiments. To test the OpenRouter structured-output path directly:
+
+```text
+STORYCAM_TEXT_PROVIDER=openrouter
+OPENROUTER_API_KEY=<your-openrouter-key>
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_TEXT_FALLBACK_MODELS=qwen/qwen3.6-flash
+```
 
 To generate Step 2 character and scene asset boards from the asset cards, enable the image provider too:
 
 ```text
-STORYCAM_IMAGE_PROVIDER=openrouter
-OPENROUTER_IMAGE_MODEL=openai/gpt-5-image
+STORYCAM_IMAGE_PROVIDER=inference_sh
+INFERENCE_API_KEY=
+INFERENCE_IMAGE_APP=openai/gpt-image-2
 ```
 
-OpenRouter currently lists `openai/gpt-5-image` as the OpenAI image generation model. If you have a newer image-capable model ID, use that value in `OPENROUTER_IMAGE_MODEL`.
+The Inference.sh `openai/gpt-image-2` app also requires the required `OPENAI_KEY` secret to be configured in Inference.sh. StoryCam uses the official `@inferencesh/sdk`, downloads the returned file URI server-side, and stores the image in private StoryCam storage.
 
 For manual browser testing without a Google account, use a Supabase local stack and set:
 
@@ -233,11 +248,17 @@ If you use a hosted test project instead of Supabase local, apply the migration 
 Real provider smoke tests are opt-in and secret-gated. See `providers.md` for the provider matrix and required variables.
 
 ```text
+DEEPSEEK_API_KEY=
+DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
+DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
+DEEPSEEK_TEXT_FALLBACK_MODELS=deepseek-v4-flash
 OPENROUTER_API_KEY=
-OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
-OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_TEXT_FALLBACK_MODELS=qwen/qwen3.6-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
 OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
+INFERENCE_API_KEY=
+INFERENCE_IMAGE_APP=openai/gpt-image-2
 SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
 ```
@@ -245,6 +266,7 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 Run real provider smoke commands only when you explicitly intend to spend provider credits:
 
 ```bash
+STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:deepseek
 STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:openrouter
 STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:seedance
 ```

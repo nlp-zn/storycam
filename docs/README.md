@@ -20,6 +20,7 @@ This directory is the source of truth for StoryCam. The repo knowledge structure
 - `RELIABILITY.md` — jobs, provider failures, recovery, observability.
 - `SECURITY.md` — auth, Supabase RLS, storage, secrets, privacy.
 - `references/local-dev.md` — local mock-mode setup and verification commands.
+- `references/inference-sh.md` — Inference.sh SDK, CLI, async task, and image-output rules.
 - `references/providers.md` — provider mode matrix and opt-in real smoke policy.
 
 ## Directories
@@ -37,6 +38,7 @@ This directory is the source of truth for StoryCam. The repo knowledge structure
 - Active implementation plan: `exec-plans/active/storycam-web-mvp-implementation-plan.md`
 - Active test plan: `exec-plans/active/test-plan.md`
 - Local development: `references/local-dev.md`
+- Inference.sh provider reference: `references/inference-sh.md`
 - Provider modes: `references/providers.md`
 - Provider contract: `generated/provider-contract.md`
 - UI design brief: `design-docs/storycam-ui-design.md`

@@ -12,7 +12,7 @@ Browser UI
   -> Next.js Route Handlers / Server Actions
   -> server-only StoryCam services
   -> Supabase Postgres + Supabase Storage
-  -> Vercel AI SDK + OpenRouter providers
+  -> DeepSeek/OpenRouter/Inference.sh provider adapters
   -> Seedance 2.0 video provider
   -> Final work composer
 ```
@@ -69,13 +69,13 @@ Provider concepts are separate:
 - `provider_kind`: `text`, `multimodal`, `image`, `video`, `stitch`
 - `provider_name`: `mock`, `openrouter`, `seedance_2_0`, etc.
 
-Text, multimodal, and image providers are orchestrated through Vercel AI SDK with OpenRouter-backed adapters. Video generation uses a dedicated Seedance 2.0 adapter behind `VideoGenerationProvider`.
+Story-world text uses a server-only DeepSeek official API adapter with beta strict function calling. Core storyboard text and multimodal providers are orchestrated through Vercel AI SDK with OpenRouter-backed adapters. Story-world asset images can use either the legacy OpenRouter image adapter or the Inference.sh SDK adapter; the current local real-image path is Inference.sh `openai/gpt-image-2`. Video generation uses a dedicated Seedance 2.0 adapter behind `VideoGenerationProvider`.
 
-Story-world text generation is a server-only OpenRouter text provider path. It must use AI SDK structured JSON output (`generateText` with `Output.object`) and validate the final `script`, `characterAssets`, and `sceneAssets` artifact schemas before returning data to the client. Provider draft output may be normalized at the provider boundary, but final artifacts must stay schema-valid.
+Story-world text generation must force the DeepSeek strict tool `submit_story_world`, parse only tool call arguments, and validate the final `script`, `characterAssets`, and `sceneAssets` artifact schemas before returning data to the client. Provider draft output may be normalized at the provider boundary, but final artifacts must stay schema-valid. The model never owns server fields such as `id`, `sessionId`, `state`, `version`, or `referenceMediaIds`.
 
-Provider selection is server configuration, not a client parameter. Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_TEXT_PROVIDER=openrouter`; other providers may remain mock. Runtime process environment takes precedence over `.env.local`, so stale exported values can force mock behavior. The story-world API exposes non-secret local diagnostics through `diagnostics.textProvider` and `x-storycam-text-provider`; use these to confirm whether Step 2 is using `mock` or `openrouter`.
+Provider selection is server configuration, not a client parameter. Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_TEXT_PROVIDER=deepseek`; other providers may remain mock. Runtime process environment takes precedence over `.env.local`, so stale exported values can force mock behavior. The story-world API exposes non-secret local diagnostics through `diagnostics.textProvider` and `x-storycam-text-provider`; use these to confirm whether Step 2 is using `mock`, `deepseek`, or `openrouter`.
 
-OpenRouter structured-output reliability is model-specific. Configure `OPENROUTER_TEXT_MODEL` plus a comma-separated `OPENROUTER_TEXT_FALLBACK_MODELS` chain for Step 2. See `docs/references/providers.md` for current gotchas and fallback guidance.
+DeepSeek strict function calling is the recommended story-world path. OpenRouter structured-output reliability is model-specific and remains available for storyboard text and fallback experiments. See `docs/references/providers.md` for current provider and fallback guidance.
 
 ## Job Model
 

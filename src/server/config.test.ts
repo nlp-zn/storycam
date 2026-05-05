@@ -28,8 +28,8 @@ describe("loadStoryCamConfig", () => {
     const config = loadStoryCamConfig({
       ...validMockEnv,
       OPENROUTER_API_KEY: "openrouter-key",
-      OPENROUTER_TEXT_FALLBACK_MODELS: "deepseek/deepseek-v4-flash, qwen/qwen3.6-flash",
-      OPENROUTER_TEXT_MODEL: "deepseek/deepseek-v4-pro",
+      OPENROUTER_TEXT_FALLBACK_MODELS: "qwen/qwen3.6-flash",
+      OPENROUTER_TEXT_MODEL: "deepseek/deepseek-v4-flash",
       STORYCAM_TEXT_PROVIDER: "openrouter"
     });
 
@@ -41,8 +41,46 @@ describe("loadStoryCamConfig", () => {
     });
     expect(config.openrouter).toEqual({
       apiKey: "openrouter-key",
-      textFallbackModels: ["deepseek/deepseek-v4-flash", "qwen/qwen3.6-flash"],
-      textModel: "deepseek/deepseek-v4-pro"
+      textFallbackModels: ["qwen/qwen3.6-flash"],
+      textModel: "deepseek/deepseek-v4-flash"
+    });
+  });
+
+  it("allows a DeepSeek text provider in mock mode for mixed local verification", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      DEEPSEEK_API_KEY: "deepseek-key",
+      DEEPSEEK_TEXT_BASE_URL: "https://api.deepseek.com/beta",
+      DEEPSEEK_TEXT_FALLBACK_MODELS: "deepseek-v4-flash",
+      DEEPSEEK_TEXT_MODEL: "deepseek-v4-pro",
+      STORYCAM_TEXT_PROVIDER: "deepseek"
+    });
+
+    expect(config.generation).toMatchObject({
+      mode: "mock",
+      textProvider: "deepseek",
+      imageProvider: "mock",
+      videoProvider: "mock"
+    });
+    expect(config.deepseek).toEqual({
+      apiKey: "deepseek-key",
+      textBaseUrl: "https://api.deepseek.com/beta",
+      textFallbackModels: ["deepseek-v4-flash"],
+      textModel: "deepseek-v4-pro"
+    });
+  });
+
+  it("uses DeepSeek strict tool defaults when optional text model fields are omitted", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      DEEPSEEK_API_KEY: "deepseek-key",
+      STORYCAM_TEXT_PROVIDER: "deepseek"
+    });
+
+    expect(config.deepseek).toEqual({
+      apiKey: "deepseek-key",
+      textBaseUrl: "https://api.deepseek.com/beta",
+      textModel: "deepseek-v4-pro"
     });
   });
 
@@ -64,6 +102,37 @@ describe("loadStoryCamConfig", () => {
       apiKey: "openrouter-key",
       imageModel: "openai/gpt-5.4-image-2"
     });
+  });
+
+  it("allows an Inference.sh image provider in mock mode for story-world asset generation", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      INFERENCE_API_KEY: "inference-key",
+      INFERENCE_IMAGE_APP: "openai/gpt-image-2",
+      STORYCAM_IMAGE_PROVIDER: "inference_sh"
+    });
+
+    expect(config.generation).toMatchObject({
+      mode: "mock",
+      imageProvider: "inference_sh",
+      textProvider: "mock",
+      videoProvider: "mock"
+    });
+    expect(config.inferenceSh).toEqual({
+      apiKey: "inference-key",
+      imageApp: "openai/gpt-image-2"
+    });
+  });
+
+  it("does not block app startup when an optional image provider key is missing", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      INFERENCE_IMAGE_APP: "openai/gpt-image-2",
+      STORYCAM_IMAGE_PROVIDER: "inference_sh"
+    });
+
+    expect(config.generation.imageProvider).toBe("inference_sh");
+    expect(config.inferenceSh).toBeUndefined();
   });
 
   it("rejects non-text real providers in mock mode", () => {
@@ -126,6 +195,15 @@ describe("loadStoryCamConfig", () => {
         STORYCAM_FINAL_WORK_PROVIDER: "mock"
       })
     ).toThrow(/MISSING_ENV:OPENROUTER_API_KEY/);
+  });
+
+  it("requires DeepSeek credentials when the DeepSeek text provider is enabled", () => {
+    expect(() =>
+      loadStoryCamConfig({
+        ...validMockEnv,
+        STORYCAM_TEXT_PROVIDER: "deepseek"
+      })
+    ).toThrow(/MISSING_ENV:DEEPSEEK_API_KEY/);
   });
 
   it("redacts secret values from config errors", () => {

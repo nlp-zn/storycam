@@ -1,7 +1,7 @@
 export type GenerationMode = "mock" | "real";
-export type TextProvider = "mock" | "openrouter";
+export type TextProvider = "deepseek" | "mock" | "openrouter";
 export type MultimodalProvider = "mock" | "openrouter";
-export type ImageProvider = "mock" | "openrouter";
+export type ImageProvider = "inference_sh" | "mock" | "openrouter";
 export type VideoProvider = "mock" | "seedance_2_0";
 export type FinalWorkProvider = "mock" | "ffmpeg";
 
@@ -47,6 +47,16 @@ export type StoryCamConfig = {
     textModel?: string;
     multimodalModel?: string;
     imageModel?: string;
+  };
+  deepseek?: {
+    apiKey: string;
+    textBaseUrl: string;
+    textFallbackModels?: string[];
+    textModel: string;
+  };
+  inferenceSh?: {
+    apiKey: string;
+    imageApp: string;
   };
   seedance?: {
     apiKey: string;
@@ -98,7 +108,7 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const textProvider = enumValue<TextProvider>(
     env,
     "STORYCAM_TEXT_PROVIDER",
-    ["mock", "openrouter"],
+    ["mock", "openrouter", "deepseek"],
     defaultProviders.STORYCAM_TEXT_PROVIDER,
     issues
   );
@@ -112,7 +122,7 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const imageProvider = enumValue<ImageProvider>(
     env,
     "STORYCAM_IMAGE_PROVIDER",
-    ["mock", "openrouter"],
+    ["mock", "openrouter", "inference_sh"],
     defaultProviders.STORYCAM_IMAGE_PROVIDER,
     issues
   );
@@ -137,9 +147,11 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     rejectNonMockProvider("STORYCAM_FINAL_WORK_PROVIDER", finalWorkProvider, issues);
   }
 
-  const needsOpenRouter =
-    textProvider === "openrouter" || multimodalProvider === "openrouter" || imageProvider === "openrouter";
-  const openrouterApiKey = needsOpenRouter ? required(env, "OPENROUTER_API_KEY", issues) : undefined;
+  const needsRequiredOpenRouter = textProvider === "openrouter" || multimodalProvider === "openrouter";
+  const needsOpenRouter = needsRequiredOpenRouter || imageProvider === "openrouter";
+  const openrouterApiKey = needsRequiredOpenRouter
+    ? required(env, "OPENROUTER_API_KEY", issues)
+    : optional(env, "OPENROUTER_API_KEY");
   const openrouterTextModel = textProvider === "openrouter"
     ? required(env, "OPENROUTER_TEXT_MODEL", issues)
     : undefined;
@@ -149,9 +161,21 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const openrouterMultimodalModel = multimodalProvider === "openrouter"
     ? required(env, "OPENROUTER_MULTIMODAL_MODEL", issues)
     : undefined;
-  const openrouterImageModel = imageProvider === "openrouter"
-    ? required(env, "OPENROUTER_IMAGE_MODEL", issues)
+  const openrouterImageModel = imageProvider === "openrouter" ? optional(env, "OPENROUTER_IMAGE_MODEL") : undefined;
+
+  const needsDeepSeek = textProvider === "deepseek";
+  const deepseekApiKey = needsDeepSeek ? required(env, "DEEPSEEK_API_KEY", issues) : optional(env, "DEEPSEEK_API_KEY");
+  const deepseekTextModel = needsDeepSeek
+    ? optional(env, "DEEPSEEK_TEXT_MODEL") ?? "deepseek-v4-pro"
     : undefined;
+  const deepseekTextBaseUrl = needsDeepSeek
+    ? optional(env, "DEEPSEEK_TEXT_BASE_URL") ?? "https://api.deepseek.com/beta"
+    : undefined;
+  const deepseekTextFallbackModels = needsDeepSeek ? optionalCsv(env, "DEEPSEEK_TEXT_FALLBACK_MODELS") : [];
+
+  const needsInferenceSh = imageProvider === "inference_sh";
+  const inferenceShApiKey = needsInferenceSh ? optional(env, "INFERENCE_API_KEY") : undefined;
+  const inferenceShImageApp = needsInferenceSh ? optional(env, "INFERENCE_IMAGE_APP") : undefined;
 
   const needsSeedance = videoProvider === "seedance_2_0";
   const seedanceApiKey = needsSeedance ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
@@ -171,6 +195,17 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
       }
     : undefined;
   const seedance = seedanceApiKey && seedanceModel ? { apiKey: seedanceApiKey, model: seedanceModel } : undefined;
+  const deepseek = needsDeepSeek && deepseekApiKey && deepseekTextModel && deepseekTextBaseUrl
+    ? {
+        apiKey: deepseekApiKey,
+        textBaseUrl: deepseekTextBaseUrl,
+        ...(deepseekTextFallbackModels.length ? { textFallbackModels: deepseekTextFallbackModels } : {}),
+        textModel: deepseekTextModel
+      }
+    : undefined;
+  const inferenceSh = inferenceShApiKey && inferenceShImageApp
+    ? { apiKey: inferenceShApiKey, imageApp: inferenceShImageApp }
+    : undefined;
 
   return {
     supabase: {
@@ -187,6 +222,8 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
       finalWorkProvider
     },
     ...(openrouter ? { openrouter } : {}),
+    ...(deepseek ? { deepseek } : {}),
+    ...(inferenceSh ? { inferenceSh } : {}),
     ...(seedance ? { seedance } : {})
   };
 }
@@ -221,6 +258,10 @@ function required(env: Env, variable: string, issues: ConfigIssue[]): string {
     });
   }
   return value ?? "";
+}
+
+function optional(env: Env, variable: string): string | undefined {
+  return env[variable]?.trim() || undefined;
 }
 
 function enumValue<T extends string>(

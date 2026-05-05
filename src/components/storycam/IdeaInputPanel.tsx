@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createStoryWorld, getAuthStatus, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
-import type { CreateStoryWorldResponse } from "@/features/storycam/client/storycamApi";
+import { createStoryWorld, getAuthStatus, listRecentStoryCamProjects, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
+import type { CreateStoryWorldResponse, RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
 import { directorChoices, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
 type SubmitState =
@@ -16,12 +16,14 @@ type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 type IdeaInputPanelProps = {
   initialChoices?: string[];
   initialIdea?: string;
+  onProjectSelected?: (sessionId: string) => Promise<void> | void;
   onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) => void;
 };
 
 export function IdeaInputPanel({
   initialChoices = ["像私人回忆"],
   initialIdea = "我想把暗恋拍成韩剧雨夜",
+  onProjectSelected,
   onStoryWorldCreated
 }: IdeaInputPanelProps) {
   const [idea, setIdea] = useState(initialIdea);
@@ -32,6 +34,10 @@ export function IdeaInputPanel({
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
+  const [recentProjects, setRecentProjects] = useState<RecentStoryCamProject[]>([]);
+  const [recentProjectsStatus, setRecentProjectsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
+  const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const canSubmit = idea.trim().length > 0 && submitState.kind !== "submitting" && authStatus === "authenticated";
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
   const ideaLength = idea.trim().length;
@@ -60,6 +66,31 @@ export function IdeaInputPanel({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      return;
+    }
+
+    let isMounted = true;
+
+    void listRecentStoryCamProjects(5)
+      .then((response) => {
+        if (isMounted) {
+          setRecentProjects(response.projects);
+          setRecentProjectsStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setRecentProjectsStatus("error");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authStatus]);
 
   async function submitStoryWorld() {
     if (!canSubmit) {
@@ -118,6 +149,22 @@ export function IdeaInputPanel({
   function clearPhotoPreview() {
     revokePhotoPreview();
     setPhotoPreviewUrl(null);
+  }
+
+  async function continueProject(project: RecentStoryCamProject) {
+    if (!onProjectSelected || restoringProjectId) {
+      return;
+    }
+
+    try {
+      setRestoringProjectId(project.sessionId);
+      await onProjectSelected(project.sessionId);
+      setIsRecentProjectsOpen(false);
+    } catch {
+      setSubmitState({ kind: "error", message: "项目恢复失败，可以稍后再试。" });
+    } finally {
+      setRestoringProjectId(null);
+    }
   }
 
   function revokePhotoPreview() {
@@ -271,6 +318,28 @@ export function IdeaInputPanel({
         </p>
       ) : null}
 
+      <section className="mt-8" aria-label="最近项目">
+        <button
+          className="group flex w-full items-center justify-between gap-4 rounded-[1.25rem] border border-[#3b494b] bg-[#111616]/80 px-5 py-4 text-left transition hover:border-[#00f0ff]/60 hover:bg-[#162020]"
+          onClick={() => setIsRecentProjectsOpen(true)}
+          type="button"
+        >
+          <span>
+            <span className="block text-sm font-extrabold text-[#e2e2e2]">最近项目</span>
+            <span className="mt-1 block text-xs leading-5 text-[#849495]">
+              {recentProjectsStatus === "loading"
+                ? "正在查找你账号里的最近创作。"
+                : recentProjects.length
+                  ? `${recentProjects.length} 个可继续的项目`
+                  : "从这里继续上次保存的故事世界或核心分镜。"}
+            </span>
+          </span>
+          <span className="shrink-0 rounded-full border border-[#00f0ff]/30 px-4 py-2 text-xs font-black text-[#00f0ff] transition group-hover:bg-[#00f0ff] group-hover:text-black">
+            打开
+          </span>
+        </button>
+      </section>
+
       <div className="mt-8 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-extrabold text-[#e2e2e2]">创作入口</h2>
@@ -292,8 +361,107 @@ export function IdeaInputPanel({
           ))}
         </div>
       </div>
+
+      {isRecentProjectsOpen ? (
+        <RecentProjectsDrawer
+          onClose={() => setIsRecentProjectsOpen(false)}
+          onContinue={continueProject}
+          projects={recentProjects}
+          restoringProjectId={restoringProjectId}
+          status={recentProjectsStatus}
+        />
+      ) : null}
     </section>
   );
+}
+
+function RecentProjectsDrawer({
+  onClose,
+  onContinue,
+  projects,
+  restoringProjectId,
+  status
+}: {
+  onClose: () => void;
+  onContinue: (project: RecentStoryCamProject) => void;
+  projects: RecentStoryCamProject[];
+  restoringProjectId: string | null;
+  status: "idle" | "loading" | "ready" | "error";
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-label="最近项目">
+      <div className="w-full max-w-3xl rounded-[1.5rem] border border-[#3b494b] bg-[#141717] p-5 shadow-2xl">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+          <div>
+            <p className="storycam-eyebrow">StoryCam</p>
+            <h2 className="mt-1 text-2xl font-black text-[#e2e2e2]">最近项目</h2>
+          </div>
+          <button
+            aria-label="关闭最近项目"
+            className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] text-xl font-black text-[#e2e2e2] transition hover:border-[#00f0ff]"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+
+        {status === "loading" ? (
+          <p className="py-8 text-sm font-bold text-[#b9cacb]" role="status">正在载入最近项目。</p>
+        ) : status === "error" ? (
+          <p className="py-8 text-sm font-bold text-[#ffb1c3]" role="status">最近项目暂时载入失败，可以刷新后再试。</p>
+        ) : projects.length ? (
+          <div className="mt-5 grid gap-3">
+            {projects.map((project) => (
+              <article className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/25 p-3 sm:grid-cols-[160px_1fr]" key={project.sessionId}>
+                <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#0e1111]">
+                  {project.thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img alt={`${project.title} 缩略图`} className="size-full object-cover" src={project.thumbnail.signedUrl} />
+                  ) : (
+                    <div className="storycam-cinematic-frame size-full rounded-none" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="truncate text-lg font-black text-[#e2e2e2]">{project.title}</h3>
+                    <span className="rounded-full border border-[#00f0ff]/25 px-3 py-1 text-xs font-black text-[#00f0ff]">
+                      {project.currentStep === "core-storyboard" ? "核心分镜" : "故事世界"}
+                    </span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{project.summary}</p>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-xs font-bold text-[#849495]">
+                      1 组 · 约 15 秒 · {formatProjectDate(project.updatedAt)}
+                    </span>
+                    <button
+                      className="storycam-primary-button px-4 py-2 text-xs"
+                      disabled={Boolean(restoringProjectId)}
+                      onClick={() => onContinue(project)}
+                      type="button"
+                    >
+                      {restoringProjectId === project.sessionId ? "恢复中" : "继续创作"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="py-8 text-sm font-bold leading-6 text-[#b9cacb]">还没有可继续的项目。生成故事世界后，它会出现在这里。</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatProjectDate(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit"
+  }).format(new Date(value));
 }
 
 function authGateMessage(authStatus: AuthStatus) {
@@ -324,13 +492,26 @@ function messageForError(error: unknown) {
 
     if (
       error.message === "OPENROUTER_TEXT_INVALID_OUTPUT" ||
-      error.message === "OPENROUTER_STORY_WORLD_INVALID_OUTPUT"
+      error.message === "OPENROUTER_STORY_WORLD_INVALID_OUTPUT" ||
+      error.message === "DEEPSEEK_STORY_WORLD_INVALID_OUTPUT"
     ) {
-      return "模型返回的故事格式不稳定，请再试一次。";
+      return "结构化故事输出校验失败，请重试或切换文本模型。";
+    }
+
+    if (error.message === "DEEPSEEK_TOOL_CALL_MISSING") {
+      return "DeepSeek 没有返回必要的结构化工具调用，请重试或切换文本模型。";
+    }
+
+    if (error.message === "DEEPSEEK_TOOL_ARGUMENTS_INVALID_JSON") {
+      return "DeepSeek 返回的工具参数不是合法 JSON，请重试或切换文本模型。";
+    }
+
+    if (error.message === "DEEPSEEK_TEXT_PROVIDER_FAILED") {
+      return "DeepSeek 文本服务暂时不可用，请稍后重试。";
     }
 
     if (error.message === "STORYCAM_CONFIG_INVALID") {
-      return "文本模型配置暂时不可用，请检查本地 OpenRouter 配置。";
+      return "文本模型配置暂时不可用，请检查本地 OpenRouter 或 DeepSeek 配置。";
     }
   }
 

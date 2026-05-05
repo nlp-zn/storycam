@@ -19,7 +19,7 @@ describe("openrouter text provider", () => {
         system: "Return only the requested structured StoryCam output."
       }),
       generateObject,
-      model: "deepseek/deepseek-v4-pro",
+      model: "deepseek/deepseek-v4-flash",
       outputSchema,
       schemaDescription: "A tiny test schema.",
       schemaName: "storycam_test_output"
@@ -53,7 +53,7 @@ describe("openrouter text provider", () => {
         system: "Return structured JSON."
       }),
       generateObject,
-      model: "deepseek/deepseek-v4-pro",
+      model: "deepseek/deepseek-v4-flash",
       outputSchema
     });
 
@@ -81,10 +81,10 @@ describe("openrouter text provider", () => {
         prompt: "Create a StoryCam script.",
         system: "Return structured JSON."
       }),
-      fallbackModels: ["deepseek/deepseek-v4-flash"],
+      fallbackModels: ["qwen/qwen3.6-flash"],
       generateObject,
       maxAttempts: 2,
-      model: "deepseek/deepseek-v4-pro",
+      model: "deepseek/deepseek-v4-flash",
       outputSchema
     });
 
@@ -109,7 +109,7 @@ describe("openrouter multimodal provider", () => {
         system: "Return stable visual descriptions without storage paths."
       }),
       generateObject,
-      model: "deepseek/deepseek-v4-pro",
+      model: "deepseek/deepseek-v4-flash",
       outputSchema
     });
 

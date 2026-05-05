@@ -18,10 +18,13 @@ describe("mock story world provider", () => {
     });
     expect(result.ok && result.value.script).toMatchObject({
       id: "script-rainy-kdrama-crush",
-      title: "雨夜未发送"
+      title: "雨夜未发送",
+      visualStyle: expect.stringContaining("写实韩剧电影感")
     });
     expect(result.ok && result.value.characterAssets[0]?.stableVisualDescription).toContain("浅色风衣");
     expect(result.ok && result.value.sceneAssets[0]?.location).toContain("便利店");
+    expect(result.ok && result.value.sceneAssets).toHaveLength(1);
+    expect(result.ok && result.value.sceneAssets[0]?.scenePanels).toHaveLength(4);
   });
 
   it("keeps uploaded photo references as media ids without raw storage paths", async () => {

@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
+import { redactForLog } from "@/lib/privacy/redact";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
+import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
+import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
+import { createConfiguredStoryboardProvider } from "@/server/storycam/storyboardProviderFactory";
 import { createStoryboard, StoryboardRequestError } from "@/server/storycam/storyboardService";
 
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const result = await createStoryboard(createSupabaseAdminClient(), user.id, await request.json());
+    const config = loadStoryCamConfig();
+    const provider = createConfiguredStoryboardProvider(config);
+    const imageProvider = createConfiguredStoryboardImageProvider(config);
+    const requestBody = await parseStoryboardJson(request);
+    const result = await createStoryboard(createSupabaseAdminClient(), user.id, requestBody, provider, imageProvider);
+    const responseHeaders = {
+      "x-storycam-text-provider": provider?.providerName ?? "mock",
+      "x-storycam-image-provider": imageProvider?.providerName ?? "mock"
+    };
 
     if (!result.ok) {
       return NextResponse.json(
@@ -15,7 +27,7 @@ export async function POST(request: Request) {
           redactedError: result.redactedError,
           redactionApplied: true
         },
-        { status: 502 }
+        { headers: responseHeaders, status: 502 }
       );
     }
 
@@ -24,7 +36,7 @@ export async function POST(request: Request) {
         ok: true,
         ...result.value
       },
-      { status: 201 }
+      { headers: responseHeaders, status: 201 }
     );
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -42,6 +54,32 @@ export async function POST(request: Request) {
       );
     }
 
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        {
+          error: "invalid_input",
+          redactedError: "Invalid storyboard request.",
+          redactionApplied: true
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof StoryCamConfigError) {
+      const redacted = redactConfigError(error);
+
+      return NextResponse.json(
+        {
+          error: redacted.code,
+          redactedError: redacted.message,
+          redactionApplied: true
+        },
+        { status: 500 }
+      );
+    }
+
+    console.error("storyboard route failed", redactForLog(error));
+
     return NextResponse.json(
       {
         error: "storyboard_failed",
@@ -50,5 +88,13 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
+  }
+}
+
+async function parseStoryboardJson(request: Request) {
+  try {
+    return await request.json();
+  } catch {
+    throw new SyntaxError("Invalid storyboard JSON request body.");
   }
 }

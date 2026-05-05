@@ -62,9 +62,9 @@ Phase 1 的核心不是做完整工作台，而是证明用户能从私人想法
 | 阶段 | 默认 mode | Real provider 边界 | Phase 1 说明 |
 | --- | --- | --- | --- |
 | 故事世界生成 | mock | Vercel AI SDK + OpenRouter text/multimodal model | 文本输入生成短剧本/人物/场景；照片上传时先提取稳定视觉描述。 |
-| 分镜脚本 + 核心分镜组 | mock | Vercel AI SDK + OpenRouter text model | 根据计划视频长度自动判断 1-3 组，并输出用户可理解的核心方案。 |
-| 核心分镜代表图 | mock/placeholder | Vercel AI SDK + OpenRouter image model | Phase 1 优先真实生成核心分镜代表图。 |
-| 扩展分镜卡 | mock | Vercel AI SDK + OpenRouter text/image model | 默认 3 张，最多 8 张；不触发视频 job。 |
+| 分镜脚本 + 核心分镜组 | mock | Vercel AI SDK + OpenRouter text model | MVP 固定 1 组、15 秒内，输出 1 份 9 帧脚本和用户可理解的核心方案。 |
+| 核心分镜代表图 | mock/placeholder | ImageGenerationProvider (`inference_sh` preferred, OpenRouter legacy) | Phase 1 优先真实生成核心分镜代表图。 |
+| 扩展分镜卡 | mock | OpenRouter text + image provider boundary | 默认 3 张，最多 8 张；不触发视频 job。 |
 | Clip prompt packet | deterministic code | 不需要 AI | 组装和校验 artifact versions，生成一句话 provider-send confirmation。 |
 | 视频片段生成 | mock | `VideoGenerationProvider=seedance_2_0` | Phase 1 真实魔法路径。 |
 | Stitch suggestion | mock/text | `TextGenerationProvider` 或 deterministic rules | Phase 1 可先用规则生成建议。 |
@@ -515,10 +515,10 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [x] 8-12 秒默认 1 组。
-- [x] 10-14 秒默认 2 组。
-- [x] 12-15 秒默认 3 组。
-- [x] 支持根据故事密度下调数量，但不超过 3。
+- [x] 新建流程固定 1 组。
+- [x] planned duration 固定归一为 15 秒内。
+- [x] 旧客户端传入 2/3 组时服务端归一为 1 组。
+- [x] 旧的多组恢复数据只做展示兼容。
 
 **Verification:**
 
@@ -740,9 +740,9 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 **Acceptance criteria:**
 
-- [x] 根据计划视频长度输出 1-3 组。
+- [x] MVP 新建流程固定输出 1 组。
 - [x] 每组包含 title、story purpose、duration、scene、characters。
-- [x] 扩展默认生成 3 张卡，最多 8 张。
+- [x] 扩展从该组 9 帧脚本的 frames 2-9 生成 8 张卡/图。
 
 **Verification:**
 
@@ -873,7 +873,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 **Acceptance criteria:**
 
 - [x] 未确认 story world 不能生成 storyboard。
-- [x] 根据计划视频长度自动生成 1-3 组。
+- [x] 新建流程固定生成 1 组，并兼容旧请求归一。
 - [x] 返回 core groups 和 duration plan。
 
 **Verification:**
@@ -1241,14 +1241,14 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 **Estimated scope:** M
 
-### Task 31A：OpenRouter image provider adapter
+### Task 31A：Image provider adapter
 
-**Description:** 使用 Vercel AI SDK + OpenRouter 中可用的图像模型生成核心分镜代表图，并将图片写入 Supabase Storage。
+**Description:** 通过 `ImageGenerationProvider` 生成核心分镜代表图，并将图片写入 Supabase Storage。当前 story-world asset board 的真实图像路径优先使用 Inference.sh `openai/gpt-image-2`，OpenRouter image adapter 保留为 legacy path。
 
 **Acceptance criteria:**
 
-- [x] `STORYCAM_IMAGE_PROVIDER=openrouter` 可配置。
-- [x] 模型名通过 `OPENROUTER_IMAGE_MODEL` 配置。
+- [x] `STORYCAM_IMAGE_PROVIDER=openrouter|inference_sh` 可配置。
+- [x] OpenRouter 模型名通过 `OPENROUTER_IMAGE_MODEL` 配置；Inference.sh app 通过 `INFERENCE_IMAGE_APP` 配置。
 - [x] 核心分镜代表图真实生成并存入 `storycam-generated` bucket。
 - [x] 生成失败时可降级为 placeholder，不阻塞视频生成。
 
@@ -1467,9 +1467,9 @@ Verified on 2026-04-26 with mock provider configuration and production build env
 
 ## 开放问题
 
-- OpenRouter 中具体选择哪些 text/multimodal/image 模型，分别用于故事世界、照片理解、分镜和核心分镜图？
-- 扩展分镜卡图片是否 Phase 1 真实生成，还是只生成文本卡 + placeholder？
-- 计划视频长度在 UI 中如何选择：默认 8-12 秒，还是给“短一点/完整一点”的轻量选择？
+- OpenRouter 中具体选择哪些 text/multimodal 模型，分别用于故事世界、照片理解和分镜文本？
+- 核心分镜图与扩展分镜图 Phase 1 走 Inference.sh `openai/gpt-image-2`；失败时降级占位，不阻塞视频生成。
+- MVP 计划视频长度已收敛为 story world 确认后固定 1 个核心分镜组，15 秒内。
 - FFmpeg 是否作为项目依赖安装，还是要求本机预装并在 local-dev 中说明？
 - final work 的账号内预览体验使用 signed URL、authenticated proxy，还是二者都支持？
 

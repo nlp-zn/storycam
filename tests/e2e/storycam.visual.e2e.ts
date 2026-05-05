@@ -38,12 +38,12 @@ test.describe("StoryCam visual smoke", () => {
     await expect(page.getByAltText("上传照片预览")).toBeVisible();
 
     await page.getByRole("button", { name: "生成故事雏形" }).click();
-    await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await page.getByRole("button", { name: "扩展这一组" }).first().click();
-    await expect(page.getByRole("heading", { name: "分镜扩展画布" })).toBeVisible();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+    await page.getByRole("button", { name: "打开扩展画布" }).click();
+    await expect(page.getByRole("dialog", { name: /9 帧分镜画布/ })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
+    await page.getByRole("dialog", { name: /9 帧分镜画布/ }).getByRole("button", { name: "用这一组生成片段" }).click();
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
     await expect(page.getByText("任务 job-1")).toBeVisible();
     await page.getByRole("button", { name: "取消生成" }).click();
@@ -115,12 +115,13 @@ async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
       body: JSON.stringify({
         artifacts: {
           coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
-          storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+          storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+          storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
         },
         durationPlan: {
-          clipDurationTargets: [4],
+          clipDurationTargets: [15],
           coreGroupTargetCount: 1,
-          plannedDurationSeconds: 10
+          plannedDurationSeconds: 15
         },
         ok: true,
         sessionId: "session-visual",
@@ -151,7 +152,7 @@ async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
       contentType: "application/json",
       status: 201,
       body: JSON.stringify({
-        confirmationSummary: "Use \"未发送短信\" to generate one private 4 second clip.",
+        confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
         jobId,
         ok: true,
         status: "running"
@@ -267,7 +268,10 @@ function storyboardFixture() {
     coreStoryboardGroups: [
       {
         emotionalTurn: "想说出口",
-        estimatedClipDurationSeconds: 4,
+        estimatedClipDurationSeconds: 15,
+        expandedStoryboardImages: [],
+        representativeImage: placeholderImage(),
+        scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
         storyPurpose: "建立她和未发送短信之间的私人情绪。",
         title: "未发送短信",
         version: 1
@@ -275,11 +279,18 @@ function storyboardFixture() {
     ],
     storyboardScript: {
       planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
-      plannedDurationSeconds: 10,
+      plannedDurationSeconds: 15,
       rhythm: "慢进入，短暂停顿，安静离开",
       tone: "韩剧雨夜，私人回忆",
       version: 1
     }
+  };
+}
+
+function placeholderImage() {
+  return {
+    placeholder: true,
+    status: "placeholder"
   };
 }
 

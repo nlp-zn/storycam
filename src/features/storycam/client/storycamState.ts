@@ -28,6 +28,10 @@ export function confirmedArtifactVersionsForClip(
 
   return {
     [coreGroup.id]: coreGroup.version,
-    ...Object.fromEntries((expansion?.expandedStoryboardCards ?? []).map((card) => [card.id, card.version]))
+    ...Object.fromEntries(
+      (expansion?.expandedStoryboardCards ?? [])
+        .filter((card) => card.parentArtifactId === coreGroup.id)
+        .map((card) => [card.id, card.version])
+    )
   };
 }

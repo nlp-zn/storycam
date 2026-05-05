@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   characterAssetSchema,
   sceneAssetSchema,
+  scenePanelShotTypes,
   storyScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
@@ -24,6 +25,29 @@ export type OpenRouterStoryWorldProviderOptions = {
 
 const draftTextSchema = z.string().trim().min(1).catch("");
 const draftTextListSchema = (maxItems: number) => z.array(draftTextSchema).max(maxItems).catch([]);
+const emptyDraftScript = {
+  beats: [],
+  logline: "",
+  summary: "",
+  title: "",
+  visualStyle: ""
+};
+const draftScriptSchema = z
+  .object({
+    beats: draftTextListSchema(8),
+    logline: draftTextSchema,
+    summary: draftTextSchema,
+    title: draftTextSchema,
+    visualStyle: draftTextSchema.optional().catch("")
+  })
+  .catch(emptyDraftScript);
+const draftScenePanelSchema = z.object({
+  description: draftTextSchema,
+  keyObjects: draftTextListSchema(6),
+  purpose: draftTextSchema,
+  shotType: z.enum(scenePanelShotTypes).catch("detail"),
+  title: draftTextSchema
+});
 
 const openRouterStoryWorldDraftSchema = z.object({
   characterAssets: z
@@ -40,6 +64,7 @@ const openRouterStoryWorldDraftSchema = z.object({
       })
     )
     .max(3)
+    .optional()
     .catch([]),
   sceneAssets: z
     .array(
@@ -49,21 +74,20 @@ const openRouterStoryWorldDraftSchema = z.object({
         light: draftTextSchema,
         location: draftTextSchema,
         name: draftTextSchema,
+        scenePanels: z.array(draftScenePanelSchema).max(6).optional().catch([]),
         spatialLogic: draftTextSchema,
         timeOfDay: draftTextSchema
       })
     )
     .max(3)
+    .optional()
     .catch([]),
-  script: z.object({
-    beats: draftTextListSchema(8),
-    logline: draftTextSchema,
-    summary: draftTextSchema,
-    title: draftTextSchema
-  })
+  script: draftScriptSchema.optional().catch(emptyDraftScript)
 });
 
 type OpenRouterStoryWorldDraft = z.infer<typeof openRouterStoryWorldDraftSchema>;
+type OpenRouterStoryWorldCharacterDraft = NonNullable<OpenRouterStoryWorldDraft["characterAssets"]>[number];
+type OpenRouterStoryWorldSceneDraft = NonNullable<OpenRouterStoryWorldDraft["sceneAssets"]>[number];
 
 export function createOpenRouterStoryWorldProvider(
   options: OpenRouterStoryWorldProviderOptions
@@ -121,16 +145,24 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       "",
       "输出要求：",
       "1. 把粗糙文本整理成一个 8-15 秒私人短片可承载的短剧本。",
-      "2. 所有 beat、人物、地点都必须能被摄影机拍到或被声音听到。",
-      "3. 只生成 1-3 个主要人物资产和 1-3 个地点资产。",
-      "4. 人物稳定视觉描述要包含外观、衣着、可重复道具或动作习惯。",
-      "5. 地点资产要写清空间关系、光线、时间和关键物件。",
-      "6. 不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。"
+      "2. 这是剧本整理阶段，不是分镜拆解阶段；下一阶段 core storyboard 才会根据剧本生成分镜脚本、镜头组和主分镜图。",
+      "3. script.summary 和 script.beats 只写短剧本层面的剧情、角色动作、对白/可听声音、关键物件和环境变化。",
+      "4. script.beats 是剧情节点/故事段落，不是镜头列表、分镜表或拍摄方案；每条用一句可读的剧情动作描述。",
+      "5. 不要写镜头编号、景别、机位、运镜、构图、剪辑、转场指令，也不要出现“镜头”“画面”“特写”“推近”“切到”“第 X 镜”等分镜术语。",
+      "6. script.visualStyle 用一句话定义本故事统一视觉风格，供人物资产图和场景资产图共同使用；根据用户输入决定写实、真人电影感、漫画、动画、绘本、胶片等，不要固定成某一种风格。",
+      "7. 只生成 1-3 个主角级/关键对手戏人物资产，不要为背景人群、路人、短暂提及人物建资产。",
+      "8. 场景资产必须且只能生成 1 个；把剧本需要的全部环境角度放进这个 scene 的 scenePanels。",
+      "9. scenePanels 生成 4-6 个小切图描述，覆盖主场景、关键物件、光线、空的动作空间或转场角度。",
+      "10. scenePanels 只能描述无人环境、关键物件、光线、空间动线和可供角色后续入画的位置；不要写可见人物、人物倒影、人物剪影、手、身体局部或人群。",
+      "11. 人物稳定视觉描述要包含外观、衣着、可重复道具或动作习惯。",
+      "12. 地点资产要写清空间关系、光线、时间和关键物件。",
+      "13. 不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。"
     ].join("\n"),
     system: [
       "你是 StoryCam 的私人故事剧本整理器，把普通用户的一句话变成可拍摄的故事世界。",
-      "参考导演方法：先判断叙事目的和情绪基调，再把不可拍的心理活动翻译为可见动作、表情、物件和环境变化。",
+      "参考山音导演方法的前置剧本梳理：先判断叙事目的和情绪基调，再把粗糙文本整理成场景结构和核心事件；不要提前进入节奏规划、镜头组或分镜拆解。",
       "写作红线：不要写心理描写，不要用括号暗示，不要说教，不要把专业分镜术语暴露给用户。",
+      "Story World 的 beats 是剧情节点，不是分镜；专业镜头语言只允许在后续 core storyboard provider 内部使用。",
       "台词和描述要口语、克制、具体；画面内容只写可见元素，声音只写可听元素。",
       "严格返回 SDK 结构化 JSON 输出要求的对象，不要包裹 Markdown，不要输出额外解释。"
     ].join("\n"),
@@ -140,12 +172,16 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
 
 function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRouterStoryWorldDraft): StoryWorldProviderOutput {
   const referenceMediaIds = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
-  const title = nonEmptyText(draft.script.title, "私人短片");
-  const logline = nonEmptyText(draft.script.logline, input.idea);
-  const summary = nonEmptyText(draft.script.summary, logline);
-  const beats = nonEmptyList(draft.script.beats, [summary]);
-  const characterDrafts = draft.characterAssets.length ? draft.characterAssets : [createFallbackCharacterDraft(input, summary)];
-  const sceneDrafts = draft.sceneAssets.length ? draft.sceneAssets : [createFallbackSceneDraft(input, summary)];
+  const draftScript = draft.script ?? emptyDraftScript;
+  const draftCharacterAssets = draft.characterAssets ?? [];
+  const draftSceneAssets = draft.sceneAssets ?? [];
+  const title = nonEmptyText(draftScript.title, "私人短片");
+  const logline = nonEmptyText(draftScript.logline, input.idea);
+  const summary = nonEmptyText(draftScript.summary, logline);
+  const beats = nonEmptyList(draftScript.beats, [summary]);
+  const visualStyle = nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title }));
+  const characterDrafts = draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)];
+  const sceneDrafts = draftSceneAssets.length ? [draftSceneAssets[0]] : [createFallbackSceneDraft(input, summary)];
   const script = storyScriptSchema.parse({
     beats,
     id: `script-${input.sessionId}`,
@@ -154,7 +190,8 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
     state: "ready",
     summary,
     title,
-    version: 1
+    version: 1,
+    visualStyle
   });
   const characterAssets = characterDrafts.map((asset, index) =>
     characterAssetSchema.parse({
@@ -182,6 +219,7 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       location: nonEmptyText(asset.location, "与故事记忆相关的具体空间"),
       name: nonEmptyText(asset.name, index === 0 ? "故事发生的地方" : `地点 ${index + 1}`),
       referenceMediaIds,
+      scenePanels: scenePanelsForDraft(asset, input, summary),
       sessionId: input.sessionId,
       spatialLogic: nonEmptyText(asset.spatialLogic, "人物在空间中移动，关键物件保持可见"),
       state: "ready",
@@ -207,7 +245,29 @@ function nonEmptyList(values: string[] | undefined, fallback: string[]) {
   return cleaned.length ? cleaned : fallback;
 }
 
-function createFallbackCharacterDraft(input: StoryWorldProviderInput, summary: string): OpenRouterStoryWorldDraft["characterAssets"][number] {
+function inferFallbackVisualStyle(input: { idea: string; lightweightChoices?: string[] }, script: {
+  logline: string;
+  summary: string;
+  title: string;
+}) {
+  const source = [input.idea, input.lightweightChoices?.join(" "), script.title, script.logline, script.summary].join(" ").toLowerCase();
+
+  if (/(漫画|动漫|动画|二次元|anime|manga|comic)/i.test(source)) {
+    return "漫画/动画设定稿风格，干净线条，低饱和色彩，情绪克制";
+  }
+
+  if (/(绘本|童话|storybook|picture book)/i.test(source)) {
+    return "绘本式视觉风格，柔和纸感，温暖色彩，适合私人记忆";
+  }
+
+  if (/(胶片|复古|film|retro|vintage)/i.test(source)) {
+    return "复古胶片电影感，柔和颗粒，低对比光影，私人回忆质感";
+  }
+
+  return "写实电影感，普通人质感，克制表演，低饱和色彩和自然光线";
+}
+
+function createFallbackCharacterDraft(input: StoryWorldProviderInput, summary: string): OpenRouterStoryWorldCharacterDraft {
   return {
     consistencyNotes: ["保持服装、发型和随身物件稳定"],
     emotionalBaseline: "克制、真实，用停顿和小动作表达情绪",
@@ -220,14 +280,59 @@ function createFallbackCharacterDraft(input: StoryWorldProviderInput, summary: s
   };
 }
 
-function createFallbackSceneDraft(input: StoryWorldProviderInput, summary: string): OpenRouterStoryWorldDraft["sceneAssets"][number] {
+function createFallbackSceneDraft(input: StoryWorldProviderInput, summary: string): OpenRouterStoryWorldSceneDraft {
   return {
     atmosphere: "私人、安静、带一点电影感",
     keyObjects: ["环境光", "门口", "随身物件"],
     light: "自然环境光混合一处可见实用光源",
     location: "与私人记忆相关的具体空间",
     name: "故事发生的地方",
+    scenePanels: [],
     spatialLogic: summary || input.idea,
     timeOfDay: "day"
   };
+}
+
+function scenePanelsForDraft(asset: OpenRouterStoryWorldSceneDraft, input: StoryWorldProviderInput, summary: string) {
+  const panels = (asset.scenePanels ?? []).filter(
+    (panel) => panel.title && panel.description && panel.purpose && panel.keyObjects.length > 0
+  );
+
+  if (panels.length >= 4 && panels.length <= 6) {
+    return panels;
+  }
+
+  const keyObjects = nonEmptyList(asset.keyObjects, ["环境光", "门口", "随身物件"]);
+  const spatialLogic = nonEmptyText(asset.spatialLogic, summary || input.idea);
+
+  return [
+    {
+      description: `${nonEmptyText(asset.location, "故事发生的地方")} 的完整空间关系。`,
+      keyObjects: keyObjects.slice(0, 3),
+      purpose: "建立故事发生的主场景。",
+      shotType: "establishing" as const,
+      title: nonEmptyText(asset.name, "主场景")
+    },
+    {
+      description: nonEmptyText(asset.light, "自然环境光混合一处可见实用光源"),
+      keyObjects: keyObjects.slice(0, 3),
+      purpose: "固定整组场景的光线基调。",
+      shotType: "lighting" as const,
+      title: "光线关系"
+    },
+    {
+      description: keyObjects.join("、"),
+      keyObjects,
+      purpose: "明确后续分镜需要保持一致的关键物件。",
+      shotType: "detail" as const,
+      title: "关键物件"
+    },
+    {
+      description: spatialLogic,
+      keyObjects: keyObjects.slice(0, 3),
+      purpose: "为后续角色入画预留空的动作空间。",
+      shotType: "medium" as const,
+      title: "动作空间"
+    }
+  ];
 }

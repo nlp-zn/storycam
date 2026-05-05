@@ -30,12 +30,13 @@ test.describe("StoryCam generate clip", () => {
         body: JSON.stringify({
           artifacts: {
             coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
-            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
           },
           durationPlan: {
-            clipDurationTargets: [4],
+            clipDurationTargets: [15],
             coreGroupTargetCount: 1,
-            plannedDurationSeconds: 10
+            plannedDurationSeconds: 15
           },
           ok: true,
           sessionId: "session-1",
@@ -68,15 +69,14 @@ test.describe("StoryCam generate clip", () => {
 
       expect(body.providerSendConfirmed).toBe(true);
       expect(body.confirmedArtifactVersions).toEqual({
-        "core-artifact-1": 1,
-        "expanded-1": 1
+        "core-artifact-1": 1
       });
 
       await route.fulfill({
         contentType: "application/json",
         status: 201,
         body: JSON.stringify({
-          confirmationSummary: "Use \"未发送短信\" to generate one private 4 second clip.",
+          confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
           jobId: `job-${generateCalls}`,
           ok: true,
           status: "queued"
@@ -135,11 +135,10 @@ test.describe("StoryCam generate clip", () => {
     await page.goto("/");
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
-    await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await page.getByRole("button", { name: "扩展这一组" }).first().click();
-    await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+    await page.getByRole("button", { name: "用这一组生成片段" }).click();
 
-    await expect(page.getByText("用「未发送短信」生成一个约 4 秒的私人片段。")).toBeVisible();
+    await expect(page.getByText("用「未发送短信」生成一个约 15 秒的私人片段。")).toBeVisible();
     expect(generateCalls).toBe(0);
     await expect(page.getByText("redactedPromptSummary")).toHaveCount(0);
 
@@ -223,12 +222,13 @@ test.describe("StoryCam generate clip", () => {
         body: JSON.stringify({
           artifacts: {
             coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
-            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
           },
           durationPlan: {
-            clipDurationTargets: [4],
+            clipDurationTargets: [15],
             coreGroupTargetCount: 1,
-            plannedDurationSeconds: 10
+            plannedDurationSeconds: 15
           },
           ok: true,
           sessionId: "session-delete",
@@ -257,7 +257,7 @@ test.describe("StoryCam generate clip", () => {
         contentType: "application/json",
         status: 201,
         body: JSON.stringify({
-          confirmationSummary: "Use \"未发送短信\" to generate one private 4 second clip.",
+          confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
           jobId: "job-delete",
           ok: true,
           status: "running"
@@ -283,9 +283,8 @@ test.describe("StoryCam generate clip", () => {
     await page.goto("/");
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
-    await page.getByRole("button", { name: "对，继续拍这一段" }).click();
-    await page.getByRole("button", { name: "扩展这一组" }).first().click();
-    await page.getByRole("button", { name: "跳过扩展直接生成片段" }).click();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+    await page.getByRole("button", { name: "用这一组生成片段" }).click();
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
     await expect(page.getByText("任务 job-delete")).toBeVisible();
 
@@ -342,7 +341,10 @@ function storyboardFixture() {
     coreStoryboardGroups: [
       {
         emotionalTurn: "想说出口",
-        estimatedClipDurationSeconds: 4,
+        estimatedClipDurationSeconds: 15,
+        expandedStoryboardImages: [],
+        representativeImage: placeholderImage(),
+        scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
         storyPurpose: "建立她和未发送短信之间的私人情绪。",
         title: "未发送短信",
         version: 1
@@ -350,11 +352,18 @@ function storyboardFixture() {
     ],
     storyboardScript: {
       planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
-      plannedDurationSeconds: 10,
+      plannedDurationSeconds: 15,
       rhythm: "慢进入，短暂停顿，安静离开",
       tone: "韩剧雨夜，私人回忆",
       version: 1
     }
+  };
+}
+
+function placeholderImage() {
+  return {
+    placeholder: true,
+    status: "placeholder"
   };
 }
 

@@ -7,8 +7,10 @@ export type CreateGenerationJobInput = {
   idempotencyKeyHash: string;
   inputArtifactVersionsJson?: Json;
   maxAttempts?: number;
+  outputArtifactId?: string | null;
   providerKind: GenerationJobRow["provider_kind"];
   providerName: string;
+  providerRequestId?: string | null;
   sessionId: string;
   status?: GenerationJobRow["status"];
   type: GenerationJobRow["type"];
@@ -17,6 +19,12 @@ export type CreateGenerationJobInput = {
 export type CompleteGenerationJobInput = {
   endedAt?: Date;
   outputArtifactId: string;
+};
+
+export type FailGenerationJobInput = {
+  endedAt?: Date;
+  errorCode: string;
+  redactedError: string;
 };
 
 export type CancelGenerationJobInput = {
@@ -55,8 +63,10 @@ export class StoryCamGenerationJobRepository {
         generation_mode: input.generationMode ?? "mock",
         provider_kind: input.providerKind,
         provider_name: input.providerName,
+        provider_request_id: input.providerRequestId ?? null,
         max_attempts: input.maxAttempts ?? 1,
-        input_artifact_versions_json: input.inputArtifactVersionsJson ?? {}
+        input_artifact_versions_json: input.inputArtifactVersionsJson ?? {},
+        output_artifact_id: input.outputArtifactId ?? null
       })
       .select(jobColumns)
       .single();
@@ -102,6 +112,40 @@ export class StoryCamGenerationJobRepository {
       .single();
 
     return unwrapRepositoryResult("mark_generation_job_succeeded", data, error);
+  }
+
+  async markRunning(userId: string, jobId: string, input: { startedAt?: Date } = {}) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .update({
+        started_at: (input.startedAt ?? new Date()).toISOString(),
+        status: "running"
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("tombstoned_at", null)
+      .select(jobColumns)
+      .single();
+
+    return unwrapRepositoryResult("mark_generation_job_running", data, error);
+  }
+
+  async markFailed(userId: string, jobId: string, input: FailGenerationJobInput) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .update({
+        ended_at: (input.endedAt ?? new Date()).toISOString(),
+        error_code: input.errorCode,
+        redacted_error: input.redactedError,
+        status: "failed"
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .is("tombstoned_at", null)
+      .select(jobColumns)
+      .single();
+
+    return unwrapRepositoryResult("mark_generation_job_failed", data, error);
   }
 
   async requestCancel(userId: string, jobId: string) {

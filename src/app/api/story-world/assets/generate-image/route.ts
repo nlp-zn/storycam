@@ -3,7 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import {
-  generateStoryWorldAssetImage,
+  submitStoryWorldAssetImageJob,
   StoryWorldAssetImageRequestError
 } from "@/server/storycam/storyWorldAssetImageService";
 import { createConfiguredStoryWorldAssetImageProvider } from "@/server/storycam/storyWorldAssetImageProviderFactory";
@@ -13,25 +13,14 @@ export async function POST(request: Request) {
     const user = await requireUser();
     const config = loadStoryCamConfig();
     const provider = createConfiguredStoryWorldAssetImageProvider(config);
-    const result = await generateStoryWorldAssetImage(createSupabaseAdminClient(), user.id, await request.json(), provider);
-
-    if (!result.ok) {
-      return NextResponse.json(
-        {
-          error: result.errorCode,
-          redactedError: result.redactedError,
-          redactionApplied: true
-        },
-        { status: 502 }
-      );
-    }
+    const result = await submitStoryWorldAssetImageJob(createSupabaseAdminClient(), user.id, await request.json(), provider);
 
     return NextResponse.json(
       {
         ok: true,
         ...result.value
       },
-      { status: 201 }
+      { status: 202 }
     );
   } catch (error) {
     if (error instanceof UnauthorizedError) {

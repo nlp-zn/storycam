@@ -4,6 +4,8 @@ Status: active implementation reference.
 
 This document explains how StoryCam chooses mock and real providers during development. The canonical provider interface remains `docs/generated/provider-contract.md`.
 
+For Inference.sh SDK, CLI, task status, and async image rules, see `docs/references/inference-sh.md`.
+
 ## Defaults
 
 StoryCam defaults to mock mode. Mock mode must be deterministic, account-scoped, and free of external AI calls.
@@ -25,9 +27,9 @@ Real provider smoke tests are never part of the default local flow. They require
 
 ```text
 STORYCAM_GENERATION_MODE=real
-STORYCAM_TEXT_PROVIDER=openrouter
+STORYCAM_TEXT_PROVIDER=deepseek
 STORYCAM_MULTIMODAL_PROVIDER=openrouter
-STORYCAM_IMAGE_PROVIDER=openrouter
+STORYCAM_IMAGE_PROVIDER=inference_sh
 STORYCAM_VIDEO_PROVIDER=seedance_2_0
 STORYCAM_FINAL_WORK_PROVIDER=ffmpeg
 ```
@@ -35,11 +37,18 @@ STORYCAM_FINAL_WORK_PROVIDER=ffmpeg
 Required secrets and model names:
 
 ```text
+DEEPSEEK_API_KEY=
+DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
+DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
+DEEPSEEK_TEXT_FALLBACK_MODELS=deepseek-v4-flash
+
 OPENROUTER_API_KEY=
-OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-pro
-OPENROUTER_TEXT_FALLBACK_MODELS=deepseek/deepseek-v4-flash,qwen/qwen3.6-flash
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_TEXT_FALLBACK_MODELS=qwen/qwen3.6-flash
 OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
-OPENROUTER_IMAGE_MODEL=openai/gpt-5.4-image-2
+
+INFERENCE_API_KEY=
+INFERENCE_IMAGE_APP=openai/gpt-image-2
 
 SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
@@ -49,23 +58,78 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 
 | StoryCam stage | Default | Real path | Notes |
 | --- | --- | --- | --- |
-| Story world text | mock | OpenRouter text | Uses AI SDK structured JSON output; raw prompts stay server-side. `OPENROUTER_TEXT_FALLBACK_MODELS` can provide a comma-separated fallback chain when the primary model's structured-output endpoint is unavailable. |
+| Story world text | mock | DeepSeek official strict tool calling | Uses `deepseek-v4-pro` through `/beta` Chat Completions, forces `submit_story_world`, parses tool arguments, and validates normalized StoryCam artifacts. Raw prompts stay server-side. |
+| Core storyboard text | mock | OpenRouter text | MVP creation uses structured JSON output to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. |
 | Photo understanding | mock | OpenRouter multimodal | Signed URLs and raw private photos must not appear in logs. |
-| Core storyboard image | placeholder/mock | OpenRouter image | Recommended starting model: `openai/gpt-5.4-image-2`. |
-| Video clip | mock video | Seedance 2.0 | One clip per confirmed core storyboard group. |
+| Story-world asset image | placeholder/mock | Inference.sh app | Uses the official `@inferencesh/sdk` with `INFERENCE_IMAGE_APP=openai/gpt-image-2`; production routes submit async tasks with `wait:false`, poll `generation_jobs`, then download completed output server-side into private StoryCam storage. The app requires an Inference.sh API key and its required `OPENAI_KEY` secret configured in Inference.sh. |
+| Core/expanded storyboard image | placeholder/mock | Inference.sh app | Generates the main storyboard image and up to 8 expanded storyboard images per core group through async Inference.sh tasks. Single image failures return placeholders and do not block the rest of the group. |
+| Video clip | mock video | Seedance 2.0 | MVP creation generates one clip for the confirmed core storyboard group. |
 | Final work | mock/FFmpeg fixture | FFmpeg composer | Account-scoped preview only. |
 
-## OpenRouter Structured Output Gotchas
+## DeepSeek Strict Tool Story World
 
-Story-world text generation must use the AI SDK structured-output path, not hand-written JSON parsing. In AI SDK 6, prefer `generateText({ output: Output.object({ schema, name, description }) })` over the deprecated `generateObject` call. The OpenRouter model should be wrapped with `extractJsonMiddleware()` and the OpenRouter `response-healing` plugin so Markdown-wrapped or slightly malformed JSON has a chance to be repaired before schema validation.
+Story-world text generation should use DeepSeek's official beta strict function calling path instead of OpenRouter structured output. Configure:
 
-Do not rely on the primary model being equally reliable for plain chat and structured JSON. During local testing, `deepseek/deepseek-v4-pro` could answer plain text successfully while its `response_format` structured-output path returned provider `502` or timed out. Keep `OPENROUTER_TEXT_FALLBACK_MODELS` configured with structured-output-capable fallbacks, currently `deepseek/deepseek-v4-flash,qwen/qwen3.6-flash`.
+```text
+STORYCAM_TEXT_PROVIDER=deepseek
+DEEPSEEK_API_KEY=
+DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
+DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
+DEEPSEEK_TEXT_FALLBACK_MODELS=deepseek-v4-flash
+```
 
-Provider draft schemas should be tolerant at the provider boundary and strict at the StoryCam artifact boundary. For Step 2, the OpenRouter draft allows missing non-critical strings/lists and normalizes them server-side, then validates the final `script`, `characterAssets`, and `sceneAssets` against StoryCam artifact schemas. This avoids failing the whole request because a model omitted a supporting note, while still preventing malformed final artifacts from reaching the client.
+The provider calls Chat Completions with one strict tool:
+
+```json
+{
+  "tool_choice": {
+    "type": "function",
+    "function": { "name": "submit_story_world" }
+  },
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "submit_story_world",
+        "strict": true
+      }
+    }
+  ]
+}
+```
+
+Only `choices[0].message.tool_calls[*].function.arguments` is accepted as model output. The arguments must parse as JSON and pass the DeepSeek draft schema. StoryCam then normalizes the draft into final `script`, `characterAssets`, and `sceneAssets` artifacts and adds server-owned fields such as `id`, `sessionId`, `state`, `version`, and `referenceMediaIds`.
+
+Story-world output policy:
+
+- `script.summary` and `script.beats` are script-level story material only. Beats are narrative events or story paragraphs, not shot lists, storyboard rows, camera moves, framing notes, edits, or shot numbers. Core storyboard generation is the first stage that may derive shot groups from the confirmed script.
+- `characterAssets` contains only main or key counterpart characters, 1-3 total.
+- `sceneAssets` contains exactly 1 scene. The single scene includes 4-6 `scenePanels` for the multi-panel environment asset image.
+- `script.visualStyle` is the shared style anchor for both character and scene asset images; infer it from the user story instead of hard-coding manga, animation, or live-action.
+- The scene image provider prompt renders those panels as one environment-only reference board, not multiple scene assets. It must not render people, human silhouettes, body parts, crowds, or human reflections inside scene assets.
+
+`deepseek-v4-pro` defaults to thinking mode. StoryCam sends `thinking: { "type": "disabled" }` for the story-world strict tool call because this endpoint must return exactly one forced function call. Keep the DeepSeek strict tool JSON Schema inside the documented supported subset; in particular, do not use array `minItems` or `maxItems` in the provider request schema. Enforce array counts in the server-side zod validation layer instead.
+
+Diagnostic provider error codes:
+
+- `DEEPSEEK_TOOL_CALL_MISSING`: the model did not call `submit_story_world`.
+- `DEEPSEEK_TOOL_ARGUMENTS_INVALID_JSON`: tool arguments were not valid JSON.
+- `DEEPSEEK_STORY_WORLD_INVALID_OUTPUT`: arguments failed the provider draft schema or final artifact schema.
+- `DEEPSEEK_TEXT_PROVIDER_FAILED`: DeepSeek returned a network, timeout, auth, or upstream error.
+
+DeepSeek calls reuse the same proxy-aware server fetch behavior as OpenRouter. If your local network requires a proxy, set `HTTPS_PROXY`, `HTTP_PROXY`, or `ALL_PROXY` before starting `pnpm dev`.
+
+## OpenRouter Structured Output Notes
+
+OpenRouter remains available for core storyboard text and as a non-default story-world fallback. For AI SDK 6 structured output, prefer `generateText({ output: Output.object({ schema, name, description }) })` over the deprecated `generateObject` call. OpenRouter maps this to `response_format` with JSON schema. The OpenRouter model should be wrapped with `extractJsonMiddleware()`, the OpenRouter `response-healing` plugin, and `provider.require_parameters=true` so requests route only to providers that support the required structured-output parameters.
+
+Do not rely on a model being equally reliable for plain chat and structured JSON. On April 27, 2026, OpenRouter's model list showed `deepseek/deepseek-v4-pro` supporting `response_format` but not `structured_outputs`; it could answer plain text while structured-output calls returned provider `502` or timed out. If using OpenRouter for local structured-output testing, prefer `OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash` and `OPENROUTER_TEXT_FALLBACK_MODELS=qwen/qwen3.6-flash`, because both advertised `structured_outputs` at that time.
+
+Provider draft schemas should be tolerant at the provider boundary and strict at the StoryCam artifact boundary. The final artifacts must always validate against StoryCam artifact schemas before reaching the client.
 
 When reproducing local API behavior with `curl`, use `--noproxy '*'` for localhost if your shell has proxy env vars. Otherwise the request can be routed through a system proxy and return an empty `502`, which looks like a StoryCam/API failure but never reached the Next.js route.
 
-When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_TEXT_PROVIDER=openrouter`, the dev shell likely exported `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
+When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_TEXT_PROVIDER=deepseek`, the dev shell likely exported `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
 
 ## Safety Rules
 
@@ -92,11 +156,14 @@ pnpm qa:visual
 Real smoke verification is intentionally manual and secret-gated:
 
 ```bash
+STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:deepseek
 STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:openrouter
 STORYCAM_RUN_REAL_SMOKE=1 pnpm storycam:smoke:seedance
 ```
 
-The OpenRouter smoke command requires `OPENROUTER_API_KEY`, `OPENROUTER_TEXT_MODEL`, and `OPENROUTER_IMAGE_MODEL`. It validates a small structured text response and writes one generated storyboard image to `.temp/storycam-smoke/`. Set `OPENROUTER_SMOKE_SKIP_IMAGE=1` to smoke only the text path.
+The DeepSeek smoke command requires `DEEPSEEK_API_KEY` and defaults to `DEEPSEEK_TEXT_MODEL=deepseek-v4-pro`. It prints only provider/model/title/count metadata, not the full prompt, private input, or provider response.
+
+The OpenRouter smoke command requires `OPENROUTER_API_KEY` and `OPENROUTER_TEXT_MODEL`. Its legacy image path also requires `OPENROUTER_IMAGE_MODEL`; set `OPENROUTER_SMOKE_SKIP_IMAGE=1` when only validating the text path. Inference.sh image smoke is currently manual through the story-world asset image endpoint with `STORYCAM_IMAGE_PROVIDER=inference_sh`, `INFERENCE_API_KEY`, and `INFERENCE_IMAGE_APP`.
 
 The Seedance smoke command requires `SEEDANCE_API_KEY` and `SEEDANCE_MODEL`. It polls the provider until a terminal task status, downloads the returned video into `.temp/storycam-smoke/`, and does not print the provider video URL.
 

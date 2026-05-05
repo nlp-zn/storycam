@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const requireUserMock = vi.hoisted(() => vi.fn());
 const createSupabaseAdminClientMock = vi.hoisted(() => vi.fn());
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/server/auth/requireUser", async () => {
   const actual = await vi.importActual<typeof import("@/server/auth/requireUser")>("@/server/auth/requireUser");
 
@@ -21,6 +23,11 @@ describe("POST /api/storyboard", () => {
     vi.resetModules();
     requireUserMock.mockReset();
     createSupabaseAdminClientMock.mockReset();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://storycam.test";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    process.env.STORYCAM_TEXT_PROVIDER = "mock";
+    process.env.STORYCAM_IMAGE_PROVIDER = "mock";
   });
 
   it("requires a confirmed story world before generating storyboard artifacts", async () => {
@@ -32,7 +39,7 @@ describe("POST /api/storyboard", () => {
     const response = await POST(
       jsonRequest({
         confirmedArtifactVersions: {},
-        plannedDurationSeconds: 12,
+        coreGroupTargetCount: 1,
         sessionId: "session-1"
       })
     );
@@ -45,7 +52,29 @@ describe("POST /api/storyboard", () => {
     });
   });
 
-  it("creates a storyboard script and 1-3 core groups from the duration plan", async () => {
+  it("returns a request error for malformed JSON instead of a generic 500", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+
+    const response = await POST(
+      new Request("https://storycam.test/api/storyboard", {
+        body: "{",
+        headers: { "content-type": "application/json" },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_input",
+      redactedError: "Invalid storyboard request.",
+      redactionApplied: true
+    });
+    expect(createSupabaseAdminClientMock).not.toHaveBeenCalled();
+  });
+
+  it("normalizes legacy multi-group requests to one MVP storyboard script and core group", async () => {
     const { POST } = await import("@/app/api/storyboard/route");
     const client = new FakeSupabaseClient({ artifactRows: storyWorldRows() });
 
@@ -59,7 +88,7 @@ describe("POST /api/storyboard", () => {
           "scene-artifact-1": 1,
           "script-artifact-1": 1
         },
-        plannedDurationSeconds: 14,
+        coreGroupTargetCount: 3,
         sessionId: "session-1"
       })
     );
@@ -68,25 +97,24 @@ describe("POST /api/storyboard", () => {
     await expect(response.json()).resolves.toMatchObject({
       artifacts: {
         coreStoryboardGroups: [
-          { state: "ready", type: "core_storyboard_group", version: 1 },
-          { state: "ready", type: "core_storyboard_group", version: 1 },
           { state: "ready", type: "core_storyboard_group", version: 1 }
         ],
-        storyboardScript: { state: "ready", type: "storyboard_script", version: 1 }
+        storyboardScript: { state: "ready", type: "storyboard_script", version: 1 },
+        storyboardScripts: [
+          { state: "ready", type: "storyboard_script", version: 1 }
+        ]
       },
-      coreStoryboardGroups: [{}, {}, {}],
+      coreStoryboardGroups: [{}],
       durationPlan: {
-        clipDurationTargets: [4.7, 4.7, 4.7],
-        coreGroupTargetCount: 3,
-        plannedDurationSeconds: 14
+        clipDurationTargets: [15],
+        coreGroupTargetCount: 1,
+        plannedDurationSeconds: 15
       },
       ok: true,
       sessionId: "session-1",
       storyboard: {
         coreStoryboardGroups: [
-          expect.objectContaining({ title: "未发送的短信" }),
-          expect.objectContaining({ title: "门铃响起" }),
-          expect.objectContaining({ title: "玻璃里的重叠" })
+          expect.objectContaining({ title: "未发送的短信" })
         ],
         storyboardScript: expect.objectContaining({ planSummary: expect.stringContaining("雨夜") })
       }
@@ -98,12 +126,12 @@ describe("POST /api/storyboard", () => {
       .filter((call) => call[0] === "insert");
     const sessionUpdate = client.queries.find((query) => query.table === "storycam_sessions" && query.calls.some((call) => call[0] === "update"));
 
-    expect(artifactInserts).toHaveLength(4);
+    expect(artifactInserts).toHaveLength(2);
     expect(sessionUpdate?.calls).toContainEqual([
       "update",
       {
-        core_group_target_count: 3,
-        planned_duration_seconds: 14,
+        core_group_target_count: 1,
+        planned_duration_seconds: 15,
         status: "ready"
       }
     ]);

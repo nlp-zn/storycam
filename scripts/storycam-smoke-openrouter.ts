@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateImage, generateObject } from "ai";
 import { z } from "zod";
+import { createOpenRouterFetch } from "../src/server/ai/openrouterProxyFetch";
 
 const smokeOutputDir = ".temp/storycam-smoke";
 const defaultTextPrompt = "为一个普通用户的私人记忆预告片生成一个极短中文片名和一句故事基调：雨夜便利店窗边，女孩停下未发送的短信。";
@@ -24,10 +25,12 @@ async function main() {
   }
 
   const apiKey = requiredEnv("OPENROUTER_API_KEY");
+  const proxiedFetch = createOpenRouterFetch();
   const openrouter = createOpenRouter({
     apiKey,
     appName: "StoryCam",
-    appUrl: "https://storycam.local"
+    appUrl: "https://storycam.local",
+    ...(proxiedFetch ? { fetch: proxiedFetch } : {})
   });
 
   const textModel = requiredEnv("OPENROUTER_TEXT_MODEL");
