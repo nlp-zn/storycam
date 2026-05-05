@@ -35,10 +35,17 @@ export type StoryboardImageState =
       mediaId?: undefined;
       mimeType?: undefined;
       placeholder: true;
+      reason?: StoryboardImagePlaceholderReason;
       signedUrl?: undefined;
       signedUrlExpiresIn?: undefined;
       status: "placeholder";
     };
+
+export type StoryboardImagePlaceholderReason =
+  | "provider_failed"
+  | "reference_images_unsupported"
+  | "storage_failed"
+  | "waiting_for_asset_images";
 
 export type AuthStatusResponse =
   | {

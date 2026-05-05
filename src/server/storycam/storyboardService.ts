@@ -10,6 +10,7 @@ import { submitImageGenerationJob } from "./imageGenerationJobService";
 import { StoryCamSessionRepository } from "./sessionRepository";
 import {
   placeholderStoryboardImage,
+  loadStoryWorldVisualContext,
   toStoryboardRepresentativeProviderInput,
   type GeneratedStoryboardImageState,
   type StoryboardRepresentativeImageInput,
@@ -144,6 +145,7 @@ export async function createStoryboard(
     coreGroupArtifacts: coreStoryboardGroupRows,
     coreGroups: providerResult.value.coreStoryboardGroups,
     imageProvider,
+    storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
     scripts: storyboardScripts,
     sessionId: session.id,
     userId
@@ -216,6 +218,7 @@ async function generateRepresentativeImages(input: {
   coreGroups: CoreStoryboardGroup[];
   imageProvider?: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>;
   scripts: StoryboardScript[];
+  storyboardScriptArtifacts: StoryCamArtifactRow[];
   sessionId: string;
   userId: string;
 }) {
@@ -226,14 +229,32 @@ async function generateRepresentativeImages(input: {
   const results = await Promise.all(
     input.coreGroups.map(async (coreGroup, index) => {
       const linkedArtifact = input.coreGroupArtifacts[index];
+      const storyboardScriptArtifact = input.storyboardScriptArtifacts[index];
 
-      if (!linkedArtifact) {
-        return placeholderStoryboardImage();
+      if (!linkedArtifact || !storyboardScriptArtifact) {
+        return placeholderStoryboardImage("waiting_for_asset_images");
+      }
+
+      const visualContext = await loadStoryWorldVisualContext(input.client, input.userId, {
+        coreGroup,
+        sessionId: input.sessionId
+      });
+
+      if (!visualContext.ok) {
+        return placeholderStoryboardImage(visualContext.reason);
+      }
+
+      if (!input.imageProvider?.supportsReferenceImages) {
+        return placeholderStoryboardImage("reference_images_unsupported");
       }
 
       const result = await submitImageGenerationJob(input.client, input.userId, {
-        imageInput: toStoryboardRepresentativeProviderInput(coreGroup, input.sessionId, input.scripts[index]),
-        inputArtifactVersionsJson: { [linkedArtifact.id]: linkedArtifact.version },
+        imageInput: toStoryboardRepresentativeProviderInput(coreGroup, input.sessionId, input.scripts[index], visualContext),
+        inputArtifactVersionsJson: {
+          ...visualContext.inputArtifactVersionsJson,
+          [linkedArtifact.id]: linkedArtifact.version,
+          [storyboardScriptArtifact.id]: storyboardScriptArtifact.version
+        },
         linkedArtifactId: linkedArtifact.id,
         provider: input.imageProvider,
         sessionId: input.sessionId,
@@ -334,11 +355,17 @@ function parseStoryScript(row: StoryCamArtifactRow): StoryScript {
 }
 
 function parseCharacterAsset(row: StoryCamArtifactRow): CharacterAsset {
-  return characterAssetSchema.parse(row.data_json);
+  return characterAssetSchema.parse({
+    ...characterAssetSchema.parse(row.data_json),
+    id: row.id
+  });
 }
 
 function parseSceneAsset(row: StoryCamArtifactRow): SceneAsset {
-  return sceneAssetSchema.parse(row.data_json);
+  return sceneAssetSchema.parse({
+    ...sceneAssetSchema.parse(row.data_json),
+    id: row.id
+  });
 }
 
 function requireArtifactRow(row: StoryCamArtifactRow | null) {

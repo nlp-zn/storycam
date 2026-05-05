@@ -1,5 +1,3 @@
-import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imageProvider";
-import { createOpenRouterImageProvider } from "@/lib/providers/openrouter/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import type { StoryCamConfig } from "@/server/config";
 import type {
@@ -14,37 +12,11 @@ export function createConfiguredStoryboardImageProvider(
   config: StoryCamConfig
 ): ImageGenerationProvider<StoryboardImageInput, StoryboardRepresentativeImageOutput> | undefined {
   if (config.generation.imageProvider === "inference_sh") {
-    if (!config.inferenceSh?.apiKey || !config.inferenceSh.imageApp) {
-      return undefined;
-    }
-
-    return createInferenceShImageProvider<StoryboardImageInput>({
-      apiKey: config.inferenceSh.apiKey,
-      app: config.inferenceSh.imageApp,
-      buildPrompt: (input) => ({
-        height: 864,
-        prompt: buildStoryboardImagePrompt(input),
-        quality: "high",
-        width: 1536
-      }),
-      maxAttempts: 2
-    });
+    return undefined;
   }
 
   if (config.generation.imageProvider === "openrouter") {
-    if (!config.openrouter?.apiKey || !config.openrouter.imageModel) {
-      return undefined;
-    }
-
-    return createOpenRouterImageProvider<StoryboardImageInput>({
-      apiKey: config.openrouter.apiKey,
-      buildPrompt: (input) => ({
-        aspectRatio: "16:9",
-        prompt: buildStoryboardImagePrompt(input)
-      }),
-      maxAttempts: 2,
-      model: config.openrouter.imageModel
-    });
+    return undefined;
   }
 
   return undefined;
@@ -59,6 +31,7 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
       `Description: ${input.description}.`,
       `Guidance: ${input.guidance}.`,
       input.imagePrompt ? `Specific image prompt: ${input.imagePrompt}.` : "",
+      referenceImagePrompt(input.referenceImages),
       baseStoryboardImagePrompt()
     ]
       .filter(Boolean)
@@ -71,10 +44,27 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
     `Story purpose: ${input.storyPurpose}.`,
     `Emotional turn: ${input.emotionalTurn}.`,
     `Approximate clip duration: ${input.estimatedClipDurationSeconds} seconds.`,
+    referenceImagePrompt(input.referenceImages),
     baseStoryboardImagePrompt()
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function referenceImagePrompt(referenceImages: StoryboardImageInput["referenceImages"]) {
+  if (!referenceImages?.length) {
+    return "";
+  }
+
+  const references = referenceImages
+    .map((image, index) => `${index + 1}. ${image.kind} asset ${image.assetArtifactId}, media ${image.mediaId}`)
+    .join("\n");
+
+  return [
+    "Use the attached StoryCam asset reference images as the visual source of truth.",
+    references,
+    "Do not invent new character faces, wardrobes, props, locations, lighting, or spatial layout beyond those references."
+  ].join("\n");
 }
 
 function baseStoryboardImagePrompt() {

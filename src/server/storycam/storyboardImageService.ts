@@ -1,12 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardScript } from "@/features/storycam/domain/artifacts";
 import type { ImageGenerationProvider, ProviderFailure } from "@/lib/providers/types";
-import type { Database } from "@/server/db/types";
+import { characterAssetSchema, sceneAssetSchema } from "@/features/storycam/domain/artifactSchemas";
+import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
+import { StoryCamArtifactRepository } from "./artifactRepository";
 import {
   writeGeneratedStoryCamMedia,
   type GeneratedStoryCamImageMimeType,
   type WriteGeneratedStoryCamMediaResult
 } from "./generatedMediaService";
+import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamGeneratedBucket, storyCamSignedUrlTtlSeconds } from "./mediaStore";
 
 export type StoryboardRepresentativeImageInput = {
@@ -14,9 +17,12 @@ export type StoryboardRepresentativeImageInput = {
   coreGroupId: string;
   emotionalTurn: string;
   estimatedClipDurationSeconds: number;
+  frame?: StoryboardImageFrameInput;
   mainImagePrompt?: string;
+  referenceImages?: StoryWorldReferenceImage[];
   sceneAssetId: string;
   sessionId: string;
+  storyWorldBasis?: StoryWorldImageBasis;
   storyPurpose: string;
   title: string;
 };
@@ -25,11 +31,48 @@ export type ExpandedStoryboardImageInput = {
   beatType: string;
   coreGroup: StoryboardRepresentativeImageInput;
   description: string;
+  frame?: StoryboardImageFrameInput;
   guidance: string;
   imagePrompt?: string;
+  referenceImages?: StoryWorldReferenceImage[];
   sortOrder: number;
+  storyWorldBasis?: StoryWorldImageBasis;
   title: string;
 };
+
+export type StoryboardImageFrameInput = {
+  frameNumber: number;
+  imagePrompt: string;
+  title: string;
+  visualContent: string;
+};
+
+export type StoryWorldReferenceImage = {
+  assetArtifactId: string;
+  kind: "character" | "scene";
+  mediaId: string;
+  mimeType: string;
+  signedUrl: string;
+  signedUrlExpiresIn: number;
+};
+
+export type StoryWorldImageBasis = {
+  characterAssetIds: string[];
+  sceneAssetId: string;
+  scriptArtifactId?: string;
+};
+
+export type StoryWorldVisualContext =
+  | {
+      inputArtifactVersionsJson: Record<string, number | string>;
+      ok: true;
+      referenceImages: StoryWorldReferenceImage[];
+      storyWorldBasis: StoryWorldImageBasis;
+    }
+  | {
+      ok: false;
+      reason: "waiting_for_asset_images";
+    };
 
 export type StoryboardRepresentativeImageOutput = {
   bytes: Uint8Array;
@@ -77,6 +120,7 @@ export type GeneratedStoryboardImageState =
       mediaId?: undefined;
       mimeType?: undefined;
       placeholder: true;
+      reason?: "provider_failed" | "reference_images_unsupported" | "storage_failed" | "waiting_for_asset_images";
       signedUrl?: undefined;
       signedUrlExpiresIn?: undefined;
       status: "placeholder";
@@ -98,7 +142,7 @@ export async function generateCoreStoryboardRepresentativeImage(
   if (!providerResult.ok) {
     return {
       coreGroupId: input.coreGroup.id,
-      image: placeholderStoryboardImage(),
+      image: placeholderStoryboardImage("provider_failed"),
       media: null,
       placeholder: true,
       reason: "provider_failed",
@@ -128,7 +172,7 @@ export async function generateCoreStoryboardRepresentativeImage(
   } catch {
     return {
       coreGroupId: input.coreGroup.id,
-      image: placeholderStoryboardImage(),
+      image: placeholderStoryboardImage("storage_failed"),
       media: null,
       placeholder: true,
       reason: "storage_failed",
@@ -159,7 +203,7 @@ export async function generateExpandedStoryboardImage(
   });
 
   if (!providerResult.ok) {
-    return placeholderStoryboardImage();
+    return placeholderStoryboardImage("provider_failed");
   }
 
   try {
@@ -175,13 +219,14 @@ export async function generateExpandedStoryboardImage(
 
     return toReadyStoryboardImage(client, media);
   } catch {
-    return placeholderStoryboardImage();
+    return placeholderStoryboardImage("storage_failed");
   }
 }
 
-export function placeholderStoryboardImage(): GeneratedStoryboardImageState {
+export function placeholderStoryboardImage(reason?: "provider_failed" | "reference_images_unsupported" | "storage_failed" | "waiting_for_asset_images"): GeneratedStoryboardImageState {
   return {
     placeholder: true,
+    ...(reason ? { reason } : {}),
     status: "placeholder"
   };
 }
@@ -196,6 +241,14 @@ function toProviderInput(
     coreGroupId: coreGroup.id,
     emotionalTurn: coreGroup.emotionalTurn,
     estimatedClipDurationSeconds: coreGroup.estimatedClipDurationSeconds,
+    frame: storyboardScript?.frames?.[0]
+      ? {
+          frameNumber: storyboardScript.frames[0].frameNumber,
+          imagePrompt: storyboardScript.frames[0].imagePrompt,
+          title: storyboardScript.frames[0].title,
+          visualContent: storyboardScript.frames[0].visualContent
+        }
+      : undefined,
     mainImagePrompt: storyboardScript?.mainImagePrompt,
     sceneAssetId: coreGroup.sceneAssetId,
     sessionId,
@@ -207,25 +260,141 @@ function toProviderInput(
 export function toStoryboardRepresentativeProviderInput(
   coreGroup: CoreStoryboardGroup,
   sessionId: string,
-  storyboardScript?: StoryboardScript
+  storyboardScript?: StoryboardScript,
+  visualContext?: Extract<StoryWorldVisualContext, { ok: true }>
 ) {
-  return toProviderInput(coreGroup, sessionId, storyboardScript);
+  return withVisualContext(toProviderInput(coreGroup, sessionId, storyboardScript), visualContext);
 }
 
 export function toExpandedStoryboardProviderInput(input: {
   card: ExpandedStoryboardCard;
   coreGroup: CoreStoryboardGroup;
   sessionId: string;
+  visualContext?: Extract<StoryWorldVisualContext, { ok: true }>;
 }) {
   return {
     beatType: input.card.beatType,
-    coreGroup: toProviderInput(input.coreGroup, input.sessionId),
+    coreGroup: withVisualContext(toProviderInput(input.coreGroup, input.sessionId), input.visualContext),
     description: input.card.description,
+    frame:
+      input.card.frameNumber && input.card.imagePrompt
+        ? {
+            frameNumber: input.card.frameNumber,
+            imagePrompt: input.card.imagePrompt,
+            title: input.card.title,
+            visualContent: input.card.description
+          }
+        : undefined,
     guidance: input.card.guidance,
     imagePrompt: input.card.imagePrompt,
+    referenceImages: input.visualContext?.referenceImages,
     sortOrder: input.card.sortOrder,
+    storyWorldBasis: input.visualContext?.storyWorldBasis,
     title: input.card.title
   } satisfies ExpandedStoryboardImageInput;
+}
+
+function withVisualContext<T extends StoryboardRepresentativeImageInput>(
+  input: T,
+  visualContext?: Extract<StoryWorldVisualContext, { ok: true }>
+): T {
+  if (!visualContext) {
+    return input;
+  }
+
+  return {
+    ...input,
+    referenceImages: visualContext.referenceImages,
+    storyWorldBasis: visualContext.storyWorldBasis
+  };
+}
+
+export async function loadStoryWorldVisualContext(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    coreGroup: CoreStoryboardGroup;
+    sessionId: string;
+  }
+): Promise<StoryWorldVisualContext> {
+  const artifacts = new StoryCamArtifactRepository(client);
+  const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const artifactRows = (await artifacts.listBySession(userId, { sessionId: input.sessionId })) ?? [];
+  const characterRows = findCharacterArtifactRows(artifactRows, input.coreGroup.characterAssetIds);
+  const sceneRow = findSceneArtifactRow(artifactRows, input.coreGroup.sceneAssetId);
+  const scriptRow = artifactRows.find((row) => row.type === "script" && row.state === "ready");
+
+  if (characterRows.length !== input.coreGroup.characterAssetIds.length || !sceneRow || !scriptRow) {
+    return { ok: false, reason: "waiting_for_asset_images" };
+  }
+
+  const referenceRows = [...characterRows, sceneRow];
+  const referenceImages = await Promise.all(
+    referenceRows.map(async (artifact) => {
+      const media = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+        linkedArtifactId: artifact.id,
+        sessionId: input.sessionId
+      });
+
+      if (!media) {
+        return null;
+      }
+
+      return toReferenceImage(client, artifact, media);
+    })
+  );
+
+  if (referenceImages.some((image) => !image)) {
+    return { ok: false, reason: "waiting_for_asset_images" };
+  }
+
+  const storyWorldVersions = Object.fromEntries([...referenceRows, scriptRow].map((row) => [row.id, row.version]));
+  const mediaReferences = Object.fromEntries(
+    referenceImages.map((image) => [`media:${image?.mediaId ?? ""}`, image?.mediaId ?? ""]).filter(([key, value]) => key !== "media:" && value)
+  );
+
+  return {
+    inputArtifactVersionsJson: {
+      ...storyWorldVersions,
+      ...mediaReferences
+    },
+    ok: true,
+    referenceImages: referenceImages.filter(Boolean) as StoryWorldReferenceImage[],
+    storyWorldBasis: {
+      characterAssetIds: characterRows.map((row) => row.id),
+      sceneAssetId: sceneRow.id,
+      scriptArtifactId: scriptRow.id
+    }
+  };
+}
+
+function findCharacterArtifactRows(rows: StoryCamArtifactRow[], requiredIds: string[]) {
+  return requiredIds
+    .map((id) =>
+      rows.find((row) => row.type === "character_asset" && row.state === "ready" && (row.id === id || characterAssetSchema.safeParse(row.data_json).data?.id === id))
+    )
+    .filter((row): row is StoryCamArtifactRow => Boolean(row));
+}
+
+function findSceneArtifactRow(rows: StoryCamArtifactRow[], requiredId: string) {
+  return rows.find(
+    (row) => row.type === "scene_asset" && row.state === "ready" && (row.id === requiredId || sceneAssetSchema.safeParse(row.data_json).data?.id === requiredId)
+  );
+}
+
+async function toReferenceImage(
+  client: SupabaseClient<Database>,
+  artifact: StoryCamArtifactRow,
+  media: MediaAssetRow
+): Promise<StoryWorldReferenceImage> {
+  return {
+    assetArtifactId: artifact.id,
+    kind: artifact.type === "character_asset" ? "character" : "scene",
+    mediaId: media.id,
+    mimeType: media.mime_type,
+    signedUrl: await createStoryCamSignedUrl(client, storyCamGeneratedBucket, media.storage_path, storyCamSignedUrlTtlSeconds),
+    signedUrlExpiresIn: storyCamSignedUrlTtlSeconds
+  };
 }
 
 export function generatingStoryboardImage(jobId: string): GeneratedStoryboardImageState {

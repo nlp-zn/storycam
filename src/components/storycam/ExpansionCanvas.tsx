@@ -321,7 +321,11 @@ function StoryboardImage({ alt, image }: { alt: string; image?: StoryboardImageS
     );
   }
 
-  return <div className="storycam-cinematic-frame size-full rounded-none opacity-70" />;
+  return (
+    <div className="storycam-cinematic-frame flex size-full items-center justify-center rounded-none px-4 text-center text-xs font-black text-[#dbfcff]/75 opacity-70">
+      {storyboardImageStatusLabel(image)}
+    </div>
+  );
 }
 
 function FrameLabel({ frameNumber, label }: { frameNumber: number; label: string }) {
@@ -340,6 +344,18 @@ function FrameSpinner({ label }: { label: string }) {
       <strong>{label}</strong>
     </div>
   );
+}
+
+function storyboardImageStatusLabel(image?: StoryboardImageState) {
+  if (image?.status === "placeholder" && image.reason === "waiting_for_asset_images") {
+    return "等待角色/场景资产图";
+  }
+
+  if (image?.status === "placeholder" && image.reason === "reference_images_unsupported") {
+    return "未启用资产图参考";
+  }
+
+  return "";
 }
 
 function buildFrameViews(input: {

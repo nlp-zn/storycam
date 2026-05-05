@@ -154,7 +154,10 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
 
   it("regenerates the center frame image as a storyboard image job", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
-    const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow(), storyboardScriptRow()] });
+    const client = new FakeSupabaseClient({
+      artifactRows: [scriptArtifactRow(), characterAssetRow(), sceneAssetRow(), coreGroupRow(), storyboardScriptRow()],
+      mediaRows: assetImageRows()
+    });
 
     createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
     requireUserMock.mockResolvedValue({ id: "user-1" });
@@ -173,15 +176,33 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     });
     expect(generationJobInserts(client)).toContainEqual(
       expect.objectContaining({
+        input_artifact_versions_json: expect.objectContaining({
+          "character-artifact-1": 1,
+          "media:media-character-1": "media-character-1",
+          "media:media-scene-1": "media-scene-1",
+          "scene-artifact-1": 1
+        }),
         output_artifact_id: "core-artifact-1",
         type: "storyboard_image"
+      })
+    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        frame: expect.objectContaining({ frameNumber: 1, imagePrompt: expect.stringContaining("frame 1") }),
+        referenceImages: [
+          expect.objectContaining({ assetArtifactId: "character-artifact-1", kind: "character", mediaId: "media-character-1" }),
+          expect.objectContaining({ assetArtifactId: "scene-artifact-1", kind: "scene", mediaId: "media-scene-1" })
+        ]
       })
     );
   });
 
   it("regenerates an expanded frame image from its stored frame prompt", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
-    const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow(), storyboardScriptRow()] });
+    const client = new FakeSupabaseClient({
+      artifactRows: [scriptArtifactRow(), characterAssetRow(), sceneAssetRow(), coreGroupRow(), storyboardScriptRow()],
+      mediaRows: assetImageRows()
+    });
 
     createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
     requireUserMock.mockResolvedValue({ id: "user-1" });
@@ -206,9 +227,35 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
       expect.objectContaining({
         imagePrompt: expect.stringContaining("frame 5"),
+        referenceImages: [
+          expect.objectContaining({ mediaId: "media-character-1" }),
+          expect.objectContaining({ mediaId: "media-scene-1" })
+        ],
         sortOrder: 3
       })
     );
+  });
+
+  it("skips regeneration image jobs until required story-world asset images are ready", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
+    const client = new FakeSupabaseClient({ artifactRows: [scriptArtifactRow(), characterAssetRow(), sceneAssetRow(), coreGroupRow(), storyboardScriptRow()] });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(jsonRequest({ sessionId: "session-1" }), {
+      params: { frameNumber: "1", id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      frameNumber: 1,
+      image: { placeholder: true, reason: "waiting_for_asset_images", status: "placeholder" },
+      ok: true
+    });
+    expect(generationJobInserts(client)).toHaveLength(0);
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
   });
 });
 
@@ -248,6 +295,95 @@ function coreGroupRow() {
     stale_at: null,
     state: "ready",
     type: "core_storyboard_group",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    version: 1
+  };
+}
+
+function characterAssetRow() {
+  return {
+    created_at: "2026-04-26T00:00:00.000Z",
+    data_json: {
+      emotionalBaseline: "Reserved and tense.",
+      id: "character-artifact-1",
+      name: "Lin Xia",
+      props: ["phone"],
+      referenceMediaIds: [],
+      relationshipToUserStory: "Lead of the private rainy-night memory.",
+      role: "lead",
+      sessionId: "session-1",
+      stableVisualDescription: "A young person in a dark jacket under convenience-store light.",
+      state: "ready",
+      version: 1,
+      wardrobe: "Dark jacket and white canvas shoes"
+    },
+    deleted_at: null,
+    depends_on_json: {},
+    id: "character-artifact-1",
+    parent_artifact_id: null,
+    session_id: "session-1",
+    stale_at: null,
+    state: "ready",
+    type: "character_asset",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    version: 1
+  };
+}
+
+function scriptArtifactRow() {
+  return {
+    created_at: "2026-04-26T00:00:00.000Z",
+    data_json: {
+      beats: ["She pauses under the convenience-store awning and looks at the unsent message."],
+      id: "script-artifact-1",
+      logline: "An unspoken crush lingers through a rainy night.",
+      sessionId: "session-1",
+      state: "ready",
+      summary: "She waits near the rainy convenience store.",
+      title: "The Unsent Rainy Message",
+      version: 1
+    },
+    deleted_at: null,
+    depends_on_json: {},
+    id: "script-artifact-1",
+    parent_artifact_id: null,
+    session_id: "session-1",
+    stale_at: null,
+    state: "ready",
+    type: "script",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    version: 1
+  };
+}
+
+function sceneAssetRow() {
+  return {
+    created_at: "2026-04-26T00:00:00.000Z",
+    data_json: {
+      atmosphere: "Quiet and damp.",
+      id: "scene-artifact-1",
+      keyObjects: ["glass", "rain"],
+      light: "Warm store light reflected in rainwater.",
+      location: "Outside a corner convenience store",
+      name: "Rainy Convenience Store",
+      referenceMediaIds: [],
+      sessionId: "session-1",
+      spatialLogic: "The awning shelters the lead while the glass reflects the street.",
+      state: "ready",
+      timeOfDay: "Night",
+      version: 1
+    },
+    deleted_at: null,
+    depends_on_json: {},
+    id: "scene-artifact-1",
+    parent_artifact_id: null,
+    session_id: "session-1",
+    stale_at: null,
+    state: "ready",
+    type: "scene_asset",
     updated_at: "2026-04-26T00:00:00.000Z",
     user_id: "user-1",
     version: 1
@@ -344,10 +480,20 @@ function storyboardFrames() {
 
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
+  mediaRows?: unknown[];
 };
 
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  readonly storage = {
+    from: (bucket: string) => ({
+      createSignedUrl: (path: string) =>
+        Promise.resolve({
+          data: { signedUrl: `https://storycam.test/storage/${bucket}/${path}` },
+          error: null
+        })
+    })
+  };
   private artifactInsertCount = 0;
   private generationJobInsertCount = 0;
 
@@ -377,6 +523,7 @@ class FakeSupabaseClient {
 class FakeQuery {
   readonly calls: unknown[][] = [];
   private inserted: Record<string, unknown> | null = null;
+  private eqFilters: Record<string, unknown> = {};
 
   constructor(
     readonly table: string,
@@ -396,6 +543,7 @@ class FakeQuery {
   }
 
   eq(column: string, value: unknown) {
+    this.eqFilters[column] = value;
     this.calls.push(["eq", column, value]);
     return this;
   }
@@ -407,6 +555,11 @@ class FakeQuery {
 
   order(column: string, options: Record<string, unknown>) {
     this.calls.push(["order", column, options]);
+    return this;
+  }
+
+  limit(value: number) {
+    this.calls.push(["limit", value]);
     return this;
   }
 
@@ -432,7 +585,9 @@ class FakeQuery {
               updated_at: "2026-04-26T00:00:00.000Z",
               user_id: "user-1"
             }
-          : null,
+          : this.table === "media_assets"
+            ? this.findMediaRow()
+            : null,
       error: null
     });
   }
@@ -475,6 +630,20 @@ class FakeQuery {
 
     return this.inserted;
   }
+
+  private findMediaRow() {
+    const rows = this.options.mediaRows ?? [];
+
+    return (
+      rows.find(
+        (row) =>
+          (!this.eqFilters.session_id || (row as { session_id?: unknown }).session_id === this.eqFilters.session_id) &&
+          (!this.eqFilters.linked_artifact_id ||
+            (row as { linked_artifact_id?: unknown }).linked_artifact_id === this.eqFilters.linked_artifact_id) &&
+          (!this.eqFilters.kind || (row as { kind?: unknown }).kind === this.eqFilters.kind)
+      ) ?? null
+    );
+  }
 }
 
 function fakeAsyncImageProvider() {
@@ -483,12 +652,37 @@ function fakeAsyncImageProvider() {
     providerKind: "image" as const,
     providerName: "test_image_provider",
     resolveImageTask: vi.fn(),
+    supportsReferenceImages: true,
     submitImageTask: vi.fn().mockResolvedValue({
       ok: true,
       providerKind: "image",
       providerName: "test_image_provider",
       value: { providerRequestId: "provider-request-1" }
     })
+  };
+}
+
+function assetImageRows() {
+  return [
+    mediaRow("media-character-1", "character-artifact-1"),
+    mediaRow("media-scene-1", "scene-artifact-1")
+  ];
+}
+
+function mediaRow(id: string, linkedArtifactId: string) {
+  return {
+    byte_size: 128,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    id,
+    kind: "thumbnail",
+    linked_artifact_id: linkedArtifactId,
+    mime_type: "image/png",
+    session_id: "session-1",
+    source: "provider",
+    storage_bucket: "storycam-generated",
+    storage_path: `users/user-1/sessions/session-1/generated/${id}.png`,
+    user_id: "user-1"
   };
 }
 

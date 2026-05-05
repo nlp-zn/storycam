@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireUserMock = vi.hoisted(() => vi.fn());
 const createSupabaseAdminClientMock = vi.hoisted(() => vi.fn());
+const createConfiguredStoryboardImageProviderMock = vi.hoisted(() => vi.fn());
 
 vi.mock("server-only", () => ({}));
 
@@ -18,11 +19,17 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: createSupabaseAdminClientMock
 }));
 
+vi.mock("@/server/storycam/storyboardImageProviderFactory", () => ({
+  createConfiguredStoryboardImageProvider: createConfiguredStoryboardImageProviderMock
+}));
+
 describe("POST /api/storyboard", () => {
   beforeEach(() => {
     vi.resetModules();
     requireUserMock.mockReset();
     createSupabaseAdminClientMock.mockReset();
+    createConfiguredStoryboardImageProviderMock.mockReset();
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(undefined);
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://storycam.test";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
@@ -127,6 +134,7 @@ describe("POST /api/storyboard", () => {
     const sessionUpdate = client.queries.find((query) => query.table === "storycam_sessions" && query.calls.some((call) => call[0] === "update"));
 
     expect(artifactInserts).toHaveLength(2);
+    expect(client.queries.some((query) => query.table === "generation_jobs")).toBe(false);
     expect(sessionUpdate?.calls).toContainEqual([
       "update",
       {
@@ -135,6 +143,57 @@ describe("POST /api/storyboard", () => {
         status: "ready"
       }
     ]);
+  });
+
+  it("submits the representative storyboard image only after story-world asset images are ready", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+    const client = new FakeSupabaseClient({ artifactRows: storyWorldRows(), mediaRows: assetImageRows() });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        confirmedArtifactVersions: {
+          "character-artifact-1": 1,
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        },
+        sessionId: "session-1"
+      })
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      storyboard: {
+        coreStoryboardGroups: [
+          {
+            representativeImage: { placeholder: true, status: "generating" }
+          }
+        ]
+      }
+    });
+    expect(generationJobInserts(client)).toContainEqual(
+      expect.objectContaining({
+        input_artifact_versions_json: expect.objectContaining({
+          "character-artifact-1": 1,
+          "media:media-character-1": "media-character-1",
+          "media:media-scene-1": "media-scene-1",
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        }),
+        type: "storyboard_image"
+      })
+    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceImages: [
+          expect.objectContaining({ assetArtifactId: "character-artifact-1", mediaId: "media-character-1" }),
+          expect.objectContaining({ assetArtifactId: "scene-artifact-1", mediaId: "media-scene-1" })
+        ]
+      })
+    );
   });
 });
 
@@ -209,11 +268,22 @@ function artifactRow(id: string, type: string, dataJson: Record<string, unknown>
 
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
+  mediaRows?: unknown[];
 };
 
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  readonly storage = {
+    from: (bucket: string) => ({
+      createSignedUrl: (path: string) =>
+        Promise.resolve({
+          data: { signedUrl: `https://storycam.test/storage/${bucket}/${path}` },
+          error: null
+        })
+    })
+  };
   private artifactInsertCount = 0;
+  private generationJobInsertCount = 0;
 
   constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
 
@@ -224,6 +294,11 @@ class FakeSupabaseClient {
   nextArtifactId(type: unknown) {
     this.artifactInsertCount += 1;
     return `${type}-artifact-${this.artifactInsertCount}`;
+  }
+
+  nextGenerationJobId() {
+    this.generationJobInsertCount += 1;
+    return `job-${this.generationJobInsertCount}`;
   }
 
   from(table: string) {
@@ -237,6 +312,7 @@ class FakeQuery {
   readonly calls: unknown[][] = [];
   private inserted: Record<string, unknown> | null = null;
   private updated: Record<string, unknown> | null = null;
+  private eqFilters: Record<string, unknown> = {};
 
   constructor(
     readonly table: string,
@@ -262,6 +338,7 @@ class FakeQuery {
   }
 
   eq(column: string, value: unknown) {
+    this.eqFilters[column] = value;
     this.calls.push(["eq", column, value]);
     return this;
   }
@@ -273,6 +350,11 @@ class FakeQuery {
 
   order(column: string, options: Record<string, unknown>) {
     this.calls.push(["order", column, options]);
+    return this;
+  }
+
+  limit(value: number) {
+    this.calls.push(["limit", value]);
     return this;
   }
 
@@ -298,7 +380,11 @@ class FakeQuery {
               updated_at: "2026-04-26T00:00:00.000Z",
               user_id: "user-1"
             }
-          : null,
+          : this.table === "generation_jobs"
+            ? null
+            : this.table === "media_assets"
+              ? this.findMediaRow()
+              : null,
       error: null
     });
   }
@@ -336,6 +422,85 @@ class FakeQuery {
       };
     }
 
+    if (this.table === "generation_jobs") {
+      return {
+        attempts: 0,
+        created_at: "2026-04-26T00:00:00.000Z",
+        ended_at: null,
+        error_code: null,
+        id: this.client.nextGenerationJobId(),
+        max_attempts: 1,
+        provider_request_id: null,
+        redacted_error: null,
+        started_at: null,
+        tombstoned_at: null,
+        updated_at: "2026-04-26T00:00:00.000Z",
+        ...this.inserted
+      };
+    }
+
     return this.inserted;
   }
+
+  private findMediaRow() {
+    const rows = this.options.mediaRows ?? [];
+
+    return (
+      rows.find(
+        (row) =>
+          (!this.eqFilters.session_id || (row as { session_id?: unknown }).session_id === this.eqFilters.session_id) &&
+          (!this.eqFilters.linked_artifact_id ||
+            (row as { linked_artifact_id?: unknown }).linked_artifact_id === this.eqFilters.linked_artifact_id) &&
+          (!this.eqFilters.kind || (row as { kind?: unknown }).kind === this.eqFilters.kind)
+      ) ?? null
+    );
+  }
+}
+
+function assetImageRows() {
+  return [
+    mediaRow("media-character-1", "character-artifact-1"),
+    mediaRow("media-scene-1", "scene-artifact-1")
+  ];
+}
+
+function mediaRow(id: string, linkedArtifactId: string) {
+  return {
+    byte_size: 128,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    id,
+    kind: "thumbnail",
+    linked_artifact_id: linkedArtifactId,
+    mime_type: "image/png",
+    session_id: "session-1",
+    source: "provider",
+    storage_bucket: "storycam-generated",
+    storage_path: `users/user-1/sessions/session-1/generated/${id}.png`,
+    user_id: "user-1"
+  };
+}
+
+function fakeAsyncImageProvider() {
+  return {
+    generateImage: vi.fn(),
+    providerKind: "image" as const,
+    providerName: "test_image_provider",
+    resolveImageTask: vi.fn(),
+    supportsReferenceImages: true,
+    submitImageTask: vi.fn().mockResolvedValue({
+      ok: true,
+      providerKind: "image",
+      providerName: "test_image_provider",
+      value: { providerRequestId: "provider-request-1" }
+    })
+  };
+}
+
+function generationJobInserts(client: FakeSupabaseClient) {
+  return client.queries
+    .filter((query) => query.table === "generation_jobs")
+    .flatMap((query) => query.calls)
+    .filter((call) => call[0] === "insert")
+    .map((call) => call[1]);
 }

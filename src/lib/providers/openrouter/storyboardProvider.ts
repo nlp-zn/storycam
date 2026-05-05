@@ -124,6 +124,7 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
       "输出要求：",
       "1. groups 数量必须等于目标核心分镜组数，MVP 当前固定为 1 组。",
       "2. 这一组是一段 15 秒内视频片段的拍摄脚本，不是单张装饰图。",
+      "2a. 分镜脚本必须是已确认 story-world 剧本的改编；不得脱离上方角色资产和场景资产另造人物、地点、服装、道具或空间关系。",
       "3. 该组必须包含 title、storyPurpose、emotionalTurn、planSummary、rhythm、tone、mainImagePrompt、frames。",
       "4. frames 必须正好 9 帧，frameNumber 为 1-9；第 1 帧 canvasPosition=center，是核心分镜主图；第 2-9 帧依次为 top-left/top/top-right/left/right/bottom-left/bottom/bottom-right。",
       "5. frames 每帧必须包含山隐九列分镜所需字段：timeRange、cameraAngle、shotSize、visualContent、scene、sound、technicalNotes、narrativePurpose，并补充 title、beatType、imagePrompt。",
@@ -133,6 +134,7 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
     ].join("\n"),
     system: [
       "你是 StoryCam 的核心分镜脚本师，把私人故事世界拆成普通用户能确认的 1 个核心分镜组。",
+      "story-world 的剧本、角色资产和场景资产是唯一事实来源；你的分镜只改编这些资产，不新增世界观。",
       "你只写可拍摄的动作、表情、物件、光线和空间变化；不要暴露专业拍摄表格。",
       "这一组要能支撑中心主图和周围 8 张扩展分镜图，且最终作为一个视频片段生成单位。",
       "内部按山隐导演九列分镜思维组织：镜号、时长、摄影角度、景别、画面内容、场景、声音、备注、叙事目的。",

@@ -74,7 +74,7 @@ export function CoreFramesStage({
                 ) : (
                   <div className="storycam-cinematic-frame relative size-full rounded-none transition duration-700 group-hover:scale-105">
                     <span className="storycam-core-image-status">
-                      {representativeImage.status === "generating" ? "主分镜图生成中" : "等待主分镜图"}
+                      {storyboardImageStatusLabel(representativeImage, "主分镜图")}
                     </span>
                   </div>
                 )}
@@ -167,3 +167,19 @@ const placeholderImage: StoryboardImageState = {
   placeholder: true,
   status: "placeholder"
 };
+
+function storyboardImageStatusLabel(image: StoryboardImageState, label: string) {
+  if (image.status === "generating") {
+    return `${label}生成中`;
+  }
+
+  if (image.status === "placeholder" && image.reason === "waiting_for_asset_images") {
+    return "等待角色/场景资产图";
+  }
+
+  if (image.status === "placeholder" && image.reason === "reference_images_unsupported") {
+    return "当前生图服务未启用资产图参考";
+  }
+
+  return `等待${label}`;
+}

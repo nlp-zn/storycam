@@ -35,9 +35,16 @@ export type ImageJobState =
     }
   | {
       placeholder: true;
+      reason?: StoryboardImagePlaceholderReason;
       redactedError?: string;
       status: "placeholder";
     };
+
+export type StoryboardImagePlaceholderReason =
+  | "provider_failed"
+  | "reference_images_unsupported"
+  | "storage_failed"
+  | "waiting_for_asset_images";
 
 export type SubmitImageJobResult =
   | {
@@ -100,7 +107,7 @@ export async function submitImageGenerationJob<Input>(
   } catch (error) {
     if (error instanceof StoryCamRepositoryError) {
       return {
-        image: placeholderImage("Image job metadata is unavailable."),
+        image: placeholderImage("Image job metadata is unavailable.", "storage_failed"),
         job: null,
         status: "placeholder"
       };
@@ -141,7 +148,7 @@ async function submitImageGenerationJobWithRepositories<Input>(
 
   if (!isAsyncImageProvider(input.provider)) {
     return {
-      image: placeholderImage(),
+      image: placeholderImage(undefined, "reference_images_unsupported"),
       job: null,
       status: "placeholder"
     };
@@ -185,7 +192,7 @@ async function submitImageGenerationJobWithRepositories<Input>(
 
   if (!submitted.ok) {
     return {
-      image: placeholderImage(submitted.redactedError),
+      image: placeholderImage(submitted.redactedError, "provider_failed"),
       job: null,
       status: "placeholder"
     };
@@ -206,7 +213,7 @@ async function submitImageGenerationJobWithRepositories<Input>(
 
   if (!job) {
     return {
-      image: placeholderImage("Image job creation failed."),
+        image: placeholderImage("Image job creation failed.", "storage_failed"),
       job: null,
       status: "placeholder"
     };
@@ -239,11 +246,11 @@ export async function resolveImageGenerationJob<Input>(
   }
 
   if (input.job.status === "failed" || input.job.status === "canceled" || input.job.status === "expired") {
-    return placeholderImage(input.job.redacted_error ?? undefined);
+    return placeholderImage(input.job.redacted_error ?? undefined, "provider_failed");
   }
 
   if (!input.job.provider_request_id || !input.job.output_artifact_id || !isAsyncImageProvider(input.provider)) {
-    return placeholderImage("Image provider is not available.");
+    return placeholderImage("Image provider is not available.", "reference_images_unsupported");
   }
 
   const providerResult = await input.provider.resolveImageTask(input.job.provider_request_id);
@@ -255,7 +262,7 @@ export async function resolveImageGenerationJob<Input>(
       redactedError: providerResult.redactedError
     });
 
-    return placeholderImage(providerResult.redactedError);
+    return placeholderImage(providerResult.redactedError, "provider_failed");
   }
 
   if (providerResult.value.status === "running") {
@@ -305,9 +312,13 @@ export function generatingImage(jobId: string): Extract<ImageJobState, { status:
   };
 }
 
-export function placeholderImage(redactedError?: string): Extract<ImageJobState, { status: "placeholder" }> {
+export function placeholderImage(
+  redactedError?: string,
+  reason?: StoryboardImagePlaceholderReason
+): Extract<ImageJobState, { status: "placeholder" }> {
   return {
     placeholder: true,
+    ...(reason ? { reason } : {}),
     ...(redactedError ? { redactedError } : {}),
     status: "placeholder"
   };

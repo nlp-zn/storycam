@@ -9,6 +9,7 @@ import { submitImageGenerationJob } from "./imageGenerationJobService";
 import { StoryCamSessionRepository } from "./sessionRepository";
 import {
   placeholderStoryboardImage,
+  loadStoryWorldVisualContext,
   toExpandedStoryboardProviderInput,
   toStoryboardRepresentativeProviderInput,
   type ExpandedStoryboardImageInput,
@@ -86,6 +87,10 @@ export async function createExpandedStoryboardCards(
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
   const storyboardScriptArtifact = await loadStoryboardScriptArtifact(artifacts, userId, session.id, coreGroupArtifact.id);
   const storyboardScript = storyboardScriptSchema.parse(storyboardScriptArtifact.data_json);
+  const visualContext = await loadStoryWorldVisualContext(client, userId, {
+    coreGroup,
+    sessionId: session.id
+  });
   const dependsOnJson: Json = {
     [coreGroupArtifact.id]: coreGroupArtifact.version,
     [storyboardScriptArtifact.id]: storyboardScriptArtifact.version
@@ -111,17 +116,23 @@ export async function createExpandedStoryboardCards(
     cards.map(async (card, index) => {
       const linkedArtifact = requireArtifactRow(expandedStoryboardCards[index]);
 
-      if (!imageProvider) {
-        return placeholderStoryboardImage();
+      if (!visualContext.ok) {
+        return placeholderStoryboardImage(visualContext.reason);
+      }
+
+      if (!imageProvider?.supportsReferenceImages) {
+        return placeholderStoryboardImage("reference_images_unsupported");
       }
 
       const result = await submitImageGenerationJob(client, userId, {
         imageInput: toExpandedStoryboardProviderInput({
           card,
           coreGroup,
-          sessionId: session.id
+          sessionId: session.id,
+          visualContext
         }),
         inputArtifactVersionsJson: {
+          ...visualContext.inputArtifactVersionsJson,
           [coreGroupArtifact.id]: coreGroupArtifact.version,
           [storyboardScriptArtifact.id]: storyboardScriptArtifact.version,
           [linkedArtifact.id]: linkedArtifact.version
@@ -184,17 +195,44 @@ export async function regenerateStoryboardFrameImage(
   const storyboardScriptArtifact = await loadStoryboardScriptArtifact(artifacts, userId, session.id, coreGroupArtifact.id);
   const storyboardScript = storyboardScriptSchema.parse(storyboardScriptArtifact.data_json);
   const frame = storyboardScript.frames[frameNumber - 1];
+  const visualContext = await loadStoryWorldVisualContext(client, userId, {
+    coreGroup,
+    sessionId: session.id
+  });
 
   if (!frame) {
     throw new ExpansionRequestError("frame_not_found");
+  }
+
+  if (!visualContext.ok) {
+    return {
+      ok: true,
+      value: {
+        frameNumber,
+        image: placeholderStoryboardImage(visualContext.reason),
+        sessionId: session.id
+      }
+    };
+  }
+
+  if (!imageProvider?.supportsReferenceImages) {
+    return {
+      ok: true,
+      value: {
+        frameNumber,
+        image: placeholderStoryboardImage("reference_images_unsupported"),
+        sessionId: session.id
+      }
+    };
   }
 
   if (frameNumber === 1) {
     const result = await submitImageGenerationJob(client, userId, {
       forceNew: true,
       idempotencyKeySuffix: randomUUID(),
-      imageInput: toStoryboardRepresentativeProviderInput(coreGroup, session.id, storyboardScript),
+      imageInput: toStoryboardRepresentativeProviderInput(coreGroup, session.id, storyboardScript, visualContext),
       inputArtifactVersionsJson: {
+        ...visualContext.inputArtifactVersionsJson,
         [coreGroupArtifact.id]: coreGroupArtifact.version,
         [storyboardScriptArtifact.id]: storyboardScriptArtifact.version
       },
@@ -232,9 +270,11 @@ export async function regenerateStoryboardFrameImage(
     imageInput: toExpandedStoryboardProviderInput({
       card,
       coreGroup,
-      sessionId: session.id
+      sessionId: session.id,
+      visualContext
     }),
     inputArtifactVersionsJson: {
+      ...visualContext.inputArtifactVersionsJson,
       [coreGroupArtifact.id]: coreGroupArtifact.version,
       [storyboardScriptArtifact.id]: storyboardScriptArtifact.version,
       [cardArtifact.id]: cardArtifact.version

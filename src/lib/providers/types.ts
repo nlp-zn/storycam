@@ -35,6 +35,7 @@ export type MultimodalGenerationProvider<Input, Output> = ProviderIdentity & {
 
 export type ImageGenerationProvider<Input, Output> = ProviderIdentity & {
   providerKind: "image";
+  supportsReferenceImages?: boolean;
   generateImage(input: Input): Promise<ProviderResult<Output>>;
 };
 
