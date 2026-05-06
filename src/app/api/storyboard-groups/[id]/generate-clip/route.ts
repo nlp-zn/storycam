@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
+import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createGenerateClipJob, GenerationJobRequestError } from "@/server/storycam/generationJobService";
+import { createConfiguredVideoProvider } from "@/server/storycam/videoProviderFactory";
 
 type GenerateClipRouteContext = {
   params: Promise<{ id: string }> | { id: string };
@@ -11,7 +13,9 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
   try {
     const user = await requireUser();
     const params = await context.params;
-    const result = await createGenerateClipJob(createSupabaseAdminClient(), user.id, params.id, await request.json());
+    const config = loadStoryCamConfig();
+    const videoProvider = createConfiguredVideoProvider(config);
+    const result = await createGenerateClipJob(createSupabaseAdminClient(), user.id, params.id, await request.json(), videoProvider);
 
     return NextResponse.json(
       {
@@ -32,7 +36,20 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
           redactedError: "Invalid generation job request.",
           redactionApplied: true
         },
-        { status: 400 }
+        { status: error.code === "video_provider_failed" ? 502 : 400 }
+      );
+    }
+
+    if (error instanceof StoryCamConfigError) {
+      const redacted = redactConfigError(error);
+
+      return NextResponse.json(
+        {
+          error: redacted.code,
+          redactedError: redacted.message,
+          redactionApplied: true
+        },
+        { status: 500 }
       );
     }
 

@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { coreStoryboardGroupSchema, expandedStoryboardCardSchema } from "@/features/storycam/domain/artifactSchemas";
+import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import { assertClipPromptPacketCanCreateVideoJob, buildClipPromptPacketPayload } from "@/features/storycam/domain/clipPromptPacket";
-import type { ClipPromptPacket } from "@/features/storycam/domain/artifacts";
-import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
+import type { ClipPromptPacket, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import type { Database, Json, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
+import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
 
 export type CreateClipPromptPacketInput = {
@@ -23,6 +24,7 @@ export type ClipPromptPacketArtifactRef = {
 
 export type ClipPromptPacketServiceOutput = {
   clipPromptPacket: ClipPromptPacketArtifactRef;
+  clipPromptPacketPayload: ClipPromptPacket;
   confirmationSummary: string;
   sessionId: string;
 };
@@ -57,6 +59,8 @@ export async function createClipPromptPacket(
   }
 
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
+  const storyboardScriptArtifact = findStoryboardScriptArtifact(rows, coreGroupArtifact.id);
+  const storyboardScript = storyboardScriptArtifact ? storyboardScriptSchema.parse(storyboardScriptArtifact.data_json) : undefined;
   const expandedCardArtifacts = rows.filter(
     (row) =>
       row.type === "expanded_storyboard_card" &&
@@ -65,8 +69,10 @@ export async function createClipPromptPacket(
       input.confirmedArtifactVersions[row.id] === row.version
   );
   const expandedCardIds = expandedCardArtifacts.map((row) => expandedStoryboardCardSchema.parse(row.data_json).id);
+  const storyboardMedia = await loadStoryboardFrameMedia(client, userId, session.id, coreGroupArtifact, expandedCardArtifacts);
   const inputArtifactVersions = {
     [coreGroupArtifact.id]: coreGroupArtifact.version,
+    ...(storyboardScriptArtifact ? { [storyboardScriptArtifact.id]: storyboardScriptArtifact.version } : {}),
     ...Object.fromEntries(expandedCardArtifacts.map((row) => [row.id, row.version]))
   };
   const packet = buildClipPromptPacketPayload({
@@ -77,7 +83,25 @@ export async function createClipPromptPacket(
     inputArtifactVersions,
     packetId: `${coreGroupArtifact.id}-clip-packet-v1`,
     providerSendConfirmed: input.providerSendConfirmed,
+    providerPrompt: buildVideoProviderPrompt({
+      coreGroupTitle: coreGroup.title,
+      durationSeconds: coreGroup.estimatedClipDurationSeconds,
+      storyboardScript
+    }),
+    referenceImageMedia: storyboardMedia.map((item) => ({
+      artifactId: item.artifactId,
+      frameNumber: item.frameNumber,
+      kind: item.kind,
+      mediaId: item.media.id
+    })),
     sessionId: session.id,
+    storyboardFrames: storyboardScript?.frames.map((frame) => ({
+      frameNumber: frame.frameNumber,
+      summary: `${frame.visualContent} ${frame.narrativePurpose}`,
+      timeRange: frame.timeRange,
+      title: frame.title
+    })),
+    storyboardScriptId: storyboardScriptArtifact?.id,
     version: 1
   });
   const packetArtifact = requireArtifactRow(
@@ -96,10 +120,90 @@ export async function createClipPromptPacket(
     ok: true,
     value: {
       clipPromptPacket: toArtifactRef(packetArtifact),
+      clipPromptPacketPayload: packet,
       confirmationSummary: packet.confirmationSummary,
       sessionId: session.id
     }
   };
+}
+
+function findStoryboardScriptArtifact(rows: StoryCamArtifactRow[], coreGroupArtifactId: string) {
+  return rows.find(
+    (row) =>
+      row.type === "storyboard_script" &&
+      row.parent_artifact_id === coreGroupArtifactId &&
+      row.state === "ready" &&
+      storyboardScriptSchema.safeParse(row.data_json).success
+  );
+}
+
+async function loadStoryboardFrameMedia(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessionId: string,
+  coreGroupArtifact: StoryCamArtifactRow,
+  expandedCardArtifacts: StoryCamArtifactRow[]
+) {
+  const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const coreMedia = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+    linkedArtifactId: coreGroupArtifact.id,
+    sessionId
+  });
+  const expandedMedia = await Promise.all(
+    expandedCardArtifacts.map(async (row) => {
+      const media = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+        linkedArtifactId: row.id,
+        sessionId
+      });
+      const card = expandedStoryboardCardSchema.parse(row.data_json);
+
+      return media
+        ? {
+            artifactId: row.id,
+            frameNumber: card.frameNumber ?? card.sortOrder + 2,
+            kind: "expanded" as const,
+            media
+          }
+        : null;
+    })
+  );
+
+  return [
+    ...(coreMedia
+      ? [
+          {
+            artifactId: coreGroupArtifact.id,
+            frameNumber: 1,
+            kind: "core" as const,
+            media: coreMedia
+          }
+        ]
+      : []),
+    ...expandedMedia.filter((item): item is { artifactId: string; frameNumber: number; kind: "expanded"; media: MediaAssetRow } => Boolean(item))
+  ];
+}
+
+function buildVideoProviderPrompt(input: {
+  coreGroupTitle: string;
+  durationSeconds: number;
+  storyboardScript?: StoryboardScript;
+}) {
+  const frames = input.storyboardScript?.frames
+    .map(
+      (frame) =>
+        `${String(frame.frameNumber).padStart(2, "0")} ${frame.timeRange} ${frame.title}: ${frame.visualContent} Purpose: ${frame.narrativePurpose}`
+    )
+    .join("\n");
+
+  return [
+    `Create one private StoryCam short film clip titled "${input.coreGroupTitle}".`,
+    `Target duration: ${Math.min(15, Math.round(input.durationSeconds))} seconds, 16:9, cinematic, no subtitles, no readable UI text.`,
+    "Use the attached storyboard/reference images as visual continuity anchors. Preserve character appearance, wardrobe, props, location, lighting, and mood.",
+    frames ? `Nine-frame storyboard script:\n${frames}` : "",
+    "Motion should connect the frames as one continuous private-memory scene with restrained performances and natural camera movement."
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function assertClipPromptPacketArtifactCanCreateVideoJob(row: StoryCamArtifactRow) {

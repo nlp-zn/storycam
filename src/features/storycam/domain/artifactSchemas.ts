@@ -138,7 +138,30 @@ export const clipPromptPacketSchema = artifactIdentitySchema.extend({
   providerSendConfirmed: z.literal(true),
   confirmationSummary: z.string().min(1),
   inputArtifactVersions: z.record(idSchema, positiveVersionSchema),
+  plannedDurationSeconds: z.number().positive().optional(),
+  providerPrompt: z.string().min(1).optional(),
   redactedPromptSummary: z.string().min(1),
+  storyboardScriptId: idSchema.optional(),
+  storyboardFrames: z
+    .array(
+      z.object({
+        frameNumber: z.number().int().min(1).max(9),
+        timeRange: z.string().min(1),
+        title: z.string().min(1),
+        summary: z.string().min(1)
+      })
+    )
+    .default([]),
+  referenceImageMedia: z
+    .array(
+      z.object({
+        artifactId: idSchema,
+        frameNumber: z.number().int().min(1).max(9),
+        kind: z.enum(["core", "expanded"]),
+        mediaId: idSchema
+      })
+    )
+    .default([]),
   expandedCardIds: z.array(idSchema).default([])
 });
 

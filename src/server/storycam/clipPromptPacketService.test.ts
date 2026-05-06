@@ -47,8 +47,13 @@ describe("clip-packet service", () => {
       },
       type: "clip_prompt_packet"
     });
-    expect(JSON.stringify(result)).not.toContain("redactedPromptSummary");
-    expect(JSON.stringify(result)).not.toContain("inputArtifactVersions");
+    expect(result.value.clipPromptPacketPayload).toMatchObject({
+      inputArtifactVersions: {
+        "core-artifact-1": 1,
+        "expanded-artifact-1": 1
+      },
+      plannedDurationSeconds: 4.7
+    });
   });
 
   it("rejects stale or unconfirmed core groups", async () => {
@@ -220,6 +225,11 @@ class FakeQuery {
 
   order(column: string, options: Record<string, unknown>) {
     this.calls.push(["order", column, options]);
+    return this;
+  }
+
+  limit(value: number) {
+    this.calls.push(["limit", value]);
     return this;
   }
 

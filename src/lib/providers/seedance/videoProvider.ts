@@ -22,6 +22,10 @@ export type SeedanceVideoGenerationOutput = {
   videoUrl?: string;
 };
 
+export type SeedanceVideoTaskSubmission = {
+  providerRequestId: string;
+};
+
 export type SeedanceVideoProviderOptions = {
   apiKey: string;
   baseUrl?: string;
@@ -58,7 +62,10 @@ const defaultBaseUrl = "https://ark.cn-beijing.volces.com/api/v3";
 
 export function createSeedanceVideoProvider(
   options: SeedanceVideoProviderOptions
-): VideoGenerationProvider<SeedanceVideoGenerationInput, SeedanceVideoGenerationOutput> {
+): VideoGenerationProvider<SeedanceVideoGenerationInput, SeedanceVideoGenerationOutput> & {
+  resolveClipTask(providerRequestId: string): Promise<ProviderResult<SeedanceVideoGenerationOutput>>;
+  submitClipTask(input: SeedanceVideoGenerationInput): Promise<ProviderResult<SeedanceVideoTaskSubmission>>;
+} {
   const request = options.fetch ?? fetch;
   const baseUrl = trimTrailingSlash(options.baseUrl ?? defaultBaseUrl);
 
@@ -66,21 +73,19 @@ export function createSeedanceVideoProvider(
     ...identity,
     async generateClip(input): Promise<ProviderResult<SeedanceVideoGenerationOutput>> {
       try {
-        const createResponse = await request(`${baseUrl}/contents/generations/tasks`, {
-          body: JSON.stringify(toCreateTaskBody(input, options.model)),
-          headers: {
-            Authorization: `Bearer ${options.apiKey}`,
-            "Content-Type": "application/json"
-          },
-          method: "POST"
+        const submitted = await submitSeedanceTask({
+          apiKey: options.apiKey,
+          baseUrl,
+          input,
+          model: options.model,
+          request
         });
 
-        if (!createResponse.ok) {
-          return seedanceFailure(await safeJson(createResponse), createResponse.status);
+        if (!submitted.ok) {
+          return submitted;
         }
 
-        const created = parseCreateTaskResponse(await safeJson(createResponse));
-        const providerRequestId = created.id;
+        const providerRequestId = submitted.value.providerRequestId;
 
         if (!options.polling?.enabled) {
           return providerSuccess(
@@ -111,6 +116,24 @@ export function createSeedanceVideoProvider(
           retryable: true
         });
       }
+    },
+    async resolveClipTask(providerRequestId) {
+      return resolveSeedanceTask({
+        apiKey: options.apiKey,
+        baseUrl,
+        model: options.model,
+        providerRequestId,
+        request
+      });
+    },
+    async submitClipTask(input) {
+      return submitSeedanceTask({
+        apiKey: options.apiKey,
+        baseUrl,
+        input,
+        model: options.model,
+        request
+      });
     }
   };
 }
@@ -158,56 +181,91 @@ async function pollSeedanceTask(input: {
       await sleep(input.intervalMs);
     }
 
-    const response = await input.request(`${input.baseUrl}/contents/generations/tasks/${input.providerRequestId}`, {
-      headers: {
-        Authorization: `Bearer ${input.apiKey}`,
-        "Content-Type": "application/json"
-      },
-      method: "GET"
-    });
+    const resolved = await resolveSeedanceTask(input);
 
-    if (!response.ok) {
-      return seedanceFailure(await safeJson(response), response.status, input.providerRequestId);
+    if (!resolved.ok) {
+      return resolved;
     }
 
-    const responseBody = await safeJson(response);
-    let normalized: ReturnType<typeof normalizeSeedanceTaskResponse>;
-
-    try {
-      normalized = normalizeSeedanceTaskResponse(responseBody);
-    } catch (error) {
-      return providerFailure(requestIdentity, error, {
-        errorCode: "SEEDANCE_INVALID_RESPONSE",
-        retryable: true
-      });
-    }
-
-    if (normalized.status === "succeeded") {
-      return providerSuccess(requestIdentity, {
-        model: normalized.model ?? input.model,
-        providerRequestId: input.providerRequestId,
-        ...(normalized.seed !== undefined ? { seed: normalized.seed } : {}),
-        status: "succeeded",
-        videoUrl: normalized.videoUrl
-      });
-    }
-
-    if (normalized.status === "failed" || normalized.status === "expired") {
-      return seedanceFailure(responseBody, 200, input.providerRequestId, normalized.status);
-    }
-
-    if (normalized.status === "canceled") {
-      return providerSuccess(requestIdentity, {
-        model: normalized.model ?? input.model,
-        providerRequestId: input.providerRequestId,
-        status: "canceled"
-      });
+    if (resolved.value.status === "succeeded" || resolved.value.status === "canceled") {
+      return resolved;
     }
   }
 
   return providerFailure(requestIdentity, new Error("Seedance task polling timed out."), {
     errorCode: "SEEDANCE_TIMEOUT",
     retryable: true
+  });
+}
+
+async function submitSeedanceTask(input: {
+  apiKey: string;
+  baseUrl: string;
+  input: SeedanceVideoGenerationInput;
+  model: string;
+  request: typeof fetch;
+}): Promise<ProviderResult<SeedanceVideoTaskSubmission>> {
+  const createResponse = await input.request(`${input.baseUrl}/contents/generations/tasks`, {
+    body: JSON.stringify(toCreateTaskBody(input.input, input.model)),
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    method: "POST"
+  });
+
+  if (!createResponse.ok) {
+    return seedanceFailure(await safeJson(createResponse), createResponse.status);
+  }
+
+  return providerSuccess(identity, parseCreateTaskResponse(await safeJson(createResponse)));
+}
+
+async function resolveSeedanceTask(input: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  providerRequestId: string;
+  request: typeof fetch;
+}): Promise<ProviderResult<SeedanceVideoGenerationOutput>> {
+  const requestIdentity = {
+    ...identity,
+    providerRequestId: input.providerRequestId
+  };
+  const response = await input.request(`${input.baseUrl}/contents/generations/tasks/${input.providerRequestId}`, {
+    headers: {
+      Authorization: `Bearer ${input.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    method: "GET"
+  });
+
+  if (!response.ok) {
+    return seedanceFailure(await safeJson(response), response.status, input.providerRequestId);
+  }
+
+  const responseBody = await safeJson(response);
+  let normalized: ReturnType<typeof normalizeSeedanceTaskResponse>;
+
+  try {
+    normalized = normalizeSeedanceTaskResponse(responseBody);
+  } catch (error) {
+    return providerFailure(requestIdentity, error, {
+      errorCode: "SEEDANCE_INVALID_RESPONSE",
+      retryable: true
+    });
+  }
+
+  if (normalized.status === "failed" || normalized.status === "expired") {
+    return seedanceFailure(responseBody, 200, input.providerRequestId, normalized.status);
+  }
+
+  return providerSuccess(requestIdentity, {
+    model: normalized.model ?? input.model,
+    providerRequestId: input.providerRequestId,
+    ...(normalized.seed !== undefined ? { seed: normalized.seed } : {}),
+    status: normalized.status,
+    ...(normalized.videoUrl ? { videoUrl: normalized.videoUrl } : {})
   });
 }
 
@@ -241,7 +299,7 @@ function parseCreateTaskResponse(value: unknown) {
   }
 
   return {
-    id: response.id
+    providerRequestId: response.id
   };
 }
 

@@ -107,6 +107,48 @@ describe("seedance video provider", () => {
     });
   });
 
+  it("submits and resolves async Seedance tasks separately for API polling", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "cgt-2026-storycam" }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          content: {
+            video_url: "https://ark-content.example/video.mp4"
+          },
+          id: "cgt-2026-storycam",
+          status: "succeeded"
+        })
+      );
+    const provider = createSeedanceVideoProvider({
+      apiKey: "seedance-secret",
+      baseUrl: "https://ark.example/api/v3",
+      fetch,
+      model: "doubao-seedance-2-0-260128"
+    });
+
+    await expect(provider.submitClipTask(input)).resolves.toMatchObject({
+      ok: true,
+      value: {
+        providerRequestId: "cgt-2026-storycam"
+      }
+    });
+    await expect(provider.resolveClipTask("cgt-2026-storycam")).resolves.toMatchObject({
+      ok: true,
+      value: {
+        providerRequestId: "cgt-2026-storycam",
+        status: "succeeded",
+        videoUrl: "https://ark-content.example/video.mp4"
+      }
+    });
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://ark.example/api/v3/contents/generations/tasks/cgt-2026-storycam",
+      expect.objectContaining({ method: "GET" })
+    );
+  });
+
+
   it("normalizes webhook payloads with the same shape as queried tasks", () => {
     expect(
       normalizeSeedanceTaskResponse({

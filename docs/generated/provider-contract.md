@@ -133,6 +133,8 @@ Requirements:
 
 - provider-send confirmation must be true,
 - async job only,
+- `clip_prompt_packet` must include the 9-frame storyboard summary, target duration, and any ready core/expanded storyboard image media references,
+- Seedance input uses the packet provider prompt plus signed storyboard image URLs as `image_url` content items,
 - idempotency,
 - timeout,
 - cancellation/tombstone,

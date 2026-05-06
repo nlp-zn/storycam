@@ -10,7 +10,21 @@ export type BuildClipPromptPacketPayloadInput = {
   inputArtifactVersions: Record<string, number>;
   packetId: string;
   providerSendConfirmed: true;
+  providerPrompt?: string;
+  referenceImageMedia?: Array<{
+    artifactId: string;
+    frameNumber: number;
+    kind: "core" | "expanded";
+    mediaId: string;
+  }>;
   sessionId: string;
+  storyboardFrames?: Array<{
+    frameNumber: number;
+    summary: string;
+    timeRange: string;
+    title: string;
+  }>;
+  storyboardScriptId?: string;
   version: number;
 };
 
@@ -23,10 +37,15 @@ export function buildClipPromptPacketPayload(input: BuildClipPromptPacketPayload
     expandedCardIds: input.expandedCardIds ?? [],
     id: input.packetId,
     inputArtifactVersions: input.inputArtifactVersions,
+    plannedDurationSeconds: input.estimatedClipDurationSeconds,
     providerSendConfirmed: input.providerSendConfirmed,
+    ...(input.providerPrompt ? { providerPrompt: input.providerPrompt } : {}),
+    referenceImageMedia: input.referenceImageMedia ?? [],
     redactedPromptSummary: `${input.coreGroupTitle}; ${formatDuration(input.estimatedClipDurationSeconds)}; ${expandedCardCount} guide cards.`,
     sessionId: input.sessionId,
     state: "ready",
+    storyboardFrames: input.storyboardFrames ?? [],
+    ...(input.storyboardScriptId ? { storyboardScriptId: input.storyboardScriptId } : {}),
     version: input.version
   });
 }

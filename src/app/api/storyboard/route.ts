@@ -50,7 +50,7 @@ export async function POST(request: Request) {
           redactedError: "Invalid storyboard request.",
           redactionApplied: true
         },
-        { status: 400 }
+        { status: error.code === "story_world_asset_images_not_ready" ? 409 : 400 }
       );
     }
 

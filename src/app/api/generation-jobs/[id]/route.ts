@@ -5,6 +5,7 @@ import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/se
 import { GenerationJobRequestError, getGenerationJob } from "@/server/storycam/generationJobService";
 import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
 import { createConfiguredStoryWorldAssetImageProvider } from "@/server/storycam/storyWorldAssetImageProviderFactory";
+import { createConfiguredVideoProvider } from "@/server/storycam/videoProviderFactory";
 
 type GenerationJobRouteContext = {
   params: Promise<{ id: string }> | { id: string };
@@ -17,11 +18,13 @@ export async function GET(_request: Request, context: GenerationJobRouteContext)
     const config = loadStoryCamConfig();
     const storyboardImageProvider = createConfiguredStoryboardImageProvider(config);
     const storyWorldImageProvider = createConfiguredStoryWorldAssetImageProvider(config);
+    const videoProvider = createConfiguredVideoProvider(config);
     const result = await getGenerationJob(
       createSupabaseAdminClient(),
       user.id,
       params.id,
-      (storyboardImageProvider ?? storyWorldImageProvider) as Parameters<typeof getGenerationJob>[3]
+      (storyboardImageProvider ?? storyWorldImageProvider) as Parameters<typeof getGenerationJob>[3],
+      videoProvider
     );
 
     return NextResponse.json(

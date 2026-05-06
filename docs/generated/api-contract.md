@@ -309,6 +309,7 @@ Rules:
 
 - Reject if story world is not confirmed.
 - New MVP results contain exactly 1 group, targeting about 15 seconds and exactly 9 storyboard frames.
+- When a configured reference-image storyboard provider is available, storyboard creation first checks that every confirmed character and scene asset has a ready thumbnail. Missing thumbnails return HTTP `409` with `error: "story_world_asset_images_not_ready"` and no storyboard/core-group artifacts are created.
 - The representative core image is generated from frame 1 only after all referenced story-world character and scene asset images have ready thumbnails.
 - If required asset images are not ready, `representativeImage` returns a placeholder with `reason: "waiting_for_asset_images"` and no storyboard image job is submitted.
 - If the configured storyboard image provider does not support reference images, image generation returns `reason: "reference_images_unsupported"` instead of falling back to pure text prompts.
@@ -430,6 +431,8 @@ Rules:
 - `providerSendConfirmed` must be true.
 - Response must not include full clip prompt packet.
 - Duplicate `idempotencyKey` returns the existing active job.
+- The server-created `clip_prompt_packet` contains the 9-frame storyboard summary, planned duration, core/expanded storyboard image media references, and a provider prompt assembled from those internal artifacts.
+- Real Seedance jobs are submitted immediately through the configured video provider; the generation job stores `provider_request_id` and is polled through `GET /api/generation-jobs/:id`.
 
 ### `GET /api/generation-jobs/:id`
 
@@ -456,6 +459,12 @@ type GenerationJobResponse = {
   };
 };
 ```
+
+Rules:
+
+- Image jobs resolve provider output and store ready thumbnail media.
+- Real Seedance video jobs poll the provider task id; on success the server downloads `content.video_url`, stores it in private StoryCam storage, creates a `generated_clip` artifact, and marks the job succeeded.
+- Provider URLs and full prompts are never returned.
 
 ### `POST /api/generation-jobs/:id/cancel`
 

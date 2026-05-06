@@ -7,6 +7,7 @@ import type { ImageGenerationProvider, ProviderFailure, TextGenerationProvider }
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { submitImageGenerationJob } from "./imageGenerationJobService";
+import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
 import {
   placeholderStoryboardImage,
@@ -58,7 +59,7 @@ export type StoryboardCoreGroupView = CoreStoryboardGroup & {
 };
 
 export class StoryboardRequestError extends Error {
-  constructor(readonly code: "invalid_input" | "session_not_found" | "story_world_not_confirmed") {
+  constructor(readonly code: "invalid_input" | "session_not_found" | "story_world_asset_images_not_ready" | "story_world_not_confirmed") {
     super(`StoryCam storyboard request error: ${code}`);
     this.name = "StoryboardRequestError";
   }
@@ -85,6 +86,12 @@ export async function createStoryboard(
   const plannedDurationSeconds = input.plannedDurationSeconds ?? session.planned_duration_seconds;
   const durationPlan = createDurationPlan({ coreGroupTargetCount, plannedDurationSeconds });
   const storyWorld = await loadConfirmedStoryWorld(artifacts, userId, session.id, input.confirmedArtifactVersions);
+  const storyWorldArtifactVersions = artifactVersions(storyWorld.artifactRows);
+
+  if (imageProvider?.supportsReferenceImages) {
+    await assertStoryWorldAssetImagesReady(client, userId, session.id, storyWorld.assetRows);
+  }
+
   const providerResult = await provider.generate({
     coreGroupTargetCount: durationPlan.coreGroupTargetCount,
     expansionCardTargetCount: input.expansionCardTargetCount,
@@ -103,7 +110,7 @@ export async function createStoryboard(
     status: "ready"
   });
 
-  const dependsOnJson: Json = input.confirmedArtifactVersions;
+  const dependsOnJson: Json = storyWorldArtifactVersions;
   const coreStoryboardGroups = await Promise.all(
     providerResult.value.coreStoryboardGroups.map((group) =>
       artifacts.createVersion(userId, {
@@ -127,7 +134,7 @@ export async function createStoryboard(
       artifacts.createVersion(userId, {
         dataJson: script,
         dependsOnJson: {
-          ...input.confirmedArtifactVersions,
+          ...storyWorldArtifactVersions,
           [coreStoryboardGroupRows[index]?.id ?? ""]: coreStoryboardGroupRows[index]?.version ?? 1
         },
         parentArtifactId: coreStoryboardGroupRows[index]?.id,
@@ -285,10 +292,37 @@ async function loadConfirmedStoryWorld(
   }
 
   return {
+    artifactRows: [script, ...characterRows, ...sceneRows],
+    assetRows: [...characterRows, ...sceneRows],
     characterAssets: characterRows.map((row) => parseCharacterAsset(row)),
     sceneAssets: sceneRows.map((row) => parseSceneAsset(row)),
     script: parseStoryScript(script)
   };
+}
+
+async function assertStoryWorldAssetImagesReady(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessionId: string,
+  assetRows: StoryCamArtifactRow[]
+) {
+  const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const imageRows = await Promise.all(
+    assetRows.map((row) =>
+      mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+        linkedArtifactId: row.id,
+        sessionId
+      })
+    )
+  );
+
+  if (imageRows.some((row) => !row)) {
+    throw new StoryboardRequestError("story_world_asset_images_not_ready");
+  }
+}
+
+function artifactVersions(rows: StoryCamArtifactRow[]) {
+  return Object.fromEntries(rows.map((row) => [row.id, row.version])) as Record<string, number>;
 }
 
 function parseConfirmedArtifactVersions(value: unknown) {

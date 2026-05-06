@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { clipPromptPacketSchema } from "@/features/storycam/domain/artifactSchemas";
+import type { ClipPromptPacket } from "@/features/storycam/domain/artifacts";
 import { hashLogIdentifier } from "@/lib/privacy/redact";
+import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
 import type { Database, GenerationJobRow } from "@/server/db/types";
 import { createClipPromptPacket, ClipPromptPacketRequestError } from "./clipPromptPacketService";
+import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import {
   resolveImageGenerationJob,
@@ -9,6 +13,9 @@ import {
   type ImageJobState
 } from "./imageGenerationJobService";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
+import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import { createStoryCamSignedUrl, storyCamSignedUrlTtlSeconds } from "./mediaStore";
+import { storeProviderGeneratedClip } from "./videoGenerationService";
 
 export type GenerateClipRequestBody = {
   confirmedArtifactVersions?: unknown;
@@ -32,6 +39,25 @@ export type GenerationJobSummary = {
 };
 
 export type GenerationJobServiceImageProvider = ImageGenerationProvider<unknown, AsyncImageProviderOutput>;
+export type GenerationJobServiceVideoInput = {
+  durationSeconds: number;
+  generateAudio?: boolean;
+  prompt: string;
+  ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "adaptive";
+  referenceImageUrls?: string[];
+  watermark?: boolean;
+};
+export type GenerationJobServiceVideoOutput = {
+  model: string;
+  providerRequestId: string;
+  seed?: number;
+  status: "queued" | "running" | "succeeded" | "canceled";
+  videoUrl?: string;
+};
+export type GenerationJobServiceVideoProvider = VideoGenerationProvider<GenerationJobServiceVideoInput, GenerationJobServiceVideoOutput> & {
+  resolveClipTask?(providerRequestId: string): Promise<ProviderResult<GenerationJobServiceVideoOutput>>;
+  submitClipTask?(input: GenerationJobServiceVideoInput): Promise<ProviderResult<{ providerRequestId: string }>>;
+};
 
 export type GenerateClipServiceOutput = {
   confirmationSummary: string;
@@ -49,7 +75,7 @@ type ParsedGenerateClipRequest = {
 };
 
 export class GenerationJobRequestError extends Error {
-  constructor(readonly code: "invalid_input" | "job_not_found" | ClipPromptPacketRequestError["code"]) {
+  constructor(readonly code: "invalid_input" | "job_not_found" | "video_provider_failed" | ClipPromptPacketRequestError["code"]) {
     super(`StoryCam generation job request error: ${code}`);
     this.name = "GenerationJobRequestError";
   }
@@ -59,7 +85,8 @@ export async function createGenerateClipJob(
   client: SupabaseClient<Database>,
   userId: string,
   coreStoryboardGroupId: string,
-  body: GenerateClipRequestBody
+  body: GenerateClipRequestBody,
+  videoProvider?: GenerationJobServiceVideoProvider
 ): Promise<{ ok: true; value: GenerateClipServiceOutput }> {
   const input = parseGenerateClipRequest(coreStoryboardGroupId, body);
   const jobs = new StoryCamGenerationJobRepository(client);
@@ -85,14 +112,27 @@ export async function createGenerateClipJob(
       sessionId: input.sessionId
     });
     const packetArtifact = packetResult.value.clipPromptPacket;
+    const providerRequest = isAsyncVideoProvider(videoProvider)
+      ? await videoProvider.submitClipTask(await toVideoProviderInput(client, userId, packetResult.value.clipPromptPacketPayload))
+      : undefined;
+
+    if (providerRequest && !providerRequest.ok) {
+      throw new GenerationJobRequestError("video_provider_failed");
+    }
+
     const job = requireGenerationJobRow(
       await jobs.create(userId, {
         generationMode: input.generationMode,
         idempotencyKeyHash,
-        inputArtifactVersionsJson: { [packetArtifact.id]: packetArtifact.version },
+        inputArtifactVersionsJson: {
+          [packetArtifact.id]: packetArtifact.version,
+          ...packetResult.value.clipPromptPacketPayload.inputArtifactVersions
+        },
         providerKind: "video",
-        providerName: "mock",
+        providerName: videoProvider?.providerName ?? "mock",
+        providerRequestId: providerRequest?.value.providerRequestId,
         sessionId: input.sessionId,
+        status: providerRequest ? "running" : "queued",
         type: "video_clip"
       })
     );
@@ -118,7 +158,8 @@ export async function getGenerationJob(
   client: SupabaseClient<Database>,
   userId: string,
   jobId: string,
-  imageProvider?: GenerationJobServiceImageProvider
+  imageProvider?: GenerationJobServiceImageProvider,
+  videoProvider?: GenerationJobServiceVideoProvider
 ): Promise<{ ok: true; value: { image?: ImageJobState; job: GenerationJobSummary } }> {
   if (!jobId) {
     throw new GenerationJobRequestError("invalid_input");
@@ -136,6 +177,7 @@ export async function getGenerationJob(
         provider: imageProvider
       })
     : undefined;
+  const videoResolved = job.type === "video_clip" ? await resolveVideoGenerationJob(client, userId, { job, provider: videoProvider }) : undefined;
 
   const refreshedJob = await new StoryCamGenerationJobRepository(client).findById(userId, jobId);
 
@@ -143,8 +185,135 @@ export async function getGenerationJob(
     ok: true,
     value: {
       ...(image ? { image } : {}),
-      job: toJobSummary(refreshedJob ?? job)
+      job: toJobSummary(refreshedJob ?? videoResolved ?? job)
     }
+  };
+}
+
+async function resolveVideoGenerationJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    job: GenerationJobRow;
+    provider?: GenerationJobServiceVideoProvider;
+  }
+) {
+  if (
+    input.job.status === "succeeded" ||
+    input.job.status === "failed" ||
+    input.job.status === "canceled" ||
+    input.job.status === "expired" ||
+    !input.job.provider_request_id ||
+    !isAsyncVideoProvider(input.provider)
+  ) {
+    return input.job;
+  }
+
+  const providerResult = await input.provider.resolveClipTask(input.job.provider_request_id);
+  const jobs = new StoryCamGenerationJobRepository(client);
+
+  if (!providerResult.ok) {
+    return (
+      (await jobs.markFailed(userId, input.job.id, {
+        errorCode: providerResult.errorCode,
+        redactedError: providerResult.redactedError
+      })) ?? input.job
+    );
+  }
+
+  if (providerResult.value.status === "queued" || providerResult.value.status === "running") {
+    return input.job.status === "queued" ? (await jobs.markRunning(userId, input.job.id)) ?? input.job : input.job;
+  }
+
+  if (providerResult.value.status === "canceled") {
+    return (await jobs.markCanceled(userId, input.job.id)) ?? input.job;
+  }
+
+  if (!providerResult.value.videoUrl) {
+    return (
+      (await jobs.markFailed(userId, input.job.id, {
+        errorCode: "SEEDANCE_INVALID_RESPONSE",
+        redactedError: "Seedance completed without a downloadable video."
+      })) ?? input.job
+    );
+  }
+
+  const packet = await loadClipPromptPacketForJob(client, userId, input.job);
+  const stored = await storeProviderGeneratedClip(client, {
+    clipPromptPacketId: packet.id,
+    coreGroupId: packet.coreGroupId,
+    durationSeconds: packet.plannedDurationSeconds ?? 15,
+    inputArtifactVersions: packet.inputArtifactVersions,
+    jobId: input.job.id,
+    providerName: input.job.provider_name,
+    providerRequestId: input.job.provider_request_id,
+    sessionId: input.job.session_id,
+    userId,
+    videoUrl: providerResult.value.videoUrl
+  });
+
+  if (!stored.ok) {
+    return (
+      (await jobs.markFailed(userId, input.job.id, {
+        errorCode: stored.errorCode,
+        redactedError: stored.redactedError
+      })) ?? input.job
+    );
+  }
+
+  return (await jobs.findById(userId, input.job.id)) ?? input.job;
+}
+
+async function loadClipPromptPacketForJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  job: GenerationJobRow
+) {
+  const packetArtifactId = Object.keys((job.input_artifact_versions_json ?? {}) as Record<string, unknown>)[0];
+  const rows = (await new StoryCamArtifactRepository(client).listBySession(userId, { sessionId: job.session_id, type: "clip_prompt_packet" })) ?? [];
+  const versionMap = (job.input_artifact_versions_json ?? {}) as Record<string, unknown>;
+  const row = rows.find(
+    (artifact) =>
+      artifact.type === "clip_prompt_packet" &&
+      artifact.state === "ready" &&
+      (artifact.id === packetArtifactId || versionMap[artifact.id] === artifact.version)
+  );
+
+  if (!row) {
+    throw new GenerationJobRequestError("stale_packet");
+  }
+
+  return clipPromptPacketSchema.parse(row.data_json);
+}
+
+async function toVideoProviderInput(
+  client: SupabaseClient<Database>,
+  userId: string,
+  packet: ClipPromptPacket
+): Promise<GenerationJobServiceVideoInput> {
+  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(userId, packet.sessionId)) ?? [];
+  const referenceImageUrls = await Promise.all(
+    packet.referenceImageMedia.map(async (reference) => {
+      const media = mediaRows.find((row) => row.id === reference.mediaId);
+
+      return media
+        ? createStoryCamSignedUrl(
+            client,
+            media.storage_bucket as Parameters<typeof createStoryCamSignedUrl>[1],
+            media.storage_path,
+            storyCamSignedUrlTtlSeconds
+          )
+        : null;
+    })
+  );
+
+  return {
+    durationSeconds: Math.min(15, packet.plannedDurationSeconds ?? 15),
+    generateAudio: false,
+    prompt: packet.providerPrompt ?? packet.redactedPromptSummary,
+    ratio: "16:9",
+    referenceImageUrls: referenceImageUrls.filter((url): url is string => Boolean(url)),
+    watermark: false
   };
 }
 
@@ -237,4 +406,15 @@ function toJobSummary(job: GenerationJobRow): GenerationJobSummary {
 
 function isImageJobType(type: GenerationJobRow["type"]) {
   return type === "story_world_asset_image" || type === "storyboard_image" || type === "expanded_storyboard_image";
+}
+
+function isAsyncVideoProvider(provider: GenerationJobServiceVideoProvider | undefined): provider is GenerationJobServiceVideoProvider & {
+  resolveClipTask(providerRequestId: string): Promise<ProviderResult<GenerationJobServiceVideoOutput>>;
+  submitClipTask(input: GenerationJobServiceVideoInput): Promise<ProviderResult<{ providerRequestId: string }>>;
+} {
+  return Boolean(
+    provider &&
+      typeof provider.resolveClipTask === "function" &&
+      typeof provider.submitClipTask === "function"
+  );
 }

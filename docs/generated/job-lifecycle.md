@@ -5,7 +5,14 @@ Status: planned contract, to be regenerated from `GenerationJob` implementation 
 ## Job Types
 
 ```ts
-type GenerationJobType = "story_world" | "storyboard" | "video_clip" | "final_work";
+type GenerationJobType =
+  | "story_world"
+  | "story_world_asset_image"
+  | "storyboard"
+  | "storyboard_image"
+  | "expanded_storyboard_image"
+  | "video_clip"
+  | "final_work";
 ```
 
 ## Job Statuses
@@ -78,6 +85,8 @@ Timeout behavior:
 - `queued` jobs can expire if never picked up.
 - `running` jobs can expire if provider exceeds configured timeout.
 - Expired video jobs keep the clip prompt packet for retry.
+- Running image jobs are resolved by polling the image provider task and storing ready thumbnail media.
+- Running Seedance video jobs are resolved by polling the provider task id, downloading `content.video_url`, storing generated clip media, and marking the job succeeded.
 - User-facing rescue path for unstable video output is `重拍这一段`.
 
 ## Job Record

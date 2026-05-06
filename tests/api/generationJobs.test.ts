@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireUserMock = vi.hoisted(() => vi.fn());
 const createSupabaseAdminClientMock = vi.hoisted(() => vi.fn());
+const createConfiguredVideoProviderMock = vi.hoisted(() => vi.fn());
+
+vi.mock("server-only", () => ({}));
 
 vi.mock("@/server/auth/requireUser", async () => {
   const actual = await vi.importActual<typeof import("@/server/auth/requireUser")>("@/server/auth/requireUser");
@@ -16,16 +19,28 @@ vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: createSupabaseAdminClientMock
 }));
 
+vi.mock("@/server/storycam/videoProviderFactory", () => ({
+  createConfiguredVideoProvider: createConfiguredVideoProviderMock
+}));
+
 describe("generation job API routes", () => {
   beforeEach(() => {
     vi.resetModules();
     requireUserMock.mockReset();
     createSupabaseAdminClientMock.mockReset();
+    createConfiguredVideoProviderMock.mockReset();
+    createConfiguredVideoProviderMock.mockReturnValue(undefined);
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://storycam.test";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    process.env.STORYCAM_IMAGE_PROVIDER = "mock";
+    process.env.STORYCAM_TEXT_PROVIDER = "mock";
+    process.env.STORYCAM_VIDEO_PROVIDER = "mock";
   });
 
   it("creates a video generation job for a confirmed core storyboard group", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
-    const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow(), expandedCardRow()] });
+    const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow(), storyboardScriptRow(), expandedCardRow()], mediaRows: [mediaRow("media-core-1", "core-artifact-1"), mediaRow("media-expanded-1", "expanded-artifact-1")] });
 
     requireUserMock.mockResolvedValue({ id: "user-1" });
     createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
@@ -51,10 +66,34 @@ describe("generation job API routes", () => {
       .find((call) => call[0] === "insert")?.[1];
 
     expect(jobInsert).toMatchObject({
+      input_artifact_versions_json: expect.objectContaining({
+        "clip_prompt_packet-artifact-1": 1,
+        "core-artifact-1": 1,
+        "expanded-artifact-1": 1,
+        "storyboard-script-artifact-1": 1
+      }),
       provider_kind: "video",
       provider_name: "mock",
       type: "video_clip"
     });
+    const packetInsert = client.queries
+      .filter((query) => query.table === "storycam_artifacts")
+      .flatMap((query) => query.calls)
+      .find((call) => call[0] === "insert" && (call[1] as { type?: unknown }).type === "clip_prompt_packet")?.[1] as { data_json?: Record<string, unknown> };
+
+    expect(packetInsert.data_json).toMatchObject({
+      plannedDurationSeconds: 4.7,
+      referenceImageMedia: [
+        { artifactId: "core-artifact-1", frameNumber: 1, kind: "core", mediaId: "media-core-1" },
+        { artifactId: "expanded-artifact-1", frameNumber: 2, kind: "expanded", mediaId: "media-expanded-1" }
+      ],
+      storyboardFrames: expect.arrayContaining([
+        expect.objectContaining({ frameNumber: 1, title: "Center Frame" }),
+        expect.objectContaining({ frameNumber: 2, title: "Small Look" })
+      ]),
+      storyboardScriptId: "storyboard-script-artifact-1"
+    });
+    expect(packetInsert.data_json?.providerPrompt).toContain("Nine-frame storyboard script");
   });
 
   it("returns an existing active job for duplicate idempotency keys before creating a packet", async () => {
@@ -75,6 +114,57 @@ describe("generation job API routes", () => {
       status: "running"
     });
     expect(client.queries.some((query) => query.table === "storycam_artifacts")).toBe(false);
+  });
+
+  it("submits a real Seedance job with the 9-frame packet prompt and storyboard image references", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
+    const client = new FakeSupabaseClient({
+      artifactRows: [coreGroupRow(), storyboardScriptRow(), expandedCardRow()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), mediaRow("media-expanded-1", "expanded-artifact-1")]
+    });
+    const videoProvider = {
+      generateClip: vi.fn(),
+      providerKind: "video" as const,
+      providerName: "seedance_2_0",
+      resolveClipTask: vi.fn(),
+      submitClipTask: vi.fn().mockResolvedValue({
+        ok: true,
+        providerKind: "video",
+        providerName: "seedance_2_0",
+        value: { providerRequestId: "seedance-task-1" }
+      })
+    };
+
+    createConfiguredVideoProviderMock.mockReturnValue(videoProvider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(generateClipRequest(), {
+      params: { id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(201);
+    expect(videoProvider.submitClipTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        durationSeconds: 4.7,
+        prompt: expect.stringContaining("Nine-frame storyboard script"),
+        referenceImageUrls: [
+          "https://storycam.test/storage/storycam-generated/users/user-1/sessions/session-1/generated/media-core-1.png",
+          "https://storycam.test/storage/storycam-generated/users/user-1/sessions/session-1/generated/media-expanded-1.png"
+        ]
+      })
+    );
+    expect(
+      client.queries
+        .filter((query) => query.table === "generation_jobs")
+        .flatMap((query) => query.calls)
+        .find((call) => call[0] === "insert")?.[1]
+    ).toMatchObject({
+      provider_name: "seedance_2_0",
+      provider_request_id: "seedance-task-1",
+      status: "running",
+      type: "video_clip"
+    });
   });
 
   it("polls a generation job status with a safe summary", async () => {
@@ -220,6 +310,42 @@ function expandedCardRow() {
   };
 }
 
+function storyboardScriptRow() {
+  return {
+    ...baseArtifactRow(),
+    data_json: {
+      frames: Array.from({ length: 9 }, (_, index) => ({
+        beatType: index === 0 ? "core" : "reaction",
+        cameraAngle: "平视",
+        canvasPosition: ["center", "top-left", "top", "top-right", "left", "right", "bottom-left", "bottom", "bottom-right"][index],
+        durationSeconds: index === 0 ? 3 : 1.5,
+        frameNumber: index + 1,
+        imagePrompt: `Frame ${index + 1} prompt`,
+        narrativePurpose: index === 0 ? "Establish the unsent message." : "Extend the emotional beat.",
+        scene: "Rainy convenience store",
+        shotSize: "中景",
+        sound: "Rain ambience",
+        technicalNotes: "Keep visual continuity.",
+        timeRange: `00:0${index}-00:0${index + 1}`,
+        title: index === 0 ? "Center Frame" : index === 1 ? "Small Look" : `Frame ${index + 1}`,
+        visualContent: index === 0 ? "The lead holds the phone under rain light." : "A quiet continuation frame."
+      })),
+      id: "storyboard-script-1",
+      mainImagePrompt: "Core frame prompt",
+      planSummary: "A 15 second rainy memory.",
+      plannedDurationSeconds: 15,
+      rhythm: "quiet",
+      sessionId: "session-1",
+      state: "ready",
+      tone: "private",
+      version: 1
+    },
+    id: "storyboard-script-artifact-1",
+    parent_artifact_id: "core-artifact-1",
+    type: "storyboard_script"
+  };
+}
+
 function baseArtifactRow() {
   return {
     created_at: "2026-04-26T00:00:00.000Z",
@@ -242,10 +368,20 @@ type FakeSupabaseClientOptions = {
   activeJob?: unknown;
   artifactRows?: unknown[];
   job?: unknown;
+  mediaRows?: unknown[];
 };
 
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  readonly storage = {
+    from: (bucket: string) => ({
+      createSignedUrl: (path: string) =>
+        Promise.resolve({
+          data: { signedUrl: `https://storycam.test/storage/${bucket}/${path}` },
+          error: null
+        })
+    })
+  };
   private artifactInsertCount = 0;
 
   constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
@@ -270,6 +406,7 @@ class FakeQuery {
   readonly calls: unknown[][] = [];
   private inserted: Record<string, unknown> | null = null;
   private updated: Record<string, unknown> | null = null;
+  private eqFilters: Record<string, unknown> = {};
 
   constructor(
     readonly table: string,
@@ -295,6 +432,7 @@ class FakeQuery {
   }
 
   eq(column: string, value: unknown) {
+    this.eqFilters[column] = value;
     this.calls.push(["eq", column, value]);
     return this;
   }
@@ -325,9 +463,14 @@ class FakeQuery {
 
   then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
     return Promise.resolve({
-      data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : [],
+      data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : this.table === "media_assets" ? this.findMediaRows() : [],
       error: null
     }).then(resolve, reject);
+  }
+
+  limit(value: number) {
+    this.calls.push(["limit", value]);
+    return this;
   }
 
   private maybeSingleRow() {
@@ -351,6 +494,10 @@ class FakeQuery {
         updated_at: "2026-04-26T00:00:00.000Z",
         user_id: "user-1"
       };
+    }
+
+    if (this.table === "media_assets") {
+      return this.findMediaRows()[0] ?? null;
     }
 
     return null;
@@ -379,4 +526,32 @@ class FakeQuery {
 
     return this.inserted;
   }
+
+  private findMediaRows() {
+    return (this.options.mediaRows ?? []).filter(
+      (row) =>
+        (!this.eqFilters.user_id || (row as { user_id?: unknown }).user_id === this.eqFilters.user_id) &&
+        (!this.eqFilters.session_id || (row as { session_id?: unknown }).session_id === this.eqFilters.session_id) &&
+        (!this.eqFilters.linked_artifact_id ||
+          (row as { linked_artifact_id?: unknown }).linked_artifact_id === this.eqFilters.linked_artifact_id) &&
+        (!this.eqFilters.kind || (row as { kind?: unknown }).kind === this.eqFilters.kind)
+    );
+  }
+}
+
+function mediaRow(id: string, linkedArtifactId: string) {
+  return {
+    byte_size: 128,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    id,
+    kind: "thumbnail",
+    linked_artifact_id: linkedArtifactId,
+    mime_type: "image/png",
+    session_id: "session-1",
+    source: "provider",
+    storage_bucket: "storycam-generated",
+    storage_path: `users/user-1/sessions/session-1/generated/${id}.png`,
+    user_id: "user-1"
+  };
 }

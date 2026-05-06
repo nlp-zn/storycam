@@ -195,6 +195,39 @@ describe("POST /api/storyboard", () => {
       })
     );
   });
+
+  it("does not generate storyboard artifacts when reference-image provider is ready but asset images are missing", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+    const client = new FakeSupabaseClient({ artifactRows: storyWorldRows() });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        confirmedArtifactVersions: {
+          "character-artifact-1": 1,
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        },
+        sessionId: "session-1"
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "story_world_asset_images_not_ready",
+      redactionApplied: true
+    });
+    expect(client.queries.some((query) => query.table === "generation_jobs")).toBe(false);
+    expect(
+      client.queries
+        .filter((query) => query.table === "storycam_artifacts")
+        .flatMap((query) => query.calls)
+        .some((call) => call[0] === "insert")
+    ).toBe(false);
+  });
 });
 
 function jsonRequest(body: unknown) {
