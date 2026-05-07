@@ -58,12 +58,12 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 
 | StoryCam stage | Default | Real path | Notes |
 | --- | --- | --- | --- |
-| Story world text | mock | DeepSeek official strict tool calling | Uses `deepseek-v4-pro` through `/beta` Chat Completions, forces `submit_story_world`, parses tool arguments, and validates normalized StoryCam artifacts. Raw prompts stay server-side. |
-| Core storyboard text | mock | OpenRouter text | MVP creation uses confirmed script, character assets, and scene asset to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. |
+| Story world text | mock | DeepSeek official strict tool calling | Uses `deepseek-v4-pro` through `/beta` Chat Completions, forces `submit_story_world`, parses tool arguments, and validates normalized StoryCam artifacts. StoryCam normalizes the visual route to private comic-film / animated-storyboard style, not photorealistic real-person drama. Raw prompts stay server-side. |
+| Core storyboard text | mock | OpenRouter text | MVP creation uses confirmed script, character assets, and scene asset to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. Image prompts should describe stylized comic animation storyboard frames with fictional illustrated characters. |
 | Photo understanding | mock | OpenRouter multimodal | Signed URLs and raw private photos must not appear in logs. |
-| Story-world asset image | placeholder/mock | Inference.sh app | Uses the official `@inferencesh/sdk` with `INFERENCE_IMAGE_APP=openai/gpt-image-2`; production routes submit async tasks with `wait:false`, poll `generation_jobs`, then download completed output server-side into private StoryCam storage. The app requires an Inference.sh API key and its required `OPENAI_KEY` secret configured in Inference.sh. |
-| Core/expanded storyboard image | placeholder/mock | Inference.sh `openai/gpt-image-2` | Storyboard images use ready character and scene asset images as `images[]` visual references plus the stored frame prompt. Pure-prompt providers return placeholders instead of generating off-text. |
-| Video clip | mock video | Seedance 2.0 | MVP creation generates one clip for the confirmed core storyboard group. The server creates a 9-frame clip prompt packet, submits a Seedance task with signed storyboard image references, polls by provider task id, then downloads `content.video_url` into private storage. |
+| Story-world asset image | placeholder/mock | Inference.sh app | Uses the official `@inferencesh/sdk` with `INFERENCE_IMAGE_APP=openai/gpt-image-2`; production routes submit async tasks with `wait:false`, poll `generation_jobs`, then download completed output server-side into private StoryCam storage. The app requires an Inference.sh API key and its required `OPENAI_KEY` secret configured in Inference.sh. Character boards should be comic-animation model sheets, not real-person likeness boards. |
+| Core/expanded storyboard image | placeholder/mock | Inference.sh `openai/gpt-image-2` | Storyboard images use ready character and scene asset images as `images[]` visual references plus the stored frame prompt. Pure-prompt providers return placeholders instead of generating off-text. The default target is stylized comic animation with consistent fictional illustrated characters. |
+| Video clip | mock video | Seedance 2.0 | MVP creation generates one clip for the confirmed core storyboard group. The server creates a 9-frame clip prompt packet with native audio direction, submits a Seedance task with comic storyboard image references and `generate_audio: true`, polls by provider task id or receives a webhook update, then downloads `content.video_url` into private storage. Reference media URLs sent to Seedance must be public HTTPS URLs, not local Supabase signed URLs. |
 | Final work | mock/FFmpeg fixture | FFmpeg composer | Account-scoped preview only. |
 
 ## DeepSeek Strict Tool Story World
@@ -139,6 +139,25 @@ When `/api/story-world` appears to return the same mock fixture instantly, check
 - Store generated media in private Supabase Storage buckets.
 - Download Seedance `content.video_url` results before provider URLs expire.
 - Treat real smoke output as private account data, not public demo content.
+
+## Seedance Video Communication
+
+Seedance video generation is asynchronous. The provider contract is:
+
+1. `POST /contents/generations/tasks` creates the remote task and returns a provider task id.
+2. `GET /contents/generations/tasks/{id}` reads task status until `succeeded`, `failed`, `canceled`, or `expired`; official examples use about a 30 second polling interval.
+3. `callback_url` may be supplied when a public server endpoint can receive webhook notifications; the webhook body matches the task query response shape.
+4. When the task succeeds, StoryCam must download `content.video_url` into private storage before the provider URL expires.
+
+The browser should never poll Seedance directly. StoryCam should create or update a local `generation_jobs` row, store the provider task id when submission succeeds, and let the client poll StoryCam with slow backoff. Production can replace client polling with a webhook-updated job plus SSE or realtime updates, but the provider-facing communication remains server-side.
+
+StoryCam clip generation enables Seedance native audio by default with `generate_audio: true`. The provider prompt packet must include audio direction that follows the confirmed storyboard script and reference frames: rain ambience, store-door chime, footsteps or fabric movement, restrained background music, and sparse dialogue/inner voice only when it supports the visual beat. The generated `content.video_url` is still the single mp4 result and should be downloaded to private storage before expiry.
+
+Seedance must be able to fetch every referenced image/video/audio URL. StoryCam signs provider reference media with `STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS` (default 3600 seconds) instead of the UI preview TTL. Local Supabase Storage URLs such as `localhost`, `127.0.0.1`, or `::1` are rejected before provider submission and recorded as failed local jobs. For real image-reference testing from local development, run local Next.js against a hosted Supabase dev/staging project so the signed Storage URLs are public HTTPS.
+
+The v1 Seedance route should avoid sending photorealistic real-person or real-person-like face references from external Storage URLs. Default StoryCam assets and storyboard frames should be comic-film / animated-storyboard references. Real-person, virtual-human, or authorized likeness routes require an explicit Ark/ByteDance asset workflow such as `asset://...` and should be treated as a later provider capability.
+
+The same provider reference URL rule applies to reference-image providers such as Inference.sh. If StoryCam cannot create a public HTTPS reference URL for a character or scene image, it returns a placeholder instead of submitting a provider task.
 
 ## Verification
 

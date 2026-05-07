@@ -61,6 +61,8 @@ Private Storage buckets:
 
 See `docs/generated/db-schema.md` for the current generated schema summary.
 
+Storage access stays private across local, staging, and production. Browser previews use short-lived UI signed URLs. External providers use server-created provider reference signed URLs with a longer TTL, and those URLs must be public HTTPS endpoints from a hosted Supabase project. Local Supabase Storage URLs are valid for mock/local UI work only, not for real Seedance or image-reference provider calls.
+
 ## Provider Model
 
 Provider concepts are separate:

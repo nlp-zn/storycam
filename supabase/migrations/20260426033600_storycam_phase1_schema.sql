@@ -91,6 +91,8 @@ create table if not exists public.generation_jobs (
   input_artifact_versions_json jsonb not null default '{}'::jsonb,
   output_artifact_id uuid references public.storycam_artifacts(id) on delete set null,
   error_code text,
+  provider_error_category text,
+  provider_http_status integer,
   redacted_error text,
   started_at timestamptz,
   ended_at timestamptz,

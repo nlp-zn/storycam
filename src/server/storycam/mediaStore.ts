@@ -8,6 +8,7 @@ export const storyCamPrivateBuckets = [storyCamUploadBucket, storyCamGeneratedBu
 export const storyCamAllowedUploadMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 export const storyCamUploadMaxBytes = 10 * 1024 * 1024;
 export const storyCamSignedUrlTtlSeconds = 60 * 5;
+export const storyCamProviderReferenceSignedUrlTtlSeconds = 60 * 60;
 
 export type StoryCamUploadMimeType = (typeof storyCamAllowedUploadMimeTypes)[number];
 export type StoryCamPrivateBucket = (typeof storyCamPrivateBuckets)[number];
@@ -70,6 +71,7 @@ export class StoryCamMediaStoreError extends Error {
       | "invalid_mime_type"
       | "invalid_size"
       | "invalid_bucket"
+      | "provider_reference_url_not_public"
       | "signed_url_failed"
       | "upload_failed"
   ) {
@@ -139,6 +141,21 @@ export async function createStoryCamSignedUrl(
   return data.signedUrl;
 }
 
+export async function createStoryCamProviderReferenceSignedUrl(
+  client: SignedUrlStorageClient,
+  bucket: StoryCamPrivateBucket,
+  path: string,
+  expiresIn = storyCamProviderReferenceSignedUrlTtlSeconds
+) {
+  const signedUrl = await createStoryCamSignedUrl(client, bucket, path, expiresIn);
+
+  if (!isPublicHttpsProviderReferenceUrl(signedUrl)) {
+    throw new StoryCamMediaStoreError("provider_reference_url_not_public");
+  }
+
+  return signedUrl;
+}
+
 export async function downloadStoryCamObject(client: DownloadStorageClient, bucket: StoryCamPrivateBucket, path: string) {
   assertStoryCamPrivateBucket(bucket);
 
@@ -155,6 +172,43 @@ export function assertStoryCamPrivateBucket(bucket: string): asserts bucket is S
   if (!storyCamPrivateBuckets.includes(bucket as StoryCamPrivateBucket)) {
     throw new StoryCamMediaStoreError("invalid_bucket");
   }
+}
+
+export function isPublicHttpsProviderReferenceUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+
+    return (
+      url.protocol === "https:" &&
+      hostname !== "localhost" &&
+      hostname !== "127.0.0.1" &&
+      hostname !== "::1" &&
+      !isPrivateIpv4Hostname(hostname) &&
+      !hostname.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPrivateIpv4Hostname(hostname: string) {
+  const parts = hostname.split(".").map((part) => Number(part));
+
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [first = 0, second = 0] = parts;
+
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
 }
 
 function extensionForUploadMimeType(mimeType: StoryCamUploadMimeType) {

@@ -21,6 +21,8 @@ const job = {
   input_artifact_versions_json: {},
   output_artifact_id: null,
   error_code: null,
+  provider_error_category: null,
+  provider_http_status: null,
   redacted_error: null,
   started_at: null,
   ended_at: null,

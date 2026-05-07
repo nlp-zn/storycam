@@ -18,6 +18,7 @@ type ExpansionCanvasProps = {
   onClose: () => void;
   onConfirmExpansion: () => void;
   onGenerateClip: () => void;
+  onMediaLoadError?: () => void;
   onRegenerateFrame: (frameNumber: number) => void;
   selectedGroup: CreateStoryboardResponse["storyboard"]["coreStoryboardGroups"][number];
   selectedIndex: number;
@@ -43,6 +44,7 @@ const canvasSlots = [
   { frameNumber: 8, label: "下方", position: "bottom" },
   { frameNumber: 9, label: "右下", position: "bottom-right" }
 ] as const;
+const requiredExpandedFrameCount = 8;
 
 export function ExpansionCanvas({
   expansion,
@@ -51,6 +53,7 @@ export function ExpansionCanvas({
   onClose,
   onConfirmExpansion,
   onGenerateClip,
+  onMediaLoadError,
   onRegenerateFrame,
   selectedGroup,
   selectedIndex,
@@ -65,6 +68,8 @@ export function ExpansionCanvas({
     [cards, expandedImages, selectedGroup, selectedScript]
   );
   const readyFrames = frames.filter((frame) => frame.image?.status === "ready");
+  const readyExpandedFrameCount = expandedImages.filter((image) => image?.status === "ready").length;
+  const canGenerateClip = readyExpandedFrameCount >= requiredExpandedFrameCount;
   const previewFrame = frames.find((frame) => frame.frameNumber === previewFrameNumber && frame.image?.status === "ready");
 
   function movePreview(delta: number) {
@@ -94,8 +99,13 @@ export function ExpansionCanvas({
             <button className="storycam-secondary-button px-4 py-2 text-xs" onClick={onClose} type="button">
               收起
             </button>
-            <button className="storycam-primary-button px-4 py-2 text-xs" onClick={onGenerateClip} type="button">
-              用这一组生成片段
+            <button
+              className="storycam-primary-button px-4 py-2 text-xs"
+              disabled={isLoading || !canGenerateClip}
+              onClick={onGenerateClip}
+              type="button"
+            >
+              {canGenerateClip ? "用这一组生成片段" : `等待扩展图 ${readyExpandedFrameCount}/8`}
             </button>
           </div>
         </div>
@@ -112,6 +122,7 @@ export function ExpansionCanvas({
                       isGenerating={isLoading || frame?.image?.status === "generating"}
                       isRegenerating={isRegeneratingFrame(slot.frameNumber)}
                       key={slot.position}
+                      onMediaLoadError={onMediaLoadError}
                       onPreview={() => setPreviewFrameNumber(slot.frameNumber)}
                       onRegenerate={() => onRegenerateFrame(slot.frameNumber)}
                       position={slot.position}
@@ -125,6 +136,7 @@ export function ExpansionCanvas({
               isLoading={isLoading}
               isRegenerating={isRegeneratingFrame(1)}
               onConfirmExpansion={onConfirmExpansion}
+              onMediaLoadError={onMediaLoadError}
               onPreview={() => setPreviewFrameNumber(1)}
               onRegenerate={() => onRegenerateFrame(1)}
             />
@@ -135,7 +147,7 @@ export function ExpansionCanvas({
             <h3 className="mt-3 text-lg font-black text-[#e2e2e2]">{selectedScript?.planSummary ?? selectedGroup.storyPurpose}</h3>
             <p className="mt-3 text-sm leading-6 text-[#b9cacb]">{selectedScript?.rhythm ?? selectedGroup.emotionalTurn}</p>
             <div className="mt-5 rounded-[1rem] border border-[#00f0ff]/24 bg-[#00f0ff]/10 p-4 text-sm font-black text-[#dbfcff]">
-              {expandedImages.filter((image) => image?.status === "ready").length} / 8 张扩展分镜图
+              {readyExpandedFrameCount} / 8 张扩展分镜图
             </div>
             <ol className="storycam-script-frame-list">
               {frames.map((frame) => (
@@ -156,6 +168,7 @@ export function ExpansionCanvas({
         <FramePreviewModal
           canStep={readyFrames.length > 1}
           frame={previewFrame}
+          onMediaLoadError={onMediaLoadError}
           onClose={() => setPreviewFrameNumber(null)}
           onNext={() => movePreview(1)}
           onPrevious={() => movePreview(-1)}
@@ -171,6 +184,7 @@ function CoreSlot({
   isLoading,
   isRegenerating,
   onConfirmExpansion,
+  onMediaLoadError,
   onPreview,
   onRegenerate
 }: {
@@ -179,6 +193,7 @@ function CoreSlot({
   isLoading: boolean;
   isRegenerating: boolean;
   onConfirmExpansion: () => void;
+  onMediaLoadError?: () => void;
   onPreview: () => void;
   onRegenerate: () => void;
 }) {
@@ -193,7 +208,7 @@ function CoreSlot({
         onClick={hasStartedExpansion ? onPreview : onConfirmExpansion}
         type="button"
       >
-        <StoryboardImage alt={`${frame?.title ?? "中心主图"} 主分镜图`} image={frame?.image} />
+        <StoryboardImage alt={`${frame?.title ?? "中心主图"} 主分镜图`} image={frame?.image} onMediaLoadError={onMediaLoadError} />
       </button>
       <div className="storycam-expansion-slot-overlay" />
       <FrameLabel frameNumber={1} label="中心主图" />
@@ -221,6 +236,7 @@ function ExpansionSlot({
   frame,
   isGenerating,
   isRegenerating,
+  onMediaLoadError,
   onPreview,
   onRegenerate,
   position
@@ -228,6 +244,7 @@ function ExpansionSlot({
   frame?: FrameView;
   isGenerating: boolean;
   isRegenerating: boolean;
+  onMediaLoadError?: () => void;
   onPreview: () => void;
   onRegenerate: () => void;
   position: string;
@@ -245,7 +262,7 @@ function ExpansionSlot({
         onClick={onPreview}
         type="button"
       >
-        <StoryboardImage alt={`扩展分镜 ${frameNumber}`} image={frame?.image} />
+        <StoryboardImage alt={`扩展分镜 ${frameNumber}`} image={frame?.image} onMediaLoadError={onMediaLoadError} />
       </button>
       <div className="storycam-expansion-slot-overlay" />
       <FrameLabel frameNumber={frameNumber} label={frame?.label ?? "扩展帧"} />
@@ -272,12 +289,14 @@ function ExpansionSlot({
 function FramePreviewModal({
   canStep,
   frame,
+  onMediaLoadError,
   onClose,
   onNext,
   onPrevious
 }: {
   canStep: boolean;
   frame: FrameView;
+  onMediaLoadError?: () => void;
   onClose: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -295,7 +314,11 @@ function FramePreviewModal({
           </button>
         </div>
         <div className="storycam-frame-preview-image">
-          <StoryboardImage alt={`第 ${String(frame.frameNumber).padStart(2, "0")} 帧大图`} image={frame.image} />
+          <StoryboardImage
+            alt={`第 ${String(frame.frameNumber).padStart(2, "0")} 帧大图`}
+            image={frame.image}
+            onMediaLoadError={onMediaLoadError}
+          />
         </div>
         <div className="storycam-frame-preview-footer">
           <p>{frame.description}</p>
@@ -313,11 +336,19 @@ function FramePreviewModal({
   );
 }
 
-function StoryboardImage({ alt, image }: { alt: string; image?: StoryboardImageState }) {
+function StoryboardImage({ alt, image, onMediaLoadError }: { alt: string; image?: StoryboardImageState; onMediaLoadError?: () => void }) {
   if (image?.status === "ready") {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img alt={alt} className="size-full object-cover" src={image.signedUrl} />
+      <img
+        alt={alt}
+        className="size-full object-cover"
+        onError={(event) => {
+          event.currentTarget.hidden = true;
+          onMediaLoadError?.();
+        }}
+        src={image.signedUrl}
+      />
     );
   }
 

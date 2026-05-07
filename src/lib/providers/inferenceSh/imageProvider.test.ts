@@ -155,6 +155,45 @@ describe("createInferenceShImageProvider", () => {
     );
   });
 
+  it("converts local reference image URLs to data URIs before submitting async tasks", async () => {
+    const runTask = vi.fn().mockResolvedValue({
+      id: "task-local-refs",
+      status: "queued"
+    });
+    const fetchImage = vi.fn().mockResolvedValue({
+      bytes: new Uint8Array([1, 2, 3]),
+      mimeType: "image/png"
+    });
+    const provider = createInferenceShImageProvider({
+      apiKey: "inference-key",
+      app: "openai/gpt-image-2",
+      buildPrompt: () => ({
+        images: ["http://127.0.0.1:54321/storage/v1/object/sign/storycam-generated/private-reference.png"],
+        prompt: "combine the local references into one cinematic storyboard frame"
+      }),
+      fetchImage,
+      getTask: vi.fn(),
+      runTask,
+      supportsReferenceImages: true
+    });
+
+    await expect(provider.submitImageTask({})).resolves.toMatchObject({
+      ok: true,
+      value: {
+        providerRequestId: "task-local-refs"
+      }
+    });
+    expect(fetchImage).toHaveBeenCalledWith("http://127.0.0.1:54321/storage/v1/object/sign/storycam-generated/private-reference.png");
+    expect(runTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({
+          images: ["data:image/png;base64,AQID"]
+        })
+      }),
+      { stream: false, wait: false }
+    );
+  });
+
   it("resolves a running async image task without downloading", async () => {
     const fetchImage = vi.fn();
     const provider = createInferenceShImageProvider({
@@ -176,6 +215,26 @@ describe("createInferenceShImageProvider", () => {
       }
     });
     expect(fetchImage).not.toHaveBeenCalled();
+  });
+
+  it("treats errored async task status as a terminal provider failure", async () => {
+    const provider = createInferenceShImageProvider({
+      apiKey: "inference-key",
+      app: "openai/gpt-image-2",
+      buildPrompt: () => ({ prompt: "draw" }),
+      fetchImage: vi.fn(),
+      getTask: vi.fn().mockResolvedValue({
+        error: "Error downloading URL http://127.0.0.1:54321/storage/v1/object/sign/private-reference",
+        status: 11
+      }),
+      runTask: vi.fn()
+    });
+
+    await expect(provider.resolveImageTask("task-errored")).resolves.toMatchObject({
+      errorCode: "INFERENCE_SH_IMAGE_INVALID_OUTPUT",
+      ok: false,
+      retryable: true
+    });
   });
 
   it("resolves a completed async image task by downloading output images", async () => {

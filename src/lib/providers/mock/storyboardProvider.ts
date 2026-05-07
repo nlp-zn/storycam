@@ -216,7 +216,7 @@ function buildMockStoryboardFrames(
       imagePrompt:
         index === 0
           ? buildMockMainImagePrompt(group.title, group.storyPurpose, group.emotionalTurn)
-          : `Cinematic storyboard still frame ${index + 1} for "${group.title}", ${frame.visualContent}, ordinary people, rainy Korean drama realism, consistent character wardrobe and convenience-store location, 16:9, no text.`,
+          : `Stylized comic animation storyboard frame ${index + 1} for "${group.title}", ${frame.visualContent}, fictional illustrated characters, rainy private-memory mood, consistent character wardrobe and convenience-store location, cinematic lighting, 16:9, no text, not photorealistic.`,
       narrativePurpose: index === 0 ? group.storyPurpose : "作为中心主图周围的连续分镜，补足动作、反应和氛围。",
       scene: `session ${sessionId} rainy convenience-store story world`,
       shotSize: index === 0 ? "中景" : index % 3 === 0 ? "近景" : "全景",
@@ -232,7 +232,7 @@ function buildMockMainImagePrompt(title: string, storyPurpose: string, emotional
     `Core storyboard still: ${title}.`,
     storyPurpose,
     `Emotional turn: ${emotionalTurn}.`,
-    "A cinematic 16:9 frame, restrained Korean drama rain-night realism, ordinary people, expressive small gestures, no text."
+    "A stylized comic animation 16:9 frame, restrained rain-night private-memory mood, fictional illustrated characters, expressive small gestures, cinematic lighting, no text, not photorealistic."
   ].join(" ");
 }
 

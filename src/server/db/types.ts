@@ -92,6 +92,8 @@ export type GenerationJobRow = {
   input_artifact_versions_json: Json;
   output_artifact_id: string | null;
   error_code: string | null;
+  provider_error_category: string | null;
+  provider_http_status: number | null;
   redacted_error: string | null;
   started_at: string | null;
   ended_at: string | null;
@@ -116,6 +118,8 @@ export type GenerationJobInsert = {
   input_artifact_versions_json?: Json;
   output_artifact_id?: string | null;
   error_code?: string | null;
+  provider_error_category?: string | null;
+  provider_http_status?: number | null;
   redacted_error?: string | null;
   started_at?: string | null;
   ended_at?: string | null;

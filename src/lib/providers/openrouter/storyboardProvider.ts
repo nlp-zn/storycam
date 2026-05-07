@@ -128,7 +128,7 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
       "3. 该组必须包含 title、storyPurpose、emotionalTurn、planSummary、rhythm、tone、mainImagePrompt、frames。",
       "4. frames 必须正好 9 帧，frameNumber 为 1-9；第 1 帧 canvasPosition=center，是核心分镜主图；第 2-9 帧依次为 top-left/top/top-right/left/right/bottom-left/bottom/bottom-right。",
       "5. frames 每帧必须包含山隐九列分镜所需字段：timeRange、cameraAngle、shotSize、visualContent、scene、sound、technicalNotes、narrativePurpose，并补充 title、beatType、imagePrompt。",
-      "6. imagePrompt 用英文写，适合文生图生成 16:9 分镜图；必须强调 cinematic storyboard still、ordinary people、consistent character and scene assets。",
+      "6. imagePrompt 用英文写，适合文生图生成 16:9 分镜图；必须强调 stylized comic animation storyboard frame、fictional illustrated characters、consistent character and scene assets、not photorealistic。",
       "7. mainImagePrompt 必须等于第 1 帧 imagePrompt 的核心含义。",
       "8. 不要输出内部 id、sessionId、state、version、provider 或 Markdown。"
     ].join("\n"),
@@ -256,7 +256,7 @@ function fallbackFramesForGroup(coreGroup: CoreStoryboardGroup, sessionId: strin
       imagePrompt:
         index === 0
           ? fallbackImagePrompt(coreGroup.title)
-          : `Cinematic storyboard still frame ${index + 1} for "${coreGroup.title}", ${coreGroup.storyPurpose}, visible action and reaction, consistent character and location assets, 16:9, no text.`,
+          : `Stylized comic animation storyboard frame ${index + 1} for "${coreGroup.title}", ${coreGroup.storyPurpose}, fictional illustrated characters, visible action and reaction, consistent character and location assets, cinematic lighting, 16:9, no text, not photorealistic.`,
       narrativePurpose: index === 0 ? coreGroup.storyPurpose : "补充中心分镜周围的动作、反应和氛围连续性。",
       scene: `StoryCam confirmed scene for ${sessionId}`,
       shotSize: index === 0 ? "中景" : "近景",
@@ -298,7 +298,7 @@ function fallbackGroup(index: number): OpenRouterStoryboardGroupDraft {
 }
 
 function fallbackImagePrompt(title: string) {
-  return `Cinematic storyboard still for "${title}", ordinary people in a grounded private-memory scene, consistent character and location assets, restrained emotion, 16:9, no text.`;
+  return `Stylized comic animation storyboard frame for "${title}", fictional illustrated people in a grounded private-memory scene, consistent character and location assets, restrained emotion, cinematic lighting, 16:9, no text, not photorealistic.`;
 }
 
 function nonEmptyText(value: string | undefined, fallback: string) {

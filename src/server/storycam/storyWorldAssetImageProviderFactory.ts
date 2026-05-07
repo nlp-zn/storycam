@@ -1,6 +1,7 @@
 import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imageProvider";
 import { createOpenRouterImageProvider } from "@/lib/providers/openrouter/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
+import { normalizeStoryCamVisualStyle, storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { StoryCamConfig } from "@/server/config";
 import type { StoryWorldAssetImageInput, StoryWorldAssetImageOutput } from "./storyWorldAssetImageService";
 
@@ -65,7 +66,8 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
         "Composition: right 70-75% is a detailed model sheet with front, side, and back turnaround views at consistent height.",
         "Add head, hair, and expression studies plus wardrobe, footwear, hand, and prop detail callouts around the turnaround.",
         "Use light pencil construction lines, simple measurement guides, and small nonessential annotation marks to feel like a professional character reference board.",
-        "Keep the character asset style consistent with the shared visual style; it may be live-action realistic, cinematic, manga, animation, picture-book, filmic, or another style inferred from the story.",
+        "Keep the character asset style consistent with the shared visual style as a comic-animation model sheet.",
+        storyCamComicVisualSafetyLine,
         "Use a plain white or warm off-white studio background unless the shared visual style clearly requires another neutral production-board background.",
         "This is not a cinematic still, poster, close-up portrait, or UI mockup.",
         "No readable copyrighted logos, no watermarks, no large text blocks."
@@ -105,7 +107,7 @@ function sharedVisualStyleForPrompt(input: StoryWorldAssetImageInput) {
   const explicitStyle = input.script?.visualStyle?.trim();
 
   if (explicitStyle) {
-    return explicitStyle;
+    return normalizeStoryCamVisualStyle(explicitStyle);
   }
 
   const source = [
@@ -120,18 +122,18 @@ function sharedVisualStyleForPrompt(input: StoryWorldAssetImageInput) {
     .toLowerCase();
 
   if (/(漫画|动漫|动画|二次元|anime|manga|comic)/i.test(source)) {
-    return "漫画/动画设定稿风格，干净线条，低饱和色彩，情绪克制";
+    return normalizeStoryCamVisualStyle("漫画/动画设定稿风格，干净线条，低饱和色彩，情绪克制");
   }
 
   if (/(绘本|童话|storybook|picture book)/i.test(source)) {
-    return "绘本式视觉风格，柔和纸感，温暖色彩，适合私人记忆";
+    return normalizeStoryCamVisualStyle("绘本式视觉风格，柔和纸感，温暖色彩，适合私人记忆");
   }
 
   if (/(胶片|复古|film|retro|vintage)/i.test(source)) {
-    return "复古胶片电影感，柔和颗粒，低对比光影，私人回忆质感";
+    return normalizeStoryCamVisualStyle("复古胶片电影感，柔和颗粒，低对比光影，私人回忆质感");
   }
 
-  return "写实电影感，普通人质感，克制表演，低饱和色彩和自然光线";
+  return normalizeStoryCamVisualStyle();
 }
 
 function scenePanelsForPrompt(input: Extract<StoryWorldAssetImageInput, { assetKind: "scene" }>) {

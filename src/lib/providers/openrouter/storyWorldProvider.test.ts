@@ -82,7 +82,7 @@ describe("openrouter story world provider", () => {
           id: "script-session-1",
           sessionId: "session-1",
           title: "雨夜未发送",
-          visualStyle: "写实韩剧电影感，雨夜冷暖混合光，低饱和色彩"
+          visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
         })
       }
     });
@@ -153,7 +153,7 @@ describe("openrouter story world provider", () => {
         script: expect.objectContaining({
           logline: "我想把雨夜错过的人拍成短片",
           title: "私人短片",
-          visualStyle: "写实电影感，普通人质感，克制表演，低饱和色彩和自然光线"
+          visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
         })
       }
     });

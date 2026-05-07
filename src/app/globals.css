@@ -681,6 +681,10 @@ button:disabled {
   gap: 32px;
 }
 
+.storycam-review-grid[data-clip-count="1"] {
+  grid-template-columns: minmax(0, min(720px, 100%));
+}
+
 .storycam-review-card {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -762,6 +766,10 @@ button:disabled {
 
 .storycam-timeline-clip:nth-child(4) {
   width: 30%;
+}
+
+.storycam-timeline-clip--single {
+  width: 100%;
 }
 
 .storycam-timeline-clip.is-active {

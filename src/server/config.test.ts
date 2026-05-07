@@ -12,6 +12,9 @@ describe("loadStoryCamConfig", () => {
   it("loads safe mock defaults", () => {
     const config = loadStoryCamConfig(validMockEnv);
 
+    expect(config.media).toEqual({
+      providerReferenceSignedUrlTtlSeconds: 3600
+    });
     expect(config.generation).toEqual({
       mode: "mock",
       textProvider: "mock",
@@ -184,6 +187,24 @@ describe("loadStoryCamConfig", () => {
       apiKey: "seedance-key",
       model: "doubao-seedance-2-0-260128"
     });
+  });
+
+  it("loads a custom provider reference signed URL TTL", () => {
+    const config = loadStoryCamConfig({
+      ...validMockEnv,
+      STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS: "7200"
+    });
+
+    expect(config.media.providerReferenceSignedUrlTtlSeconds).toBe(7200);
+  });
+
+  it("rejects invalid provider reference signed URL TTL values", () => {
+    expect(() =>
+      loadStoryCamConfig({
+        ...validMockEnv,
+        STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS: "0"
+      })
+    ).toThrow(/INVALID_ENV:STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS/);
   });
 
   it("requires OpenRouter credentials and enabled provider model names", () => {

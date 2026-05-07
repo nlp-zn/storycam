@@ -5,6 +5,7 @@ type AssetCardProps = {
   lines: string[];
   meta?: string;
   onOpen?: () => void;
+  onImageError?: () => void;
   status?: "empty" | "generating" | "ready" | "error";
   tone?: "character" | "scene";
   title: string;
@@ -16,6 +17,7 @@ export function AssetCard({
   layout = "standard",
   lines,
   meta,
+  onImageError,
   onOpen,
   status = "empty",
   title,
@@ -37,7 +39,15 @@ export function AssetCard({
       >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img alt={`${title} 资产图`} className="absolute inset-0 size-full object-cover" src={imageUrl} />
+          <img
+            alt={`${title} 资产图`}
+            className="absolute inset-0 size-full object-cover"
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+              onImageError?.();
+            }}
+            src={imageUrl}
+          />
         ) : null}
         <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
           <span className="rounded-full border border-white/15 bg-black/50 px-3 py-1 text-xs font-black text-[#dbfcff] backdrop-blur">

@@ -10,11 +10,12 @@ Product specs define what StoryCam should do and why. Engineering plans must poi
 ## Current Product Decisions
 
 - StoryCam is a Web-first AI private story theater for ordinary users.
+- The v1 visual route is a private comic-film / animated-storyboard experience, not photorealistic real-person short drama.
 - Phase 1 requires account login through Supabase Auth, preferably Google login.
 - Data uses Supabase Postgres; media uses Supabase Storage.
 - Story-world text uses DeepSeek official strict function calling; core storyboard text and multimodal understanding use provider adapters, with OpenRouter still available for structured text and multimodal paths.
 - Story-world, core storyboard, and expanded storyboard images use the provider boundary and currently prefer Inference.sh `openai/gpt-image-2`.
-- Seedance 2.0 is the first real video generation path.
+- Seedance 2.0 is the first real video generation path and should receive stylized comic storyboard references by default.
 - First version does not include sharing links, payments, marketplace, or public feed.
 
 ## How To Update

@@ -4,6 +4,8 @@ export const redactedValue = "[redacted]" as const;
 
 export type RedactedProviderError = {
   errorCode: string;
+  providerErrorCategory?: string;
+  providerHttpStatus?: number;
   redactedError: string;
   retryable: boolean;
   redactionApplied: true;
@@ -56,10 +58,12 @@ export function redactForLog<T>(value: T): unknown {
 
 export function redactProviderError(
   error: unknown,
-  options: { errorCode?: string; retryable?: boolean } = {}
+  options: { errorCode?: string; providerErrorCategory?: string; providerHttpStatus?: number; retryable?: boolean } = {}
 ): RedactedProviderError {
   return {
     errorCode: options.errorCode ?? providerErrorCode(error),
+    ...(options.providerErrorCategory ? { providerErrorCategory: options.providerErrorCategory } : {}),
+    ...(options.providerHttpStatus !== undefined ? { providerHttpStatus: options.providerHttpStatus } : {}),
     redactedError: "Provider request failed.",
     retryable: options.retryable ?? false,
     redactionApplied: true

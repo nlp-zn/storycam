@@ -20,7 +20,7 @@ export const rainyKDramaStoryWorldFixture = {
     logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
     summary: "冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的那一秒。",
     title: "雨夜未发送",
-    visualStyle: "写实韩剧电影感，雨夜冷暖混合光，低饱和色彩，克制真实的私人回忆质感"
+    visualStyle: "漫画电影/动画分镜风格，雨夜冷暖混合光，低饱和色彩，克制真实的私人回忆质感，非写实真人"
   },
   characterAssets: [
     {
@@ -32,7 +32,7 @@ export const rainyKDramaStoryWorldFixture = {
       referenceMediaIds: [],
       relationshipToUserStory: "承载那段没有说出口的暗恋记忆",
       role: "暗恋者",
-      stableVisualDescription: "湿发贴在脸侧，浅色风衣，手指反复点亮手机屏幕",
+      stableVisualDescription: "虚构漫画角色，湿发贴在脸侧，浅色风衣，手指反复点亮手机屏幕",
       wardrobe: "浅色风衣、低饱和围巾",
       consistencyNotes: ["表演始终收住，不做大哭或奔跑"]
     }

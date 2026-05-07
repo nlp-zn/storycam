@@ -15,7 +15,20 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
     const params = await context.params;
     const config = loadStoryCamConfig();
     const videoProvider = createConfiguredVideoProvider(config);
-    const result = await createGenerateClipJob(createSupabaseAdminClient(), user.id, params.id, await request.json(), videoProvider);
+    const body = await request.json();
+    const result = await createGenerateClipJob(
+      createSupabaseAdminClient(),
+      user.id,
+      params.id,
+      {
+        ...body,
+        generationMode: config.generation.mode
+      },
+      videoProvider,
+      {
+        providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
+      }
+    );
 
     return NextResponse.json(
       {

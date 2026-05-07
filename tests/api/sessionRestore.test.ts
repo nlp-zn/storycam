@@ -193,6 +193,87 @@ describe("GET /api/storycam-sessions/current", () => {
     expect(serialized).not.toContain("storage_path");
     expect(serialized).not.toContain("storage_bucket");
   });
+
+  it("restores generated clip and final work progress so later steps stay reachable", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/current/route");
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "export-session": [
+          ...storyWorldArtifacts("export-session"),
+          storyboardScriptArtifact("storyboard-script-artifact-1", "core-artifact-1", "export-session"),
+          coreGroupArtifact("core-artifact-1", "export-session"),
+          generatedClipArtifact("generated-clip-artifact-1", "export-session"),
+          finalWorkArtifact("final-work-artifact-1", "export-session")
+        ]
+      },
+      generationJobsBySession: {
+        "export-session": [
+          generationJobRow({
+            id: "clip-job-1",
+            output_artifact_id: "generated-clip-artifact-1",
+            session_id: "export-session",
+            status: "succeeded",
+            updated_at: "2026-04-28T09:20:00.000Z"
+          })
+        ]
+      },
+      mediaBySession: {
+        "export-session": [
+          mediaRow({
+            id: "clip-media-1",
+            kind: "generated_clip",
+            mime_type: "video/mp4",
+            session_id: "export-session",
+            storage_path: "users/user-1/sessions/export-session/generated/clips/clip.mp4"
+          }),
+          mediaRow({
+            id: "final-media-1",
+            kind: "final_work",
+            mime_type: "video/mp4",
+            session_id: "export-session",
+            storage_path: "users/user-1/sessions/export-session/generated/final/final.mp4"
+          })
+        ]
+      },
+      sessions: [
+        sessionRow({
+          core_group_target_count: 1,
+          id: "export-session",
+          planned_duration_seconds: 15,
+          updated_at: "2026-04-28T10:00:00.000Z"
+        })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      clipJob: {
+        id: "clip-job-1",
+        outputArtifactId: "generated-clip-artifact-1",
+        outputPreview: {
+          durationSeconds: 15,
+          signedUrl: "signed://storycam-generated/users%2Fuser-1%2Fsessions%2Fexport-session%2Fgenerated%2Fclips%2Fclip.mp4"
+        },
+        status: "succeeded"
+      },
+      currentStep: "export",
+      finalWork: {
+        finalWork: { id: "final-work-artifact-1", type: "final_work", version: 1 },
+        media: { id: "final-media-1", kind: "final_work", mimeType: "video/mp4" },
+        preview: {
+          durationSeconds: 15,
+          signedUrl: "signed://storycam-generated/users%2Fuser-1%2Fsessions%2Fexport-session%2Fgenerated%2Ffinal%2Ffinal.mp4"
+        }
+      },
+      restored: true
+    });
+  });
 });
 
 describe("GET /api/storycam-sessions/recent", () => {
@@ -506,6 +587,64 @@ function expandedCardArtifact(id: string, parentArtifactId: string, sessionId: s
   );
 }
 
+function generatedClipArtifact(id: string, sessionId: string) {
+  return artifactRow(id, "generated_clip", sessionId, {
+    clipPromptPacketId: "clip-packet-1",
+    coreGroupId: "core-group-1",
+    durationSeconds: 15,
+    id: "generated-clip-1",
+    jobId: "clip-job-1",
+    mediaAssetId: "clip-media-1",
+    providerName: "mock",
+    reviewState: "pending",
+    sessionId,
+    state: "ready",
+    version: 1
+  });
+}
+
+function finalWorkArtifact(id: string, sessionId: string) {
+  return artifactRow(id, "final_work", sessionId, {
+    durationSeconds: 15,
+    generatedClipIds: ["generated-clip-1"],
+    id: "final-work-1",
+    mediaAssetId: "final-media-1",
+    previewStatus: "ready",
+    sessionId,
+    state: "ready",
+    version: 1
+  });
+}
+
+function generationJobRow(overrides: Record<string, unknown> = {}) {
+  return {
+    attempts: 0,
+    created_at: "2026-04-28T09:15:00.000Z",
+    ended_at: null,
+    error_code: null,
+    generation_mode: "mock",
+    id: "clip-job-1",
+    idempotency_key_hash: "job-hash",
+    input_artifact_versions_json: {},
+    max_attempts: 1,
+    output_artifact_id: null,
+    provider_error_category: null,
+    provider_http_status: null,
+    provider_kind: "video",
+    provider_name: "mock",
+    provider_request_id: null,
+    redacted_error: null,
+    session_id: "session-1",
+    started_at: null,
+    status: "queued",
+    tombstoned_at: null,
+    type: "video_clip",
+    updated_at: "2026-04-28T09:15:00.000Z",
+    user_id: "user-1",
+    ...overrides
+  };
+}
+
 function mediaRow(overrides: Record<string, unknown>) {
   return {
     byte_size: 123,
@@ -526,6 +665,7 @@ function mediaRow(overrides: Record<string, unknown>) {
 
 type FakeSupabaseClientOptions = {
   artifactsBySession?: Record<string, unknown[]>;
+  generationJobsBySession?: Record<string, unknown[]>;
   mediaBySession?: Record<string, unknown[]>;
   sessions?: unknown[];
 };
@@ -627,6 +767,11 @@ class FakeQuery {
     if (this.table === "media_assets") {
       const sessionId = this.filters.find(([column]) => column === "session_id")?.[1] as string | undefined;
       return sessionId ? (this.options.mediaBySession?.[sessionId] ?? []) : [];
+    }
+
+    if (this.table === "generation_jobs") {
+      const sessionId = this.filters.find(([column]) => column === "session_id")?.[1] as string | undefined;
+      return sessionId ? (this.options.generationJobsBySession?.[sessionId] ?? []) : [];
     }
 
     return [];

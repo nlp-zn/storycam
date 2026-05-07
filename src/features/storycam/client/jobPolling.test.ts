@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   imageGenerationPollingPolicy,
   mapWithConcurrencyLimit,
-  nextImageGenerationPollDelayMs
+  nextImageGenerationPollDelayMs,
+  nextVideoGenerationPollDelayMs
 } from "./jobPolling";
 
 describe("image generation polling", () => {
@@ -35,5 +36,16 @@ describe("image generation polling", () => {
     expect(maxActiveRequests).toBeLessThanOrEqual(imageGenerationPollingPolicy.maxConcurrentRequests);
     expect(results).toHaveLength(8);
     expect(results.every((result) => result.status === "fulfilled")).toBe(true);
+  });
+});
+
+describe("video generation polling", () => {
+  it("checks quickly once, then backs off to a provider-friendly polling cadence", () => {
+    expect(nextVideoGenerationPollDelayMs(0)).toBe(2_000);
+    expect(nextVideoGenerationPollDelayMs(1)).toBe(5_000);
+    expect(nextVideoGenerationPollDelayMs(2)).toBe(10_000);
+    expect(nextVideoGenerationPollDelayMs(3)).toBe(20_000);
+    expect(nextVideoGenerationPollDelayMs(4)).toBe(30_000);
+    expect(nextVideoGenerationPollDelayMs(99)).toBe(30_000);
   });
 });

@@ -30,6 +30,7 @@ test.describe("StoryCam generate clip", () => {
         body: JSON.stringify({
           artifacts: {
             coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+            expandedStoryboardCards: expandedStoryboardCardRefs(),
             storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
             storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
           },
@@ -69,7 +70,8 @@ test.describe("StoryCam generate clip", () => {
 
       expect(body.providerSendConfirmed).toBe(true);
       expect(body.confirmedArtifactVersions).toEqual({
-        "core-artifact-1": 1
+        "core-artifact-1": 1,
+        ...Object.fromEntries(expandedStoryboardCardRefs().map((card) => [card.id, card.version]))
       });
 
       await route.fulfill({
@@ -222,6 +224,7 @@ test.describe("StoryCam generate clip", () => {
         body: JSON.stringify({
           artifacts: {
             coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+            expandedStoryboardCards: expandedStoryboardCardRefs(),
             storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
             storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
           },
@@ -342,7 +345,7 @@ function storyboardFixture() {
       {
         emotionalTurn: "想说出口",
         estimatedClipDurationSeconds: 15,
-        expandedStoryboardImages: [],
+        expandedStoryboardImages: Array.from({ length: 8 }, (_, index) => readyImage(`media-expanded-${index + 1}`)),
         representativeImage: placeholderImage(),
         scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
         storyPurpose: "建立她和未发送短信之间的私人情绪。",
@@ -365,6 +368,27 @@ function placeholderImage() {
     placeholder: true,
     status: "placeholder"
   };
+}
+
+function readyImage(mediaId: string) {
+  return {
+    mediaId,
+    mimeType: "image/png",
+    placeholder: false,
+    signedUrl: `https://storycam.test/${mediaId}.png`,
+    signedUrlExpiresIn: 300,
+    status: "ready"
+  };
+}
+
+function expandedStoryboardCardRefs() {
+  return Array.from({ length: 8 }, (_, index) => ({
+    id: `expanded-${index + 1}`,
+    parentArtifactId: "core-artifact-1",
+    state: "ready",
+    type: "expanded_storyboard_card",
+    version: 1
+  }));
 }
 
 function expansionCardsFixture() {

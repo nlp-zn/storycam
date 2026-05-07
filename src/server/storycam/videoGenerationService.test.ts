@@ -375,6 +375,8 @@ function baseJobRow() {
     created_at: "2026-04-26T00:00:00.000Z",
     ended_at: null,
     error_code: null,
+  provider_error_category: null,
+  provider_http_status: null,
     generation_mode: "real",
     id: "job-1",
     idempotency_key_hash: "hash-1",

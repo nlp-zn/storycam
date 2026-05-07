@@ -72,7 +72,10 @@ export async function createExpandedStoryboardCards(
   userId: string,
   coreStoryboardGroupId: string,
   body: ExpansionRequestBody,
-  imageProvider?: ImageGenerationProvider<ExpandedStoryboardImageInput, StoryboardRepresentativeImageOutput>
+  imageProvider?: ImageGenerationProvider<ExpandedStoryboardImageInput, StoryboardRepresentativeImageOutput>,
+  options: {
+    providerReferenceSignedUrlTtlSeconds?: number;
+  } = {}
 ): Promise<{ ok: true; value: ExpansionServiceOutput }> {
   const input = parseExpansionRequest(coreStoryboardGroupId, body);
   const sessions = new StoryCamSessionRepository(client);
@@ -89,6 +92,7 @@ export async function createExpandedStoryboardCards(
   const storyboardScript = storyboardScriptSchema.parse(storyboardScriptArtifact.data_json);
   const visualContext = await loadStoryWorldVisualContext(client, userId, {
     coreGroup,
+    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
     sessionId: session.id
   });
   const dependsOnJson: Json = {
@@ -175,7 +179,10 @@ export async function regenerateStoryboardFrameImage(
   coreStoryboardGroupId: string,
   body: ExpansionRequestBody,
   frameNumber: number,
-  imageProvider?: ImageGenerationProvider<ExpandedStoryboardImageInput | StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>
+  imageProvider?: ImageGenerationProvider<ExpandedStoryboardImageInput | StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>,
+  options: {
+    providerReferenceSignedUrlTtlSeconds?: number;
+  } = {}
 ): Promise<{ ok: true; value: RegenerateStoryboardFrameImageOutput }> {
   const input = parseExpansionRequest(coreStoryboardGroupId, body);
   const sessions = new StoryCamSessionRepository(client);
@@ -197,6 +204,7 @@ export async function regenerateStoryboardFrameImage(
   const frame = storyboardScript.frames[frameNumber - 1];
   const visualContext = await loadStoryWorldVisualContext(client, userId, {
     coreGroup,
+    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
     sessionId: session.id
   });
 

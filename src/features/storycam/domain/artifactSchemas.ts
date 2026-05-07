@@ -209,7 +209,7 @@ function fallbackStoryboardFrames() {
     canvasPosition: positions[index],
     durationSeconds: index === 0 ? 3 : 1.5,
     frameNumber: index + 1,
-    imagePrompt: `Cinematic storyboard still frame ${index + 1}, ordinary people, consistent character and scene assets, 16:9, no text.`,
+    imagePrompt: `Stylized comic animation storyboard frame ${index + 1}, fictional illustrated characters, consistent character and scene assets, 16:9, no text, not photorealistic.`,
     narrativePurpose: index === 0 ? "建立核心分镜的中心视觉锚点。" : "补充分镜组中的连续动作和反应。",
     scene: "已确认的故事场景",
     shotSize: index === 0 ? "中景" : "近景",

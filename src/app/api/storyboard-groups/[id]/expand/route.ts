@@ -20,7 +20,10 @@ export async function POST(request: Request, context: ExpansionRouteContext) {
       user.id,
       params.id,
       await request.json(),
-      imageProvider
+      imageProvider,
+      {
+        providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
+      }
     );
 
     return NextResponse.json(

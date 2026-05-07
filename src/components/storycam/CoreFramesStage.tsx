@@ -6,16 +6,20 @@ type CoreFramesStageProps = {
   isBusy?: boolean;
   onExpandGroup: (index: number) => void;
   onGenerateClip: (index: number) => void;
+  onMediaLoadError?: () => void;
   onSelectGroup: (index: number) => void;
   selectedIndex: number;
   storyboard: CreateStoryboardResponse;
 };
+
+const requiredExpandedFrameCount = 8;
 
 export function CoreFramesStage({
   generationPanel,
   isBusy = false,
   onExpandGroup,
   onGenerateClip,
+  onMediaLoadError,
   onSelectGroup,
   selectedIndex,
   storyboard
@@ -44,6 +48,8 @@ export function CoreFramesStage({
           const isSelected = selectedIndex === index;
           const representativeImage = group.representativeImage ?? placeholderImage;
           const expandedStoryboardImages = group.expandedStoryboardImages ?? [];
+          const readyExpandedCount = readyExpandedFrameCount(expandedStoryboardImages);
+          const canGenerateClip = readyExpandedCount >= requiredExpandedFrameCount;
 
           return (
             <article
@@ -69,6 +75,10 @@ export function CoreFramesStage({
                   <img
                     alt={`${group.title} 主分镜图`}
                     className="size-full object-cover transition duration-700 group-hover:scale-105"
+                    onError={(event) => {
+                      event.currentTarget.hidden = true;
+                      onMediaLoadError?.();
+                    }}
                     src={representativeImage.signedUrl}
                   />
                 ) : (
@@ -102,6 +112,10 @@ export function CoreFramesStage({
                           <img
                             alt={`${group.title} 扩展分镜 ${imageIndex + 1}`}
                             className="size-full object-cover"
+                            onError={(event) => {
+                              event.currentTarget.hidden = true;
+                              onMediaLoadError?.();
+                            }}
                             src={image.signedUrl}
                           />
                         ) : (
@@ -132,7 +146,7 @@ export function CoreFramesStage({
                     }}
                     type="button"
                   >
-                    用这一组生成片段
+                    {canGenerateClip ? "用这一组生成片段" : `先补齐扩展图 ${readyExpandedCount}/8`}
                   </button>
                 </div>
               </div>
@@ -182,4 +196,8 @@ function storyboardImageStatusLabel(image: StoryboardImageState, label: string) 
   }
 
   return `等待${label}`;
+}
+
+function readyExpandedFrameCount(images: StoryboardImageState[]) {
+  return images.filter((image) => image.status === "ready").length;
 }

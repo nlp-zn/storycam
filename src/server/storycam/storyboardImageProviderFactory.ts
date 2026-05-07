@@ -1,5 +1,6 @@
 import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
+import { storyCamComicImagePromptLine, storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { StoryCamConfig } from "@/server/config";
 import type {
   ExpandedStoryboardImageInput,
@@ -80,14 +81,16 @@ function referenceImagePrompt(referenceImages: StoryboardImageInput["referenceIm
   return [
     "Use the attached StoryCam asset reference images as the visual source of truth.",
     references,
-    "Do not invent new character faces, wardrobes, props, locations, lighting, or spatial layout beyond those references."
+    "Translate any non-comic source reference into the same illustrated comic-animation style.",
+    "Do not invent new character faces, wardrobes, props, locations, lighting, or spatial layout beyond those references.",
+    storyCamComicVisualSafetyLine
   ].join("\n");
 }
 
 function baseStoryboardImagePrompt() {
   return [
-    "Style: cinematic storyboard still, polished production frame, 16:9 landscape.",
-    "Subject: ordinary people in a private-memory film scene; grounded facial expressions and small visible actions.",
+    storyCamComicImagePromptLine(),
+    "Subject: fictional illustrated people in a private-memory comic film scene; grounded facial expressions and small visible actions.",
     "Continuity: keep character appearance, wardrobe, props, location, lighting, and mood consistent with the confirmed StoryCam assets.",
     "Composition: clear single frame, readable staging, natural camera perspective, no collage, no model sheet, no UI.",
     "No readable text, no subtitles, no watermarks, no logos."

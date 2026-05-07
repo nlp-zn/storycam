@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
 import { ClipReview } from "@/components/storycam/ClipReview";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
@@ -30,6 +30,7 @@ import {
   restoreStoryCamSession,
   type CreateStoryboardResponse,
   type CreateStoryWorldResponse,
+  type GenerateStoryWorldAssetImageResponse,
   type FinalWorkResponse,
   type StoryboardImageState,
   type GenerationJobSummary,
@@ -39,6 +40,7 @@ import {
   imageGenerationPollingPolicy,
   mapWithConcurrencyLimit,
   nextImageGenerationPollDelayMs,
+  nextVideoGenerationPollDelayMs,
   shouldPollGenerationJob
 } from "@/features/storycam/client/jobPolling";
 import { workflowStages } from "@/features/storycam/domain/shellContent";
@@ -51,6 +53,9 @@ const stepPaths = [
   "/storycam/clip-review",
   "/storycam/export"
 ] as const;
+
+type StoryWorldAssetImage = NonNullable<GenerateStoryWorldAssetImageResponse["media"]>;
+const requiredExpandedFrameCount = 8;
 
 export function StoryCamWorkspace() {
   const [storyWorld, setStoryWorld] = useState<CreateStoryWorldResponse | null>(null);
@@ -78,6 +83,24 @@ export function StoryCamWorkspace() {
   const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["像私人回忆"] });
   const [coreGroupTargetCount, setCoreGroupTargetCount] = useState<1 | 2 | 3>(1);
   const imagePollAttemptsRef = useRef<Record<string, number>>({});
+  const videoPollAttemptsRef = useRef<Record<string, number>>({});
+  const mediaRefreshInFlightRef = useRef(false);
+
+  const rememberStoryWorldAssetImage = useCallback((artifactId: string, media: StoryWorldAssetImage) => {
+    setStoryWorld((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        assetImagesByArtifactId: {
+          ...(current.assetImagesByArtifactId ?? {}),
+          [artifactId]: media
+        }
+      };
+    });
+  }, []);
 
   function replaceStoryboardImage(jobId: string, nextImage: StoryboardImageState) {
     setStoryboard((current) => {
@@ -185,8 +208,8 @@ export function StoryCamWorkspace() {
     setExpansion(null);
     setExpansionModalIndex(null);
     setClipConfirmationSummary(null);
-    setClipJob(null);
-    setFinalWork(null);
+    setClipJob(restored.clipJob ?? null);
+    setFinalWork(restored.finalWork ?? null);
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setWorkspaceNotice(null);
@@ -196,14 +219,71 @@ export function StoryCamWorkspace() {
         ? "已恢复核心分镜：1 个 15 秒内核心分镜组。"
         : "已恢复上次生成的故事世界，请确认后继续。"
     );
-    syncStepPath(restored.currentStep === "core-storyboard" ? 2 : 1);
+    syncStepPath(stepIndexForRestoredCurrentStep(restored.currentStep));
   }
+
+  const refreshSessionMediaUrls = useCallback(async () => {
+    const sessionId = storyWorld?.sessionId;
+
+    if (!sessionId || mediaRefreshInFlightRef.current || collectStoryboardImageJobIds(storyboard, expansion).length > 0) {
+      return;
+    }
+
+    mediaRefreshInFlightRef.current = true;
+
+    try {
+      const restored = await restoreStoryCamSession(sessionId);
+
+      if (!restored.restored) {
+        return;
+      }
+
+      setStoryWorld((current) =>
+        current?.sessionId === sessionId
+          ? {
+              ...current,
+              assetImagesByArtifactId: restored.storyWorld.assetImagesByArtifactId
+            }
+          : current
+      );
+      setStoryboard((current) => (current?.sessionId === sessionId && restored.storyboard ? restored.storyboard : current));
+      setExpansion((current) =>
+        current && restored.storyboard
+          ? refreshExpansionMediaFromStoryboard(current, restored.storyboard, expansionModalIndex ?? selectedCoreGroupIndex ?? 0)
+          : current
+      );
+      setClipJob((current) => (current && restored.clipJob ? restored.clipJob : current));
+      setFinalWork((current) => (current && restored.finalWork ? restored.finalWork : current));
+    } catch {
+      setWorkspaceNotice("图片预览链接刷新失败，可以稍后刷新页面重试。");
+    } finally {
+      mediaRefreshInFlightRef.current = false;
+    }
+  }, [expansion, expansionModalIndex, selectedCoreGroupIndex, storyboard, storyWorld?.sessionId]);
 
   useEffect(() => {
     if (window.location.pathname === "/" || window.location.pathname === "/storycam") {
       window.history.replaceState(null, "", stepPaths[0]);
     }
   }, []);
+
+  useEffect(() => {
+    if (!storyWorld?.sessionId) {
+      return;
+    }
+
+    const initialRefresh = window.setTimeout(() => {
+      void refreshSessionMediaUrls();
+    }, 0);
+    const interval = window.setInterval(() => {
+      void refreshSessionMediaUrls();
+    }, 4 * 60 * 1000);
+
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(interval);
+    };
+  }, [refreshSessionMediaUrls, storyWorld?.sessionId]);
 
   useEffect(() => {
     let isCanceled = false;
@@ -246,22 +326,55 @@ export function StoryCamWorkspace() {
 
   useEffect(() => {
     if (!clipJob || !shouldPollGenerationJob(clipJob.status)) {
+      videoPollAttemptsRef.current = {};
       return;
     }
 
+    const attempts = videoPollAttemptsRef.current[clipJob.id] ?? 0;
     const timer = window.setTimeout(async () => {
       try {
         const response = await getGenerationJob(clipJob.id);
+        videoPollAttemptsRef.current[clipJob.id] = attempts + 1;
         setClipJob((current) => (current?.id === clipJob.id ? response.job : current));
       } catch {
+        videoPollAttemptsRef.current[clipJob.id] = attempts + 1;
         setClipJob((current) =>
           current?.id === clipJob.id ? { ...current, redactedError: "状态更新失败。", status: "failed" } : current
         );
       }
-    }, 1200);
+    }, nextVideoGenerationPollDelayMs(attempts));
 
     return () => window.clearTimeout(timer);
   }, [clipJob]);
+
+  useEffect(() => {
+    if (!clipJob || clipJob.status !== "succeeded" || !clipJob.outputArtifactId || clipJob.outputPreview) {
+      return;
+    }
+
+    let canceled = false;
+    const jobId = clipJob.id;
+
+    async function hydrateClipPreview() {
+      try {
+        const response = await getGenerationJob(jobId);
+
+        if (!canceled) {
+          setClipJob((current) => (current?.id === response.job.id ? response.job : current));
+        }
+      } catch {
+        if (!canceled) {
+          setStoryboardMessage("片段已生成，但预览链接刷新失败。可以稍后再试。");
+        }
+      }
+    }
+
+    void hydrateClipPreview();
+
+    return () => {
+      canceled = true;
+    };
+  }, [clipJob?.id, clipJob?.outputArtifactId, clipJob?.outputPreview, clipJob?.status]);
 
   useEffect(() => {
     const imageJobIds = collectStoryboardImageJobIds(storyboard, expansion);
@@ -512,9 +625,9 @@ export function StoryCamWorkspace() {
       setClipJob(null);
       setFinalWork(null);
       setSelectedStepIndex(null);
-      setStoryboardMessage(`已生成 ${nextExpansion.expansionCards.length} 张扩展分镜图。`);
+      setStoryboardMessage(`已提交 ${nextExpansion.expansionCards.length} 张扩展分镜图，全部完成后才能生成片段。`);
     } catch {
-      setStoryboardMessage("扩展分镜生成失败，可以直接用中心主图生成片段。");
+      setStoryboardMessage("扩展分镜生成失败，生成片段前需要补齐 8 张扩展图。");
     } finally {
       setIsExpansionLoading(false);
     }
@@ -572,6 +685,21 @@ export function StoryCamWorkspace() {
     setClipJob(null);
     setFinalWork(null);
     setSelectedStepIndex(null);
+
+    const readyCount = readyExpandedFrameCount(group);
+
+    if (readyCount < requiredExpandedFrameCount) {
+      setExpansionModalIndex(index);
+      setClipConfirmationSummary(null);
+      setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
+
+      if (!isExpansionLoading) {
+        void expandCoreGroup(index, requiredExpandedFrameCount);
+      }
+
+      return;
+    }
+
     setClipConfirmationSummary(
       `用「${group.title}」生成一个约 ${group.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
     );
@@ -585,8 +713,18 @@ export function StoryCamWorkspace() {
     }
 
     const coreArtifact = storyboard.artifacts.coreStoryboardGroups[selectedCoreGroupIndex];
+    const selectedGroup = storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex];
 
-    if (!coreArtifact) {
+    if (!coreArtifact || !selectedGroup) {
+      return;
+    }
+
+    const readyCount = readyExpandedFrameCount(selectedGroup);
+
+    if (readyCount < requiredExpandedFrameCount) {
+      setExpansionModalIndex(selectedCoreGroupIndex);
+      setClipConfirmationSummary(null);
+      setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
       return;
     }
 
@@ -603,8 +741,12 @@ export function StoryCamWorkspace() {
       setClipJob({
         attempts: 0,
         id: response.jobId,
+        ...(response.outputArtifactId ? { outputArtifactId: response.outputArtifactId } : {}),
+        ...(response.providerErrorCategory ? { providerErrorCategory: response.providerErrorCategory } : {}),
+        ...(response.providerHttpStatus !== undefined ? { providerHttpStatus: response.providerHttpStatus } : {}),
         providerKind: "video",
-        providerName: "mock",
+        providerName: response.providerName ?? "mock",
+        ...(response.redactedError ? { redactedError: response.redactedError } : {}),
         sessionId: storyboard.sessionId,
         status: response.status,
         type: "video_clip"
@@ -688,9 +830,12 @@ export function StoryCamWorkspace() {
   const generationPanel = activeStepIndex >= 4 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
     <ClipReview
       clipArtifactId={clipJob.outputArtifactId}
+      durationSeconds={clipJob.outputPreview?.durationSeconds ?? selectedGroup?.estimatedClipDurationSeconds ?? 15}
       isSubmittingFinalWork={isFinalWorkSubmitting}
       onCreateFinalWork={createFinalWorkFromAcceptedClip}
       onRetake={retryClipGeneration}
+      preview={clipJob.outputPreview}
+      title={selectedGroup?.title}
     />
   ) : activeStepIndex >= 3 && clipJob ? (
     <ClipGenerationStatus
@@ -756,6 +901,7 @@ export function StoryCamWorkspace() {
               setExpansionModalIndex(index);
             }}
             onGenerateClip={prepareClipGeneration}
+            onMediaLoadError={refreshSessionMediaUrls}
             onSelectGroup={selectCoreGroup}
             selectedIndex={selectedCoreGroupIndex ?? 0}
             storyboard={storyboard}
@@ -768,6 +914,7 @@ export function StoryCamWorkspace() {
               onClose={() => setExpansionModalIndex(null)}
               onConfirmExpansion={() => expandCoreGroup(expansionModalIndex, 8)}
               onGenerateClip={() => prepareClipGeneration(expansionModalIndex)}
+              onMediaLoadError={refreshSessionMediaUrls}
               onRegenerateFrame={(frameNumber) => regenerateFrameImage(expansionModalIndex, frameNumber)}
               selectedGroup={expansionModalGroup}
               selectedIndex={expansionModalIndex}
@@ -782,8 +929,10 @@ export function StoryCamWorkspace() {
             isConfirmed={storyWorldConfirmed}
             initialAssetImages={storyWorld.assetImagesByArtifactId}
             key={storyWorld.artifacts.script.id}
+            onAssetImageReady={rememberStoryWorldAssetImage}
             onConfirm={confirmStoryWorld}
             onEditSaved={handleStoryWorldEdit}
+            onMediaLoadError={refreshSessionMediaUrls}
             storyWorld={storyWorld}
           />
       )}
@@ -855,6 +1004,29 @@ function currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWo
   return 0;
 }
 
+function refreshExpansionMediaFromStoryboard(
+  current: ExpandStoryboardGroupResponse,
+  restoredStoryboard: CreateStoryboardResponse,
+  coreGroupIndex: number
+) {
+  const restoredGroup = restoredStoryboard.storyboard.coreStoryboardGroups[coreGroupIndex];
+
+  if (!restoredGroup) {
+    return current;
+  }
+
+  return {
+    ...current,
+    expandedStoryboardImages: restoredGroup.expandedStoryboardImages,
+    expansionCards: current.expansionCards.map((card, index) => {
+      const frameNumber = card.frameNumber ?? card.sortOrder + 2;
+      const restoredImage = restoredGroup.expandedStoryboardImages[frameNumber - 2] ?? restoredGroup.expandedStoryboardImages[index];
+
+      return restoredImage ? { ...card, image: restoredImage } : card;
+    })
+  };
+}
+
 function syncStepPath(index: number) {
   const path = stepPaths[index];
 
@@ -869,6 +1041,23 @@ function stepIndexFromPath(pathname: string) {
   const index = stepPaths.findIndex((path) => path === pathname);
 
   return index >= 0 ? index : null;
+}
+
+type RestoredCurrentStep = Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>["currentStep"];
+
+function stepIndexForRestoredCurrentStep(step: RestoredCurrentStep) {
+  switch (step) {
+    case "story-world":
+      return 1;
+    case "core-storyboard":
+      return 2;
+    case "clip-generation":
+      return 3;
+    case "clip-review":
+      return 4;
+    case "export":
+      return 5;
+  }
 }
 
 function shouldAutoRestoreFromPath(pathname: string) {
@@ -901,6 +1090,10 @@ function collectStoryboardImageJobIds(storyboard: CreateStoryboardResponse | nul
 
 function shouldReplaceGeneratingImage(current: StoryboardImageState, jobId: string) {
   return current.status === "generating" && current.jobId === jobId;
+}
+
+function readyExpandedFrameCount(group: CreateStoryboardResponse["storyboard"]["coreStoryboardGroups"][number]) {
+  return (group.expandedStoryboardImages ?? []).filter((image) => image.status === "ready").length;
 }
 
 function StoryCamTopBar({ onHome }: { onHome: () => void }) {

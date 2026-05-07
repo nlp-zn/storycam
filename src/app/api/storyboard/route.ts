@@ -14,7 +14,9 @@ export async function POST(request: Request) {
     const provider = createConfiguredStoryboardProvider(config);
     const imageProvider = createConfiguredStoryboardImageProvider(config);
     const requestBody = await parseStoryboardJson(request);
-    const result = await createStoryboard(createSupabaseAdminClient(), user.id, requestBody, provider, imageProvider);
+    const result = await createStoryboard(createSupabaseAdminClient(), user.id, requestBody, provider, imageProvider, {
+      providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
+    });
     const responseHeaders = {
       "x-storycam-text-provider": provider?.providerName ?? "mock",
       "x-storycam-image-provider": imageProvider?.providerName ?? "mock"

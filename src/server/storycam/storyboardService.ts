@@ -70,7 +70,10 @@ export async function createStoryboard(
   userId: string,
   body: StoryboardRequestBody,
   provider: TextGenerationProvider<MockStoryboardInput, MockStoryboardOutput> = createMockStoryboardProvider(),
-  imageProvider?: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>
+  imageProvider?: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>,
+  options: {
+    providerReferenceSignedUrlTtlSeconds?: number;
+  } = {}
 ): Promise<ProviderFailure | { ok: true; value: StoryboardServiceOutput }> {
   const input = parseStoryboardRequest(body);
   const sessions = new StoryCamSessionRepository(client);
@@ -152,6 +155,7 @@ export async function createStoryboard(
     coreGroupArtifacts: coreStoryboardGroupRows,
     coreGroups: providerResult.value.coreStoryboardGroups,
     imageProvider,
+    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
     storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
     scripts: storyboardScripts,
     sessionId: session.id,
@@ -224,6 +228,7 @@ async function generateRepresentativeImages(input: {
   coreGroupArtifacts: StoryCamArtifactRow[];
   coreGroups: CoreStoryboardGroup[];
   imageProvider?: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>;
+  providerReferenceSignedUrlTtlSeconds?: number;
   scripts: StoryboardScript[];
   storyboardScriptArtifacts: StoryCamArtifactRow[];
   sessionId: string;
@@ -244,6 +249,7 @@ async function generateRepresentativeImages(input: {
 
       const visualContext = await loadStoryWorldVisualContext(input.client, input.userId, {
         coreGroup,
+        providerReferenceSignedUrlTtlSeconds: input.providerReferenceSignedUrlTtlSeconds,
         sessionId: input.sessionId
       });
 

@@ -64,7 +64,7 @@ test.describe("StoryCam visual smoke", () => {
 
     await page.getByRole("button", { name: "生成最终作品" }).first().click();
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
-    await expect(page.getByText("播放最终作品")).toBeVisible();
+    await expect(page.getByText("打开最终作品")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });
@@ -115,6 +115,13 @@ async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
       body: JSON.stringify({
         artifacts: {
           coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+          expandedStoryboardCards: Array.from({ length: 8 }, (_, index) => ({
+            id: `expanded-${index + 1}`,
+            parentArtifactId: "core-artifact-1",
+            state: "ready",
+            type: "expanded_storyboard_card",
+            version: 1
+          })),
           storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
           storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
         },
@@ -135,10 +142,19 @@ async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
       contentType: "application/json",
       status: 201,
       body: JSON.stringify({
-        expandedStoryboardCards: [
-          { id: "expanded-1", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 }
-        ],
-        expansionCards: [expansionCardFixture()],
+        expandedStoryboardCards: Array.from({ length: 8 }, (_, index) => ({
+          id: `expanded-${index + 1}`,
+          parentArtifactId: "core-artifact-1",
+          state: "ready",
+          type: "expanded_storyboard_card",
+          version: 1
+        })),
+        expandedStoryboardImages: Array.from({ length: 8 }, (_, index) => readyImage(`expanded-media-${index + 1}`)),
+        expansionCards: Array.from({ length: 8 }, (_, index) => ({
+          ...expansionCardFixture(index),
+          image: readyImage(`expanded-media-${index + 1}`),
+          sortOrder: index
+        })),
         ok: true,
         sessionId: "session-visual"
       })
@@ -186,7 +202,17 @@ async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
         job: {
           attempts: jobId === "job-2" ? 1 : 0,
           id: jobId,
-          ...(jobId === "job-3" ? { outputArtifactId: "clip-artifact-visual-final" } : {}),
+          ...(jobId === "job-3"
+            ? {
+                outputArtifactId: "clip-artifact-visual-final",
+                outputPreview: {
+                  durationSeconds: 15,
+                  mimeType: "video/mp4",
+                  signedUrl: "data:video/mp4;base64,AAAA",
+                  signedUrlExpiresIn: 300
+                }
+              }
+            : {}),
           providerKind: "video",
           providerName: "mock",
           redactedError: jobId === "job-2" ? "状态更新失败。" : undefined,
@@ -217,7 +243,13 @@ async function installWorkflowRoutes(page: Page, nextJobId: () => string) {
       body: JSON.stringify({
         finalWork: { id: "final-work-artifact-with-a-long-visual-id", state: "ready", type: "final_work", version: 1 },
         media: { byteSize: 1024, id: "media-final-with-a-long-visual-id", kind: "final_work", mimeType: "video/mp4" },
-        ok: true
+        ok: true,
+        preview: {
+          durationSeconds: 15,
+          mimeType: "video/mp4",
+          signedUrl: "data:video/mp4;base64,AAAA",
+          signedUrlExpiresIn: 300
+        }
       })
     });
   });
@@ -269,7 +301,7 @@ function storyboardFixture() {
       {
         emotionalTurn: "想说出口",
         estimatedClipDurationSeconds: 15,
-        expandedStoryboardImages: [],
+        expandedStoryboardImages: Array.from({ length: 8 }, (_, index) => readyImage(`expanded-media-${index + 1}`)),
         representativeImage: placeholderImage(),
         scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
         storyPurpose: "建立她和未发送短信之间的私人情绪。",
@@ -294,13 +326,24 @@ function placeholderImage() {
   };
 }
 
-function expansionCardFixture() {
+function readyImage(mediaId: string) {
+  return {
+    mediaId,
+    mimeType: "image/png",
+    placeholder: false,
+    signedUrl: "data:image/png;base64,iVBORw0KGgo=",
+    signedUrlExpiresIn: 300,
+    status: "ready"
+  };
+}
+
+function expansionCardFixture(index = 0) {
   return {
     beatType: "enter",
     description: "她停在便利店门外，雨伞压低，手机屏幕映出未发送的短信。",
     guidance: "动作很小，重点是手指停顿和雨声。",
-    sortOrder: 0,
-    title: "门外停住",
+    sortOrder: index,
+    title: index === 0 ? "门外停住" : `扩展镜头 ${index + 1}`,
     version: 1
   };
 }

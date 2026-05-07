@@ -200,7 +200,8 @@ test.describe("StoryCam story world", () => {
     await expect(page).toHaveURL(/\/storycam\/story-world$/);
     await expect(page.getByRole("button", { name: "转到核心分镜" })).toBeDisabled();
     await expect(page.getByText("我的剧本")).toBeVisible();
-    await expect(page.getByText("剧情 1")).toBeVisible();
+    await expect(page.getByText("完整剧本")).toBeVisible();
+    await expect(page.getByText("关键片段")).toBeVisible();
     await expect(page.getByText("第 1 拍")).toHaveCount(0);
     await expect(page.getByTestId("story-world-character-asset-card")).toHaveCount(2);
     await expect(page.getByTestId("story-world-character-asset-card").first().getByText("人物", { exact: true })).toBeVisible();
@@ -226,8 +227,10 @@ test.describe("StoryCam story world", () => {
     await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
 
     await page.getByRole("button", { name: "转到故事世界" }).click();
+    await expect(page.getByAltText("她 资产图")).toBeVisible();
+    await expect(page.getByAltText("便利店外的玻璃反光 资产图")).toBeVisible();
     await page.getByRole("button", { name: "改剧本" }).click();
-    await page.getByLabel("我的剧本内容").fill("她决定走进便利店，把伞递给他。");
+    await page.getByLabel("整体剧本内容").fill("她决定走进便利店，把伞递给他。");
     await page.getByRole("button", { name: "保存修改" }).click();
 
     await expect(page).toHaveURL(/\/storycam\/story-world$/);

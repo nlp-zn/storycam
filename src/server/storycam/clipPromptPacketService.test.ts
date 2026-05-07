@@ -9,12 +9,15 @@ import {
 
 describe("clip-packet service", () => {
   it("creates a redacted clip prompt packet artifact with input artifact versions", async () => {
-    const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow(), expandedCardRow()] });
+    const client = new FakeSupabaseClient({
+      artifactRows: [coreGroupRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()]
+    });
 
     const result = await createClipPromptPacket(client.asSupabaseClient(), "user-1", {
       confirmedArtifactVersions: {
         "core-artifact-1": 1,
-        "expanded-artifact-1": 1
+        ...Object.fromEntries(expandedCardRows().map((row) => [row.id, row.version]))
       },
       coreStoryboardGroupId: "core-artifact-1",
       providerSendConfirmed: true,
@@ -43,17 +46,26 @@ describe("clip-packet service", () => {
     expect(packetInsert).toMatchObject({
       depends_on_json: {
         "core-artifact-1": 1,
-        "expanded-artifact-1": 1
+        "expanded-artifact-1": 1,
+        "expanded-artifact-8": 1
       },
       type: "clip_prompt_packet"
     });
     expect(result.value.clipPromptPacketPayload).toMatchObject({
       inputArtifactVersions: {
         "core-artifact-1": 1,
-        "expanded-artifact-1": 1
+        "expanded-artifact-1": 1,
+        "expanded-artifact-8": 1
       },
       plannedDurationSeconds: 4.7
     });
+    expect(result.value.clipPromptPacketPayload.referenceImageMedia).toHaveLength(9);
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("Native audio plan");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("雨声");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("门铃");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("脚步");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("环境音乐");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("对白");
   });
 
   it("rejects stale or unconfirmed core groups", async () => {
@@ -104,25 +116,36 @@ function coreGroupRow(overrides: Partial<StoryCamArtifactRow> = {}): StoryCamArt
   };
 }
 
-function expandedCardRow(): StoryCamArtifactRow {
+function expandedCardRows() {
+  return Array.from({ length: 8 }, (_, index) => expandedCardRow(index + 1));
+}
+
+function expandedCardRow(index: number): StoryCamArtifactRow {
+  const frameNumber = index + 1;
+
   return {
     ...baseArtifactRow(),
     data_json: {
       beatType: "reaction",
       coreGroupId: "core-group-rainy-kdrama-1",
-      description: "A small reaction beat.",
+      description: index === 1 ? "A small reaction beat." : `Frame ${frameNumber} continuation beat.`,
+      frameNumber,
       guidance: "Keep it quiet.",
-      id: "expanded-card-1",
+      id: `expanded-card-${index}`,
       sessionId: "session-1",
-      sortOrder: 0,
+      sortOrder: index - 1,
       state: "ready",
-      title: "Small Look",
+      title: index === 1 ? "Small Look" : `Frame ${frameNumber}`,
       version: 1
     },
-    id: "expanded-artifact-1",
+    id: `expanded-artifact-${index}`,
     parent_artifact_id: "core-artifact-1",
     type: "expanded_storyboard_card"
   };
+}
+
+function expandedMediaRows() {
+  return expandedCardRows().map((row, index) => mediaRow(`media-expanded-${index + 1}`, row.id));
 }
 
 function clipPacketRow(): StoryCamArtifactRow {
@@ -168,6 +191,7 @@ function baseArtifactRow(): StoryCamArtifactRow {
 
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
+  mediaRows?: unknown[];
 };
 
 class FakeSupabaseClient {
@@ -194,6 +218,7 @@ class FakeSupabaseClient {
 
 class FakeQuery {
   readonly calls: unknown[][] = [];
+  private eqFilters: Record<string, unknown> = {};
   private inserted: Record<string, unknown> | null = null;
 
   constructor(
@@ -214,6 +239,7 @@ class FakeQuery {
   }
 
   eq(column: string, value: unknown) {
+    this.eqFilters[column] = value;
     this.calls.push(["eq", column, value]);
     return this;
   }
@@ -255,6 +281,8 @@ class FakeQuery {
               updated_at: "2026-04-26T00:00:00.000Z",
               user_id: "user-1"
             }
+          : this.table === "media_assets"
+            ? this.findMediaRows()[0] ?? null
           : null,
       error: null
     });
@@ -262,7 +290,7 @@ class FakeQuery {
 
   then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
     return Promise.resolve({
-      data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : [],
+      data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : this.table === "media_assets" ? this.findMediaRows() : [],
       error: null
     }).then(resolve, reject);
   }
@@ -281,4 +309,32 @@ class FakeQuery {
 
     return this.inserted;
   }
+
+  private findMediaRows() {
+    return (this.options.mediaRows ?? []).filter(
+      (row) =>
+        (!this.eqFilters.user_id || (row as { user_id?: unknown }).user_id === this.eqFilters.user_id) &&
+        (!this.eqFilters.session_id || (row as { session_id?: unknown }).session_id === this.eqFilters.session_id) &&
+        (!this.eqFilters.linked_artifact_id ||
+          (row as { linked_artifact_id?: unknown }).linked_artifact_id === this.eqFilters.linked_artifact_id) &&
+        (!this.eqFilters.kind || (row as { kind?: unknown }).kind === this.eqFilters.kind)
+    );
+  }
+}
+
+function mediaRow(id: string, linkedArtifactId: string) {
+  return {
+    byte_size: 128,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    id,
+    kind: "thumbnail",
+    linked_artifact_id: linkedArtifactId,
+    mime_type: "image/png",
+    session_id: "session-1",
+    source: "provider",
+    storage_bucket: "storycam-generated",
+    storage_path: `users/user-1/sessions/session-1/generated/${id}.png`,
+    user_id: "user-1"
+  };
 }

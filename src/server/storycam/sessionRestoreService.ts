@@ -3,13 +3,16 @@ import {
   characterAssetSchema,
   coreStoryboardGroupSchema,
   expandedStoryboardCardSchema,
+  finalWorkSchema,
+  generatedClipSchema,
   sceneAssetSchema,
   storyboardScriptSchema,
   storyScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
 import { createDurationPlan } from "@/features/storycam/domain/durationRules";
-import type { Database, MediaAssetRow, StoryCamArtifactRow, StoryCamSessionRow } from "@/server/db/types";
+import type { Database, GenerationJobRow, MediaAssetRow, StoryCamArtifactRow, StoryCamSessionRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
+import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamSignedUrlTtlSeconds, type StoryCamPrivateBucket } from "./mediaStore";
 import { StoryCamSessionRepository } from "./sessionRepository";
@@ -17,6 +20,7 @@ import { placeholderStoryboardImage, type GeneratedStoryboardImageState } from "
 
 type ArtifactRef = {
   id: string;
+  parentArtifactId?: string | null;
   state: StoryCamArtifactRow["state"];
   type: StoryCamArtifactRow["type"];
   version: number;
@@ -29,14 +33,18 @@ type RestoredMedia = {
   signedUrlExpiresIn: number;
 };
 
+type RestoredCurrentStep = "clip-generation" | "clip-review" | "core-storyboard" | "export" | "story-world";
+
 export type RestoreStoryCamSessionOutput =
   | {
       ok: true;
       restored: false;
     }
   | {
+      clipJob?: RestoredGenerationJob;
       coreGroupTargetCount: 1 | 2 | 3;
-      currentStep: "core-storyboard" | "story-world";
+      currentStep: RestoredCurrentStep;
+      finalWork?: RestoredFinalWork;
       ok: true;
       restored: true;
       sessionId: string;
@@ -47,7 +55,7 @@ export type RestoreStoryCamSessionOutput =
 
 export type RecentStoryCamProject = {
   coreGroupTargetCount: 1 | 2 | 3;
-  currentStep: "core-storyboard" | "story-world";
+  currentStep: RestoredCurrentStep;
   sessionId: string;
   summary: string;
   thumbnail: RestoredMedia | null;
@@ -86,6 +94,7 @@ type RestoredStoryWorld = {
 type RestoredStoryboard = {
   artifacts: {
     coreStoryboardGroups: ArtifactRef[];
+    expandedStoryboardCards?: ArtifactRef[];
     storyboardScript: ArtifactRef;
     storyboardScripts: ArtifactRef[];
   };
@@ -99,6 +108,43 @@ type RestoredStoryboard = {
   storyboard: {
     coreStoryboardGroups: Array<Record<string, unknown>>;
     storyboardScript: unknown;
+  };
+};
+
+type RestoredGenerationJob = {
+  attempts: number;
+  id: string;
+  outputArtifactId?: string;
+  outputPreview?: {
+    durationSeconds: number;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  };
+  providerErrorCategory?: string;
+  providerHttpStatus?: number;
+  providerKind: GenerationJobRow["provider_kind"];
+  providerName: string;
+  redactedError?: string;
+  sessionId: string;
+  status: GenerationJobRow["status"];
+  type: GenerationJobRow["type"];
+};
+
+type RestoredFinalWork = {
+  finalWork: ArtifactRef;
+  media: {
+    byteSize: number;
+    id: string;
+    kind: "final_work";
+    mimeType: string;
+  };
+  ok: true;
+  preview?: {
+    durationSeconds: number;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
   };
 };
 
@@ -192,11 +238,15 @@ async function restoreSession(
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
   const storyWorld = await restoreStoryWorld(client, session.id, storyWorldBundle, mediaRows);
   const storyboard = await restoreStoryboard(client, session, storyWorldBundle, artifactRows, mediaRows);
+  const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
+  const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
   const coreGroupTargetCount = toCoreGroupTargetCount(session.core_group_target_count) ?? storyboard?.durationPlan.coreGroupTargetCount ?? 1;
 
   return {
+    ...(clipJob ? { clipJob } : {}),
     coreGroupTargetCount,
-    currentStep: storyboard ? "core-storyboard" : "story-world",
+    currentStep: currentStepForRestoredSession({ clipJob, finalWork, storyboard }),
+    ...(finalWork ? { finalWork } : {}),
     ok: true,
     restored: true,
     sessionId: session.id,
@@ -222,12 +272,14 @@ async function summarizeSession(
 
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
   const storyboard = await restoreStoryboard(client, session, storyWorldBundle, artifactRows, mediaRows);
+  const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
+  const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
   const script = storyScriptSchema.parse(storyWorldBundle.scriptRow.data_json);
   const coreGroupTargetCount = toCoreGroupTargetCount(session.core_group_target_count) ?? storyboard?.durationPlan.coreGroupTargetCount ?? 1;
 
   return {
     coreGroupTargetCount,
-    currentStep: storyboard ? "core-storyboard" : "story-world",
+    currentStep: currentStepForRestoredSession({ clipJob, finalWork, storyboard }),
     sessionId: session.id,
     summary: script.summary,
     thumbnail: await restoreProjectThumbnail(client, storyboard, storyWorldBundle, mediaRows),
@@ -358,6 +410,7 @@ async function restoreStoryboard(
   const storyboardScripts = scriptRows.map((row) => storyboardScriptSchema.parse(row.data_json));
   const storyboardScriptRefs = scriptRows.map(toArtifactRef);
   const storyboardScriptRef = storyboardScriptRefs[0];
+  const expandedStoryboardCardRefs = matchingCoreRows.flatMap((coreRow) => restoreExpandedStoryboardCardRefs(coreRow, rows));
   const coreGroupViews = await Promise.all(
     matchingCoreRows.map(async (row, index) => ({
       ...coreStoryboardGroupSchema.parse(row.data_json),
@@ -370,6 +423,7 @@ async function restoreStoryboard(
   return {
     artifacts: {
       coreStoryboardGroups: matchingCoreRows.map(toArtifactRef),
+      expandedStoryboardCards: expandedStoryboardCardRefs,
       storyboardScript: storyboardScriptRef,
       storyboardScripts: storyboardScriptRefs
     },
@@ -433,6 +487,127 @@ async function restoreExpandedStoryboardImages(
   return Promise.all(cards.map((card) => restoreStoryboardImage(client, card.id, mediaRows)));
 }
 
+async function restoreLatestClipJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessionId: string,
+  artifactRows: StoryCamArtifactRow[],
+  mediaRows: MediaAssetRow[]
+): Promise<RestoredGenerationJob | undefined> {
+  const jobs = ((await new StoryCamGenerationJobRepository(client).listBySession(userId, sessionId)) ?? [])
+    .filter((job) => job.type === "video_clip")
+    .sort((a, b) => timestamp(b.updated_at) - timestamp(a.updated_at));
+  const job = jobs[0];
+
+  if (!job) {
+    return undefined;
+  }
+
+  const outputPreview = await restoreGeneratedClipPreview(client, job.output_artifact_id, artifactRows, mediaRows);
+
+  return {
+    attempts: job.attempts,
+    id: job.id,
+    ...(job.output_artifact_id ? { outputArtifactId: job.output_artifact_id } : {}),
+    ...(outputPreview ? { outputPreview } : {}),
+    ...(job.provider_error_category ? { providerErrorCategory: job.provider_error_category } : {}),
+    ...(job.provider_http_status !== null ? { providerHttpStatus: job.provider_http_status } : {}),
+    providerKind: job.provider_kind,
+    providerName: job.provider_name,
+    ...(job.redacted_error ? { redactedError: job.redacted_error } : {}),
+    sessionId: job.session_id,
+    status: job.status,
+    type: job.type
+  };
+}
+
+async function restoreGeneratedClipPreview(
+  client: SupabaseClient<Database>,
+  outputArtifactId: string | null,
+  artifactRows: StoryCamArtifactRow[],
+  mediaRows: MediaAssetRow[]
+) {
+  if (!outputArtifactId) {
+    return undefined;
+  }
+
+  const artifact = artifactRows.find((row) => row.id === outputArtifactId && row.type === "generated_clip" && row.state === "ready");
+
+  if (!artifact) {
+    return undefined;
+  }
+
+  const generatedClip = generatedClipSchema.parse(artifact.data_json);
+  const media = await restoreMediaById(client, generatedClip.mediaAssetId, mediaRows);
+
+  if (!media) {
+    return undefined;
+  }
+
+  return {
+    durationSeconds: generatedClip.durationSeconds,
+    mimeType: media.mimeType,
+    signedUrl: media.signedUrl,
+    signedUrlExpiresIn: media.signedUrlExpiresIn
+  };
+}
+
+async function restoreLatestFinalWork(
+  client: SupabaseClient<Database>,
+  artifactRows: StoryCamArtifactRow[],
+  mediaRows: MediaAssetRow[]
+): Promise<RestoredFinalWork | undefined> {
+  const artifact = artifactRows
+    .filter((row) => row.type === "final_work" && row.state === "ready")
+    .sort((a, b) => timestamp(b.created_at) - timestamp(a.created_at))[0];
+
+  if (!artifact) {
+    return undefined;
+  }
+
+  const finalWork = finalWorkSchema.parse(artifact.data_json);
+  const media = mediaRows.find((row) => row.id === finalWork.mediaAssetId);
+  const previewMedia = await restoreMediaById(client, finalWork.mediaAssetId, mediaRows);
+
+  if (!media) {
+    return undefined;
+  }
+
+  const restored: RestoredFinalWork = {
+    finalWork: toArtifactRef(artifact),
+    media: {
+      byteSize: media.byte_size,
+      id: media.id,
+      kind: "final_work",
+      mimeType: media.mime_type
+    },
+    ok: true
+  };
+
+  if (previewMedia) {
+    restored.preview = {
+      durationSeconds: finalWork.durationSeconds,
+      mimeType: previewMedia.mimeType,
+      signedUrl: previewMedia.signedUrl,
+      signedUrlExpiresIn: previewMedia.signedUrlExpiresIn
+    };
+  }
+
+  return restored;
+}
+
+function restoreExpandedStoryboardCardRefs(coreRow: StoryCamArtifactRow, rows: StoryCamArtifactRow[]) {
+  return rows
+    .filter((row) => row.type === "expanded_storyboard_card" && row.state === "ready" && row.parent_artifact_id === coreRow.id)
+    .sort((a, b) => {
+      const aCard = expandedStoryboardCardSchema.safeParse(a.data_json);
+      const bCard = expandedStoryboardCardSchema.safeParse(b.data_json);
+      return (aCard.success ? aCard.data.sortOrder : 0) - (bCard.success ? bCard.data.sortOrder : 0);
+    })
+    .slice(0, 8)
+    .map(toArtifactRef);
+}
+
 async function restoreMedia(
   client: SupabaseClient<Database>,
   linkedArtifactId: string,
@@ -446,6 +621,24 @@ async function restoreMedia(
     return null;
   }
 
+  return restoreMediaRow(client, row);
+}
+
+async function restoreMediaById(
+  client: SupabaseClient<Database>,
+  mediaAssetId: string,
+  mediaRows: MediaAssetRow[]
+): Promise<RestoredMedia | null> {
+  const row = mediaRows.find((media) => media.id === mediaAssetId);
+
+  if (!row) {
+    return null;
+  }
+
+  return restoreMediaRow(client, row);
+}
+
+async function restoreMediaRow(client: SupabaseClient<Database>, row: MediaAssetRow): Promise<RestoredMedia | null> {
   try {
     return {
       id: row.id,
@@ -463,6 +656,26 @@ async function restoreMedia(
   }
 }
 
+function currentStepForRestoredSession(input: {
+  clipJob?: RestoredGenerationJob;
+  finalWork?: RestoredFinalWork;
+  storyboard: RestoredStoryboard | null;
+}): RestoredCurrentStep {
+  if (input.finalWork) {
+    return "export";
+  }
+
+  if (input.clipJob?.status === "succeeded") {
+    return "clip-review";
+  }
+
+  if (input.clipJob) {
+    return "clip-generation";
+  }
+
+  return input.storyboard ? "core-storyboard" : "story-world";
+}
+
 function dependsOnMatches(row: StoryCamArtifactRow, refs: ArtifactRef[]) {
   const dependsOn = isRecord(row.depends_on_json) ? row.depends_on_json : {};
 
@@ -472,6 +685,7 @@ function dependsOnMatches(row: StoryCamArtifactRow, refs: ArtifactRef[]) {
 function toArtifactRef(row: StoryCamArtifactRow): ArtifactRef {
   return {
     id: row.id,
+    parentArtifactId: row.parent_artifact_id,
     state: row.state,
     type: row.type,
     version: row.version

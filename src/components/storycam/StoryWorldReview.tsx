@@ -22,8 +22,10 @@ type StoryWorldReviewProps = {
   initiallyEditing?: boolean;
   isGeneratingStoryboard?: boolean;
   isConfirmed: boolean;
+  onAssetImageReady?: (artifactId: string, media: NonNullable<GenerateStoryWorldAssetImageResponse["media"]>) => void;
   onConfirm: (coreGroupTargetCount: 1 | 2 | 3) => void;
   onEditSaved: (summary: string) => void;
+  onMediaLoadError?: () => void;
   storyWorld: CreateStoryWorldResponse;
 };
 
@@ -50,8 +52,10 @@ export function StoryWorldReview({
   initiallyEditing = false,
   isGeneratingStoryboard = false,
   isConfirmed,
+  onAssetImageReady,
   onConfirm,
   onEditSaved,
+  onMediaLoadError,
   storyWorld
 }: StoryWorldReviewProps) {
   const [isEditingScript, setIsEditingScript] = useState(initiallyEditing);
@@ -62,6 +66,7 @@ export function StoryWorldReview({
   const [isBatchSubmitting, setIsBatchSubmitting] = useState(false);
   const [assetImageError, setAssetImageError] = useState<string | null>(null);
   const assetImagePollAttemptsRef = useRef<Record<string, number>>({});
+  const scriptParagraphs = scriptParagraphsFor(scriptSummary, storyWorld.storyWorld.script.beats);
   const assetArtifactIds = useMemo(
     () => [
       ...storyWorld.artifacts.characterAssets.map((artifact) => artifact.id),
@@ -69,6 +74,14 @@ export function StoryWorldReview({
     ],
     [storyWorld.artifacts.characterAssets, storyWorld.artifacts.sceneAssets]
   );
+
+  useEffect(() => {
+    setAssetImages(initialAssetImages ?? {});
+  }, [initialAssetImages, storyWorld.sessionId]);
+
+  useEffect(() => {
+    setScriptSummary(storyWorld.storyWorld.script.summary);
+  }, [storyWorld.sessionId, storyWorld.storyWorld.script.summary]);
 
   useEffect(() => {
     const jobEntries = Object.entries(assetImageJobs);
@@ -127,10 +140,7 @@ export function StoryWorldReview({
 
         if (image?.status === "ready") {
           delete assetImagePollAttemptsRef.current[result.value.jobId];
-          setAssetImages((current) => ({
-            ...current,
-            [result.value.artifactId]: mediaFromReadyImage(image)
-          }));
+          applyReadyAssetImage(result.value.artifactId, image);
           setAssetImageJobs((current) => removeJob(current, result.value.artifactId));
           continue;
         }
@@ -211,10 +221,7 @@ export function StoryWorldReview({
 
   function applyAssetImageResult(artifactId: string, image: StoryboardImageState) {
     if (image.status === "ready") {
-      setAssetImages((current) => ({
-        ...current,
-        [artifactId]: mediaFromReadyImage(image)
-      }));
+      applyReadyAssetImage(artifactId, image);
       setAssetImageJobs((current) => removeJob(current, artifactId));
       return;
     }
@@ -229,6 +236,15 @@ export function StoryWorldReview({
 
     setAssetImageJobs((current) => removeJob(current, artifactId));
     setAssetImageError("资产图生成失败，可以稍后重试。");
+  }
+
+  function applyReadyAssetImage(artifactId: string, image: Extract<StoryboardImageState, { status: "ready" }>) {
+    const media = mediaFromReadyImage(image);
+    setAssetImages((current) => ({
+      ...current,
+      [artifactId]: media
+    }));
+    onAssetImageReady?.(artifactId, media);
   }
 
   return (
@@ -272,14 +288,15 @@ export function StoryWorldReview({
               </button>
             </div>
 
-            <p className="relative mt-6 border-l-2 border-[#00f0ff]/50 pl-4 text-xl font-bold leading-8 text-[#e2e2e2]">
-              {storyWorld.storyWorld.script.logline}
-            </p>
+            <div className="relative mt-6 rounded-[1.25rem] border border-[#00f0ff]/20 bg-[#00191d]/35 px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#00f0ff]">故事一句话</p>
+              <p className="mt-2 text-lg font-black leading-8 text-[#eefbfc]">{storyWorld.storyWorld.script.logline}</p>
+            </div>
 
             {isEditingScript ? (
               <div className="relative mt-5">
                 <label className="text-sm font-bold text-[#e2e2e2]" htmlFor="story-world-script-summary">
-                  我的剧本内容
+                  整体剧本内容
                 </label>
                 <textarea
                   className="mt-2 min-h-40 w-full resize-none rounded-[1.5rem] border border-[#3b494b] bg-black/40 p-4 text-sm leading-6 text-[#e2e2e2] outline-none transition focus:border-[#00f0ff]"
@@ -296,17 +313,34 @@ export function StoryWorldReview({
                 </button>
               </div>
             ) : (
-              <p className="relative mt-5 max-h-[420px] overflow-y-auto pr-2 text-base leading-8 text-[#b9cacb]">{scriptSummary}</p>
+              <article className="relative mt-5 max-h-[500px] overflow-y-auto rounded-[1.5rem] border border-white/10 bg-black/25 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-[#849495]">完整剧本</p>
+                <div className="space-y-5">
+                  {scriptParagraphs.map((paragraph, index) => (
+                    <p className="text-[15px] font-semibold leading-8 text-[#d5e2e3]" key={`${paragraph}-${index}`}>
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              </article>
             )}
 
-            <ol className="relative mt-6 grid gap-3">
+            <div className="relative mt-6 border-t border-white/10 pt-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="storycam-eyebrow">关键片段</p>
+                <span className="text-xs font-bold text-[#849495]">{storyWorld.storyWorld.script.beats.length} 段</span>
+              </div>
+              <ol className="grid gap-2">
               {storyWorld.storyWorld.script.beats.map((beat, index) => (
-                <li className="rounded-[1.25rem] border border-white/10 bg-black/30 p-4 text-sm leading-6 text-[#b9cacb]" key={beat}>
-                  <span className="mb-1 block text-xs font-bold text-[#00f0ff]">剧情 {index + 1}</span>
-                  {beat}
+                <li className="flex gap-3 rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3 text-sm leading-6 text-[#b9cacb]" key={beat}>
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-[#00f0ff]/30 bg-[#00f0ff]/10 text-[10px] font-black text-[#00f0ff]">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span>{beat}</span>
                 </li>
               ))}
-            </ol>
+              </ol>
+            </div>
           </div>
         </div>
 
@@ -343,6 +377,7 @@ export function StoryWorldReview({
                     `${asset.emotionalBaseline}${asset.wardrobe ? `；${asset.wardrobe}` : ""}`
                   ]}
                   meta={index === 0 ? "主要" : undefined}
+                  onImageError={onMediaLoadError}
                   onOpen={() => {
                     const artifactId = storyWorld.artifacts.characterAssets[index]?.id;
 
@@ -389,6 +424,7 @@ export function StoryWorldReview({
                       `${panels.length} 个场景小切图：${panels.map((panel) => panel.title).join("、")}`
                     ]}
                     meta={`${panels.length} 切图`}
+                    onImageError={onMediaLoadError}
                     onOpen={() => {
                       const artifactId = storyWorld.artifacts.sceneAssets[index]?.id;
 
@@ -506,7 +542,13 @@ function AssetImageModal({
         <div className="storycam-asset-modal-visual">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img alt={`${asset.title} 生成资产`} src={imageUrl} />
+            <img
+              alt={`${asset.title} 生成资产`}
+              onError={(event) => {
+                event.currentTarget.hidden = true;
+              }}
+              src={imageUrl}
+            />
           ) : (
             <div className="storycam-asset-modal-placeholder">
               <span>{isGenerating ? "生成中" : "等待生成"}</span>
@@ -520,6 +562,29 @@ function AssetImageModal({
 
 function imageUrlFor(assetArtifactId: string | undefined, assetImages: AssetImageState) {
   return assetArtifactId ? assetImages[assetArtifactId]?.signedUrl : undefined;
+}
+
+function scriptParagraphsFor(summary: string, beats: string[]) {
+  const paragraphs = splitReadableParagraphs(summary);
+
+  if (paragraphs.length >= 2) {
+    return paragraphs;
+  }
+
+  return [
+    ...paragraphs,
+    ...beats
+      .map((beat) => beat.trim())
+      .filter(Boolean)
+      .filter((beat) => !paragraphs.some((paragraph) => paragraph.includes(beat) || beat.includes(paragraph)))
+  ].slice(0, 6);
+}
+
+function splitReadableParagraphs(value: string) {
+  return value
+    .split(/\n{2,}|(?<=[。！？!?])\s+(?=\S)/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 }
 
 function scenePanelsForAsset(

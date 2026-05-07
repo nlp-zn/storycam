@@ -56,7 +56,7 @@ export function isLocalAuthBypassEnabled(env: Record<string, string | undefined>
     return false;
   }
 
-  return isLocalSupabaseUrl(env.NEXT_PUBLIC_SUPABASE_URL);
+  return isLocalSupabaseUrl(env.NEXT_PUBLIC_SUPABASE_URL) || isAllowedHostedDevSupabaseUrl(env.NEXT_PUBLIC_SUPABASE_URL, env);
 }
 
 function getOrCreateLocalBypassUser() {
@@ -72,20 +72,21 @@ async function ensureLocalBypassUser(): Promise<AuthenticatedUser> {
   const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
   const supabase = createSupabaseAdminClient();
   const existing = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const email = localAuthBypassEmail();
 
   if (existing.error) {
     throw new UnauthorizedError();
   }
 
-  const user = existing.data.users.find((item) => item.email === localBypassUserEmail);
+  const user = existing.data.users.find((item) => item.email === email);
 
   if (user) {
-    return { id: user.id, email: user.email ?? localBypassUserEmail };
+    return { id: user.id, email: user.email ?? email };
   }
 
   const password = `StoryCam-local-${randomUUID()}-aA1!`;
   const created = await supabase.auth.admin.createUser({
-    email: localBypassUserEmail,
+    email,
     email_confirm: true,
     password,
     user_metadata: {
@@ -97,7 +98,11 @@ async function ensureLocalBypassUser(): Promise<AuthenticatedUser> {
     throw new UnauthorizedError();
   }
 
-  return { id: created.data.user.id, email: created.data.user.email ?? localBypassUserEmail };
+  return { id: created.data.user.id, email: created.data.user.email ?? email };
+}
+
+function localAuthBypassEmail(env: Record<string, string | undefined> = process.env) {
+  return env.STORYCAM_LOCAL_AUTH_BYPASS_EMAIL?.trim() || localBypassUserEmail;
 }
 
 function isLocalSupabaseUrl(value: string | undefined) {
@@ -111,4 +116,36 @@ function isLocalSupabaseUrl(value: string | undefined) {
   } catch {
     return false;
   }
+}
+
+function isAllowedHostedDevSupabaseUrl(value: string | undefined, env: Record<string, string | undefined>) {
+  if (!value) {
+    return false;
+  }
+
+  const allowedRefs = csv(env.STORYCAM_LOCAL_AUTH_BYPASS_ALLOWED_SUPABASE_REFS);
+
+  if (allowedRefs.length === 0) {
+    return false;
+  }
+
+  try {
+    const { hostname, protocol } = new URL(value);
+
+    if (protocol !== "https:" || !hostname.endsWith(".supabase.co")) {
+      return false;
+    }
+
+    const projectRef = hostname.slice(0, -".supabase.co".length);
+    return allowedRefs.includes(projectRef);
+  } catch {
+    return false;
+  }
+}
+
+function csv(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }

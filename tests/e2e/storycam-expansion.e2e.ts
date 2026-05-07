@@ -138,9 +138,8 @@ test.describe("StoryCam expansion", () => {
     expect(regenerateRequestedFor).toContain("/api/storyboard-groups/core-artifact-1/frames/6/regenerate-image");
     await expect(dialog.getByRole("textbox")).toHaveCount(0);
 
-    await dialog.getByRole("button", { name: "用这一组生成片段" }).click();
-    await expect(page.getByText("用「未发送短信」生成一个约 15 秒的私人片段。")).toBeVisible();
-    await expect(page.getByRole("button", { name: "确认发送生成片段" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "等待扩展图 1/8" })).toBeDisabled();
+    await expect(page.getByText("用「未发送短信」生成一个约 15 秒的私人片段。")).toHaveCount(0);
   });
 });
 

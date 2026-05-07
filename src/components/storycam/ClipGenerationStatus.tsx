@@ -188,6 +188,8 @@ function generationLogs(job: GenerationJobSummary) {
   return [
     `已接收片段作业 ${job.id}`,
     `模型通道：${job.providerName}`,
+    ...(job.providerErrorCategory ? [`失败类型：${job.providerErrorCategory}`] : []),
+    ...(job.providerHttpStatus !== undefined ? [`Provider HTTP：${job.providerHttpStatus}`] : []),
     job.redactedError ? job.redactedError : "正在同步画面、动作与镜头节奏。",
     "输出将只保存到账号内预览。"
   ];

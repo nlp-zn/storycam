@@ -19,11 +19,13 @@
 
 ## 目标
 
-StoryCam 是一个 Web 端私人小剧场相机。它帮助普通用户把一个私人想法、情绪、回忆、关系或角色幻想，变成一段足够个人化、值得保存或分享的电影感短作品。
+StoryCam 是一个 Web 端私人漫画电影小剧场相机。它帮助普通用户把一个私人想法、情绪、回忆、关系或角色幻想，变成一段足够个人化、值得保存或分享的漫画电影感短作品。
+
+v1 默认视觉路线是“私人漫画电影 / 动画分镜”，不是写实真人短剧。人物资产应更像角色设定稿和 model sheet，场景资产应更像背景设定稿，9 帧分镜应更像可被 Seedance 参考的漫画电影分镜。写实真人、授权真人或平台虚拟人像可以作为后续 provider 能力探索，不作为第一版默认链路。
 
 产品赌注不是“AI 可以生成更多短剧”。真正的赌注是：
 
-> 如果产品能温柔地把普通人的模糊情绪整理成故事、人物、地点、镜头，并最终拍成真实短视频，普通用户会愿意输入私人想法，并觉得“这是我的故事”。
+> 如果产品能温柔地把普通人的模糊情绪整理成故事、人物、地点、镜头，并最终拍成一段漫画电影短视频，普通用户会愿意输入私人想法，并觉得“这是我的故事”。
 
 第一版成功体验应该是：
 
@@ -895,12 +897,12 @@ POST /generation-jobs/:id/cancel
   -> cancel provider if possible, tombstone locally, discard late result
 
 POST /stitch-suggestion
-  confirmed clips
-  -> order + durations + transitions + subtitles + music direction
+  one ready generated clip
+  -> final-work render suggestion for the confirmed 15s v1 output
 
 POST /final-work
-  confirmed stitch suggestion
-  -> final work
+  stitch suggestion
+  -> private final work + short-lived preview URL
 ```
 
 ## Provider 边界

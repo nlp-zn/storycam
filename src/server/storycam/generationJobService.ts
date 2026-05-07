@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { clipPromptPacketSchema } from "@/features/storycam/domain/artifactSchemas";
+import { clipPromptPacketSchema, generatedClipSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { ClipPromptPacket } from "@/features/storycam/domain/artifacts";
 import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
@@ -14,8 +14,16 @@ import {
 } from "./imageGenerationJobService";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
-import { createStoryCamSignedUrl, storyCamSignedUrlTtlSeconds } from "./mediaStore";
-import { storeProviderGeneratedClip } from "./videoGenerationService";
+import {
+  assertStoryCamPrivateBucket,
+  createStoryCamSignedUrl,
+  createStoryCamProviderReferenceSignedUrl,
+  storyCamSignedUrlTtlSeconds,
+  storyCamProviderReferenceSignedUrlTtlSeconds,
+  StoryCamMediaStoreError,
+  type StoryCamPrivateBucket
+} from "./mediaStore";
+import { storeMockGeneratedClipForJob, storeProviderGeneratedClip } from "./videoGenerationService";
 
 export type GenerateClipRequestBody = {
   confirmedArtifactVersions?: unknown;
@@ -30,6 +38,12 @@ export type GenerationJobSummary = {
   attempts: number;
   id: string;
   outputArtifactId?: string;
+  outputPreview?: {
+    durationSeconds: number;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  };
   providerKind: GenerationJobRow["provider_kind"];
   providerName: string;
   redactedError?: string;
@@ -62,6 +76,11 @@ export type GenerationJobServiceVideoProvider = VideoGenerationProvider<Generati
 export type GenerateClipServiceOutput = {
   confirmationSummary: string;
   jobId: string;
+  outputArtifactId?: string;
+  providerErrorCategory?: string;
+  providerHttpStatus?: number;
+  providerName: string;
+  redactedError?: string;
   status: GenerationJobRow["status"];
 };
 
@@ -86,7 +105,10 @@ export async function createGenerateClipJob(
   userId: string,
   coreStoryboardGroupId: string,
   body: GenerateClipRequestBody,
-  videoProvider?: GenerationJobServiceVideoProvider
+  videoProvider?: GenerationJobServiceVideoProvider,
+  options: {
+    providerReferenceSignedUrlTtlSeconds?: number;
+  } = {}
 ): Promise<{ ok: true; value: GenerateClipServiceOutput }> {
   const input = parseGenerateClipRequest(coreStoryboardGroupId, body);
   const jobs = new StoryCamGenerationJobRepository(client);
@@ -99,6 +121,8 @@ export async function createGenerateClipJob(
       value: {
         confirmationSummary: "Clip generation is already queued for this storyboard group.",
         jobId: existingJob.id,
+        providerName: existingJob.provider_name,
+        ...(existingJob.redacted_error ? { redactedError: existingJob.redacted_error } : {}),
         status: existingJob.status
       }
     };
@@ -112,37 +136,143 @@ export async function createGenerateClipJob(
       sessionId: input.sessionId
     });
     const packetArtifact = packetResult.value.clipPromptPacket;
-    const providerRequest = isAsyncVideoProvider(videoProvider)
-      ? await videoProvider.submitClipTask(await toVideoProviderInput(client, userId, packetResult.value.clipPromptPacketPayload))
-      : undefined;
+    const inputArtifactVersionsJson = {
+      [packetArtifact.id]: packetArtifact.version,
+      ...packetResult.value.clipPromptPacketPayload.inputArtifactVersions
+    };
+    const providerName = videoProvider?.providerName ?? "mock";
+    let providerRequest: ProviderResult<{ providerRequestId: string }> | undefined;
+    let providerRequestId: string | undefined;
 
-    if (providerRequest && !providerRequest.ok) {
-      throw new GenerationJobRequestError("video_provider_failed");
+    if (isAsyncVideoProvider(videoProvider)) {
+      let videoInput: GenerationJobServiceVideoInput;
+
+      try {
+        videoInput = await toVideoProviderInput(client, userId, packetResult.value.clipPromptPacketPayload, {
+          providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds
+        });
+      } catch (error) {
+        if (!(error instanceof StoryCamMediaStoreError) || error.code !== "provider_reference_url_not_public") {
+          throw error;
+        }
+
+        const failedJob = await createFailedVideoClipJob(client, userId, {
+          errorCode: "VIDEO_REFERENCE_MEDIA_NOT_PUBLIC",
+          generationMode: input.generationMode,
+          idempotencyKeyHash,
+          inputArtifactVersionsJson,
+          providerName,
+          redactedError:
+            "Storyboard reference images are only available on this local machine. Expose storage through public HTTPS before real Seedance image-reference testing.",
+          sessionId: input.sessionId
+        });
+
+        return {
+          ok: true,
+          value: {
+            confirmationSummary: packetResult.value.confirmationSummary,
+            jobId: failedJob.id,
+            ...(failedJob.provider_error_category ? { providerErrorCategory: failedJob.provider_error_category } : {}),
+            ...(failedJob.provider_http_status !== null ? { providerHttpStatus: failedJob.provider_http_status } : {}),
+            providerName: failedJob.provider_name,
+            ...(failedJob.redacted_error ? { redactedError: failedJob.redacted_error } : {}),
+            status: failedJob.status
+          }
+        };
+      }
+
+      const nonPublicReferenceUrls = findNonPublicReferenceUrls(videoInput.referenceImageUrls ?? []);
+
+      if (nonPublicReferenceUrls.length > 0) {
+        const failedJob = await createFailedVideoClipJob(client, userId, {
+          errorCode: "VIDEO_REFERENCE_MEDIA_NOT_PUBLIC",
+          generationMode: input.generationMode,
+          idempotencyKeyHash,
+          inputArtifactVersionsJson,
+          providerName,
+          redactedError:
+            "Storyboard reference images are only available on this local machine. Expose storage through public HTTPS before real Seedance image-reference testing.",
+          sessionId: input.sessionId
+        });
+
+        return {
+          ok: true,
+          value: {
+            confirmationSummary: packetResult.value.confirmationSummary,
+            jobId: failedJob.id,
+            ...(failedJob.provider_error_category ? { providerErrorCategory: failedJob.provider_error_category } : {}),
+            ...(failedJob.provider_http_status !== null ? { providerHttpStatus: failedJob.provider_http_status } : {}),
+            providerName: failedJob.provider_name,
+            ...(failedJob.redacted_error ? { redactedError: failedJob.redacted_error } : {}),
+            status: failedJob.status
+          }
+        };
+      }
+
+      providerRequest = await submitVideoProviderTask(videoProvider, videoInput);
+
+      if (!providerRequest.ok) {
+        const failedJob = await createFailedVideoClipJob(client, userId, {
+          errorCode: providerRequest.errorCode,
+          generationMode: input.generationMode,
+          idempotencyKeyHash,
+          inputArtifactVersionsJson,
+          providerErrorCategory: providerRequest.providerErrorCategory,
+          providerHttpStatus: providerRequest.providerHttpStatus,
+          providerName,
+          redactedError: providerRequest.redactedError,
+          sessionId: input.sessionId
+        });
+
+        return {
+          ok: true,
+          value: {
+            confirmationSummary: packetResult.value.confirmationSummary,
+            jobId: failedJob.id,
+            ...(failedJob.provider_error_category ? { providerErrorCategory: failedJob.provider_error_category } : {}),
+            ...(failedJob.provider_http_status !== null ? { providerHttpStatus: failedJob.provider_http_status } : {}),
+            providerName: failedJob.provider_name,
+            ...(failedJob.redacted_error ? { redactedError: failedJob.redacted_error } : {}),
+            status: failedJob.status
+          }
+        };
+      }
+
+      providerRequestId = providerRequest.value.providerRequestId;
     }
 
     const job = requireGenerationJobRow(
       await jobs.create(userId, {
         generationMode: input.generationMode,
         idempotencyKeyHash,
-        inputArtifactVersionsJson: {
-          [packetArtifact.id]: packetArtifact.version,
-          ...packetResult.value.clipPromptPacketPayload.inputArtifactVersions
-        },
+        inputArtifactVersionsJson,
         providerKind: "video",
-        providerName: videoProvider?.providerName ?? "mock",
-        providerRequestId: providerRequest?.value.providerRequestId,
+        providerName,
+        providerRequestId,
         sessionId: input.sessionId,
-        status: providerRequest ? "running" : "queued",
+        status: providerRequestId || !videoProvider ? "running" : "queued",
         type: "video_clip"
       })
     );
+    const completedMockJob = !videoProvider
+      ? await completeMockVideoJob(client, userId, {
+          job,
+          packet: packetResult.value.clipPromptPacketPayload
+        })
+      : undefined;
+    const responseJob = completedMockJob ?? job;
 
     return {
       ok: true,
       value: {
         confirmationSummary: packetResult.value.confirmationSummary,
-        jobId: job.id,
-        status: job.status
+        jobId: responseJob.id,
+        ...(responseJob.output_artifact_id ? { outputArtifactId: responseJob.output_artifact_id } : {}),
+        ...(responseJob.provider_error_category ? { providerErrorCategory: responseJob.provider_error_category } : {}),
+        ...(responseJob.provider_http_status !== null ? { providerHttpStatus: responseJob.provider_http_status } : {}),
+        providerName: responseJob.provider_name,
+        ...(responseJob.redacted_error ? { redactedError: responseJob.redacted_error } : {}),
+        status: responseJob.status
       }
     };
   } catch (error) {
@@ -152,6 +282,101 @@ export async function createGenerateClipJob(
 
     throw error;
   }
+}
+
+async function submitVideoProviderTask(
+  videoProvider: GenerationJobServiceVideoProvider & {
+    submitClipTask(input: GenerationJobServiceVideoInput): Promise<ProviderResult<{ providerRequestId: string }>>;
+  },
+  videoInput: GenerationJobServiceVideoInput
+): Promise<ProviderResult<{ providerRequestId: string }>> {
+  try {
+    return await videoProvider.submitClipTask(videoInput);
+  } catch {
+    return {
+      errorCode: "VIDEO_PROVIDER_SUBMISSION_ERROR",
+      ok: false,
+      providerKind: "video",
+      providerName: videoProvider.providerName,
+      redactedError: "Video provider submission failed before a remote task was created.",
+      redactionApplied: true,
+      retryable: true
+    };
+  }
+}
+
+async function createFailedVideoClipJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    errorCode: string;
+    generationMode: GenerationJobRow["generation_mode"];
+    idempotencyKeyHash: string;
+    inputArtifactVersionsJson: Record<string, number>;
+    providerErrorCategory?: string | null;
+    providerHttpStatus?: number | null;
+    providerName: string;
+    redactedError: string;
+    sessionId: string;
+  }
+) {
+  const jobs = new StoryCamGenerationJobRepository(client);
+  const job = requireGenerationJobRow(
+    await jobs.create(userId, {
+      generationMode: input.generationMode,
+      idempotencyKeyHash: input.idempotencyKeyHash,
+      inputArtifactVersionsJson: input.inputArtifactVersionsJson,
+      providerKind: "video",
+      providerName: input.providerName,
+      sessionId: input.sessionId,
+      status: "running",
+      type: "video_clip"
+    })
+  );
+
+  return (
+    (await jobs.markFailed(userId, job.id, {
+      errorCode: input.errorCode,
+      providerErrorCategory: input.providerErrorCategory,
+      providerHttpStatus: input.providerHttpStatus,
+      redactedError: input.redactedError
+    })) ?? job
+  );
+}
+
+async function completeMockVideoJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    job: GenerationJobRow;
+    packet: ClipPromptPacket;
+  }
+) {
+  const stored = await storeMockGeneratedClipForJob(client, {
+    clipPromptPacketId: input.packet.id,
+    coreGroupId: input.packet.coreGroupId,
+    durationSeconds: input.packet.plannedDurationSeconds ?? 15,
+    inputArtifactVersions: input.packet.inputArtifactVersions,
+    jobId: input.job.id,
+    sessionId: input.job.session_id,
+    userId
+  });
+
+  if (!stored.ok) {
+    await new StoryCamGenerationJobRepository(client).markFailed(userId, input.job.id, {
+      errorCode: stored.errorCode,
+      redactedError: stored.redactedError
+    });
+    throw new GenerationJobRequestError("video_provider_failed");
+  }
+
+  return (
+    (await new StoryCamGenerationJobRepository(client).findById(userId, input.job.id)) ?? {
+      ...input.job,
+      output_artifact_id: stored.value.artifact.id,
+      status: "succeeded" as const
+    }
+  );
 }
 
 export async function getGenerationJob(
@@ -181,12 +406,49 @@ export async function getGenerationJob(
 
   const refreshedJob = await new StoryCamGenerationJobRepository(client).findById(userId, jobId);
 
+  const summarySource = refreshedJob ?? videoResolved ?? job;
+  const outputPreview = await createVideoClipOutputPreview(client, userId, summarySource);
+
   return {
     ok: true,
     value: {
       ...(image ? { image } : {}),
-      job: toJobSummary(refreshedJob ?? videoResolved ?? job)
+      job: {
+        ...toJobSummary(summarySource),
+        ...(outputPreview ? { outputPreview } : {})
+      }
     }
+  };
+}
+
+async function createVideoClipOutputPreview(client: SupabaseClient<Database>, userId: string, job: GenerationJobRow) {
+  if (job.type !== "video_clip" || job.status !== "succeeded" || !job.output_artifact_id) {
+    return undefined;
+  }
+
+  const artifacts =
+    (await new StoryCamArtifactRepository(client).listBySession(userId, { sessionId: job.session_id, type: "generated_clip" })) ?? [];
+  const artifact = artifacts.find((row) => row.id === job.output_artifact_id && row.state === "ready");
+
+  if (!artifact) {
+    return undefined;
+  }
+
+  const generatedClip = generatedClipSchema.parse(artifact.data_json);
+  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(userId, job.session_id)) ?? [];
+  const media = mediaRows.find((row) => row.id === generatedClip.mediaAssetId);
+
+  if (!media) {
+    return undefined;
+  }
+
+  assertStoryCamPrivateBucket(media.storage_bucket);
+
+  return {
+    durationSeconds: generatedClip.durationSeconds,
+    mimeType: media.mime_type,
+    signedUrl: await createStoryCamSignedUrl(client, media.storage_bucket, media.storage_path, storyCamSignedUrlTtlSeconds),
+    signedUrlExpiresIn: storyCamSignedUrlTtlSeconds
   };
 }
 
@@ -216,6 +478,8 @@ async function resolveVideoGenerationJob(
     return (
       (await jobs.markFailed(userId, input.job.id, {
         errorCode: providerResult.errorCode,
+        providerErrorCategory: providerResult.providerErrorCategory,
+        providerHttpStatus: providerResult.providerHttpStatus,
         redactedError: providerResult.redactedError
       })) ?? input.job
     );
@@ -289,19 +553,24 @@ async function loadClipPromptPacketForJob(
 async function toVideoProviderInput(
   client: SupabaseClient<Database>,
   userId: string,
-  packet: ClipPromptPacket
+  packet: ClipPromptPacket,
+  options: {
+    providerReferenceSignedUrlTtlSeconds?: number;
+  } = {}
 ): Promise<GenerationJobServiceVideoInput> {
   const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(userId, packet.sessionId)) ?? [];
+  const providerReferenceSignedUrlTtlSeconds =
+    options.providerReferenceSignedUrlTtlSeconds ?? storyCamProviderReferenceSignedUrlTtlSeconds;
   const referenceImageUrls = await Promise.all(
     packet.referenceImageMedia.map(async (reference) => {
       const media = mediaRows.find((row) => row.id === reference.mediaId);
 
       return media
-        ? createStoryCamSignedUrl(
+        ? createStoryCamProviderReferenceSignedUrl(
             client,
-            media.storage_bucket as Parameters<typeof createStoryCamSignedUrl>[1],
+            media.storage_bucket as StoryCamPrivateBucket,
             media.storage_path,
-            storyCamSignedUrlTtlSeconds
+            providerReferenceSignedUrlTtlSeconds
           )
         : null;
     })
@@ -309,12 +578,30 @@ async function toVideoProviderInput(
 
   return {
     durationSeconds: Math.min(15, packet.plannedDurationSeconds ?? 15),
-    generateAudio: false,
+    generateAudio: true,
     prompt: packet.providerPrompt ?? packet.redactedPromptSummary,
     ratio: "16:9",
     referenceImageUrls: referenceImageUrls.filter((url): url is string => Boolean(url)),
     watermark: false
   };
+}
+
+function findNonPublicReferenceUrls(urls: string[]) {
+  return urls.filter((url) => {
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+
+      return (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname.endsWith(".localhost")
+      );
+    } catch {
+      return true;
+    }
+  });
 }
 
 export async function cancelGenerationJob(
@@ -397,6 +684,8 @@ function toJobSummary(job: GenerationJobRow): GenerationJobSummary {
     ...(job.output_artifact_id ? { outputArtifactId: job.output_artifact_id } : {}),
     providerKind: job.provider_kind,
     providerName: job.provider_name,
+    ...(job.provider_error_category ? { providerErrorCategory: job.provider_error_category } : {}),
+    ...(job.provider_http_status !== null ? { providerHttpStatus: job.provider_http_status } : {}),
     ...(job.redacted_error ? { redactedError: job.redacted_error } : {}),
     sessionId: job.session_id,
     status: job.status,

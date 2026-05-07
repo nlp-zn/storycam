@@ -38,6 +38,82 @@ const identity = {
   providerKind: "video",
   providerName: "seedance_2_0"
 } as const;
+const mockIdentity = {
+  providerKind: "video",
+  providerName: "mock"
+} as const;
+
+export type StoreMockGeneratedClipInput = Omit<StoreProviderGeneratedClipInput, "fetch" | "providerName" | "providerRequestId" | "videoUrl">;
+
+export async function storeMockGeneratedClipForJob(
+  client: SupabaseClient<Database>,
+  input: StoreMockGeneratedClipInput
+): Promise<ProviderResult<StoreProviderGeneratedClipOutput>> {
+  try {
+    const jobs = new StoryCamGenerationJobRepository(client);
+    const job = await jobs.findById(input.userId, input.jobId);
+
+    if (!job || job.tombstoned_at || !canAcceptProviderResult(job.status)) {
+      return providerFailure(mockIdentity, new Error("Late mock result discarded."), {
+        errorCode: "MOCK_VIDEO_LATE_RESULT_DISCARDED",
+        retryable: false
+      });
+    }
+
+    const media = await writeGeneratedStoryCamMedia(client, {
+      bytes: createMockMp4Bytes(input),
+      kind: "generated_clip",
+      mimeType: "video/mp4",
+      sessionId: input.sessionId,
+      source: "provider",
+      userId: input.userId
+    });
+    const generatedClip = generatedClipSchema.parse({
+      clipPromptPacketId: input.clipPromptPacketId,
+      coreGroupId: input.coreGroupId,
+      durationSeconds: input.durationSeconds,
+      id: `generated-clip-${input.coreGroupId}`,
+      jobId: input.jobId,
+      mediaAssetId: media.id,
+      providerName: "mock",
+      reviewState: input.reviewState ?? "pending",
+      sessionId: input.sessionId,
+      state: "ready",
+      version: 1
+    });
+    const artifact = requireArtifactRow(
+      await new StoryCamArtifactRepository(client).createVersion(input.userId, {
+        dataJson: generatedClip,
+        dependsOnJson: input.inputArtifactVersions ?? ({} satisfies Json),
+        sessionId: input.sessionId,
+        state: "ready",
+        type: "generated_clip",
+        version: generatedClip.version
+      })
+    );
+    const completedJob = await jobs.markSucceeded(input.userId, input.jobId, {
+      outputArtifactId: artifact.id
+    });
+
+    if (!completedJob) {
+      return providerFailure(mockIdentity, new Error("Late mock result discarded."), {
+        errorCode: "MOCK_VIDEO_LATE_RESULT_DISCARDED",
+        retryable: false
+      });
+    }
+
+    return providerSuccess(mockIdentity, {
+      artifact: toArtifactRef(artifact),
+      generatedClip,
+      media
+    });
+  } catch (error) {
+    return providerFailure(mockIdentity, error, {
+      errorCode: "MOCK_VIDEO_CLIP_STORE_FAILED",
+      retryable: true
+    });
+  }
+}
 
 export async function storeProviderGeneratedClip(
   client: SupabaseClient<Database>,
@@ -151,4 +227,8 @@ function toArtifactRef(row: StoryCamArtifactRow): StoreProviderGeneratedClipOutp
 
 function canAcceptProviderResult(status: string) {
   return status === "queued" || status === "running";
+}
+
+function createMockMp4Bytes(input: Pick<StoreMockGeneratedClipInput, "coreGroupId" | "durationSeconds">) {
+  return new TextEncoder().encode(`storycam-mock-mp4\ncoreGroup=${input.coreGroupId}\nduration=${input.durationSeconds}\n`);
 }

@@ -64,6 +64,9 @@ function inferenceShConfig(): StoryCamConfig {
       apiKey: "inference-key",
       imageApp: "openai/gpt-image-2"
     },
+    media: {
+      providerReferenceSignedUrlTtlSeconds: 3600
+    },
     supabase: {
       anonKey: "anon-key",
       serviceRoleKey: "service-role-key",

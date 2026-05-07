@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import { assertClipPromptPacketCanCreateVideoJob, buildClipPromptPacketPayload } from "@/features/storycam/domain/clipPromptPacket";
 import type { ClipPromptPacket, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { Database, Json, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
@@ -30,11 +31,13 @@ export type ClipPromptPacketServiceOutput = {
 };
 
 export class ClipPromptPacketRequestError extends Error {
-  constructor(readonly code: "core_group_not_confirmed" | "invalid_input" | "session_not_found" | "stale_packet") {
+  constructor(readonly code: "core_group_not_confirmed" | "expanded_frames_not_ready" | "invalid_input" | "session_not_found" | "stale_packet") {
     super(`StoryCam clip prompt packet request error: ${code}`);
     this.name = "ClipPromptPacketRequestError";
   }
 }
+
+const requiredExpandedFrameCount = 8;
 
 export async function createClipPromptPacket(
   client: SupabaseClient<Database>,
@@ -70,6 +73,11 @@ export async function createClipPromptPacket(
   );
   const expandedCardIds = expandedCardArtifacts.map((row) => expandedStoryboardCardSchema.parse(row.data_json).id);
   const storyboardMedia = await loadStoryboardFrameMedia(client, userId, session.id, coreGroupArtifact, expandedCardArtifacts);
+
+  if (!hasCompleteNineFrameMedia(storyboardMedia)) {
+    throw new ClipPromptPacketRequestError("expanded_frames_not_ready");
+  }
+
   const inputArtifactVersions = {
     [coreGroupArtifact.id]: coreGroupArtifact.version,
     ...(storyboardScriptArtifact ? { [storyboardScriptArtifact.id]: storyboardScriptArtifact.version } : {}),
@@ -86,6 +94,10 @@ export async function createClipPromptPacket(
     providerPrompt: buildVideoProviderPrompt({
       coreGroupTitle: coreGroup.title,
       durationSeconds: coreGroup.estimatedClipDurationSeconds,
+      referenceFrames: storyboardMedia.map((item) => ({
+        frameNumber: item.frameNumber,
+        kind: item.kind
+      })),
       storyboardScript
     }),
     referenceImageMedia: storyboardMedia.map((item) => ({
@@ -180,30 +192,81 @@ async function loadStoryboardFrameMedia(
         ]
       : []),
     ...expandedMedia.filter((item): item is { artifactId: string; frameNumber: number; kind: "expanded"; media: MediaAssetRow } => Boolean(item))
-  ];
+  ].sort((left, right) => left.frameNumber - right.frameNumber);
+}
+
+function hasCompleteNineFrameMedia(storyboardMedia: Array<{ frameNumber: number; kind: "core" | "expanded" }>) {
+  const hasCoreFrame = storyboardMedia.some((item) => item.kind === "core" && item.frameNumber === 1);
+  const expandedFrameNumbers = new Set(
+    storyboardMedia
+      .filter((item) => item.kind === "expanded")
+      .map((item) => item.frameNumber)
+  );
+
+  return hasCoreFrame && expandedFrameNumbers.size >= requiredExpandedFrameCount;
 }
 
 function buildVideoProviderPrompt(input: {
   coreGroupTitle: string;
   durationSeconds: number;
+  referenceFrames?: Array<{
+    frameNumber: number;
+    kind: "core" | "expanded";
+  }>;
   storyboardScript?: StoryboardScript;
 }) {
-  const frames = input.storyboardScript?.frames
-    .map(
-      (frame) =>
-        `${String(frame.frameNumber).padStart(2, "0")} ${frame.timeRange} ${frame.title}: ${frame.visualContent} Purpose: ${frame.narrativePurpose}`
-    )
-    .join("\n");
+  const referenceImagePlan = input.referenceFrames?.length
+    ? input.referenceFrames
+        .map((frame, index) => `图片${index + 1}=F${formatFrameNumber(frame.frameNumber)} ${frame.kind}`)
+        .join(", ")
+    : undefined;
+  const frames = input.storyboardScript?.frames.map((frame) => formatSeedanceFrameBeat(frame, input.referenceFrames ?? [])).join("\n");
+  const audioPlan = buildNativeAudioPlan(input.storyboardScript);
 
   return [
-    `Create one private StoryCam short film clip titled "${input.coreGroupTitle}".`,
-    `Target duration: ${Math.min(15, Math.round(input.durationSeconds))} seconds, 16:9, cinematic, no subtitles, no readable UI text.`,
-    "Use the attached storyboard/reference images as visual continuity anchors. Preserve character appearance, wardrobe, props, location, lighting, and mood.",
-    frames ? `Nine-frame storyboard script:\n${frames}` : "",
-    "Motion should connect the frames as one continuous private-memory scene with restrained performances and natural camera movement."
+    `Create one continuous ${Math.min(15, Math.round(input.durationSeconds))}s 16:9 cinematic clip for "${input.coreGroupTitle}".`,
+    "Visual style: stylized comic animation film, illustrated characters, clean line art, cinematic lighting, private-memory mood.",
+    storyCamComicVisualSafetyLine,
+    "No subtitles, no readable UI text, no new characters or locations.",
+    referenceImagePlan ? `Reference order: ${referenceImagePlan}.` : "",
+    "Use each 图片n reference image as a comic storyboard anchor for its matching frame; preserve character design, wardrobe, location, lighting, rain, and screen direction.",
+    frames ? `Director nine-frame plan:\n${frames}` : "",
+    audioPlan,
+    "Camera: restrained natural movement between frames, visible subject action before each transition, final beat held emotionally."
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function formatSeedanceFrameBeat(frame: StoryboardScript["frames"][number], referenceFrames: Array<{ frameNumber: number }>) {
+  const referenceIndex = referenceFrames.findIndex((reference) => reference.frameNumber === frame.frameNumber);
+  const referenceLabel = referenceIndex >= 0 ? ` 图片${referenceIndex + 1}` : "";
+
+  return [
+    `F${formatFrameNumber(frame.frameNumber)}${referenceLabel} ${frame.timeRange}: ${frame.title}.`,
+    `${frame.shotSize}/${frame.cameraAngle}.`,
+    clipText(frame.visualContent, 140),
+    `Camera: ${clipText(frame.technicalNotes, 90)}`,
+    `Purpose: ${clipText(frame.narrativePurpose, 90)}`
+  ].join(" ");
+}
+
+function buildNativeAudioPlan(storyboardScript?: StoryboardScript) {
+  const basePlan =
+    "Native audio plan: generate synchronized sound that supports the storyboard images. Use rain ambience (雨声) as the quiet bed, convenience-store door bell or small chime (门铃) only when the frame implies the store entrance, subtle wet footsteps or fabric movement (脚步) only on movement beats, low private-memory background music (环境音乐), and sparse soft dialogue or inner whisper (对白) only when the storyboard/script implies spoken emotion. Do not add unrelated comedic sounds or overpower the visuals.";
+  const frameCues = storyboardScript?.frames
+    .map((frame) => `F${formatFrameNumber(frame.frameNumber)} audio: ${clipText(frame.sound, 80)}; support "${clipText(frame.title, 50)}" and ${clipText(frame.narrativePurpose, 80)}`)
+    .join("\n");
+
+  return frameCues ? `${basePlan}\nFrame audio cues:\n${frameCues}` : basePlan;
+}
+
+function formatFrameNumber(frameNumber: number) {
+  return String(frameNumber).padStart(2, "0");
+}
+
+function clipText(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}...` : value;
 }
 
 export function assertClipPromptPacketArtifactCanCreateVideoJob(row: StoryCamArtifactRow) {

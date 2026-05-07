@@ -42,6 +42,7 @@ describe("seedance video provider", () => {
             },
             {
               image_url: { url: "https://signed.example/reference.png" },
+              role: "reference_image",
               type: "image_url"
             }
           ],

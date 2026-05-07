@@ -125,6 +125,7 @@ export type CreateStoryboardResponse = {
   ok: true;
   artifacts: {
     coreStoryboardGroups: ArtifactRef[];
+    expandedStoryboardCards?: Array<ArtifactRef & { parentArtifactId: string | null }>;
     storyboardScript: ArtifactRef;
     storyboardScripts: ArtifactRef[];
   };
@@ -212,6 +213,11 @@ export type GenerateClipJobResponse = {
   confirmationSummary: string;
   jobId: string;
   ok: true;
+  outputArtifactId?: string;
+  providerErrorCategory?: string;
+  providerHttpStatus?: number;
+  providerName?: string;
+  redactedError?: string;
   status: GenerationJobStatus;
 };
 
@@ -221,6 +227,14 @@ export type GenerationJobSummary = {
   attempts: number;
   id: string;
   outputArtifactId?: string;
+  outputPreview?: {
+    durationSeconds: number;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  };
+  providerErrorCategory?: string;
+  providerHttpStatus?: number;
   providerKind: string;
   providerName: string;
   redactedError?: string;
@@ -263,6 +277,12 @@ export type FinalWorkResponse = {
     mimeType: string;
   };
   ok: true;
+  preview?: {
+    durationSeconds?: number;
+    mimeType: string;
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  };
 };
 
 export type GenerateStoryWorldAssetImageResponse = {
@@ -297,8 +317,10 @@ export type RestoreStoryCamSessionResponse =
       restored: false;
     }
   | {
+      clipJob?: GenerationJobSummary;
       coreGroupTargetCount: 1 | 2 | 3;
-      currentStep: "core-storyboard" | "story-world";
+      currentStep: "clip-generation" | "clip-review" | "core-storyboard" | "export" | "story-world";
+      finalWork?: FinalWorkResponse;
       ok: true;
       restored: true;
       sessionId: string;
@@ -309,7 +331,7 @@ export type RestoreStoryCamSessionResponse =
 
 export type RecentStoryCamProject = {
   coreGroupTargetCount: 1 | 2 | 3;
-  currentStep: "core-storyboard" | "story-world";
+  currentStep: "clip-generation" | "clip-review" | "core-storyboard" | "export" | "story-world";
   sessionId: string;
   summary: string;
   thumbnail: {

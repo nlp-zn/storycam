@@ -181,7 +181,7 @@ type RecentProjectsResponse = {
     sessionId: string;
     title: string;
     summary: string;
-    currentStep: "story-world" | "core-storyboard";
+    currentStep: "story-world" | "core-storyboard" | "clip-generation" | "clip-review" | "export";
     updatedAt: string;
     coreGroupTargetCount: 1 | 2 | 3;
     thumbnail: null | {
@@ -456,6 +456,12 @@ type GenerationJobResponse = {
     retryable?: boolean;
     redactedError?: string;
     outputArtifactId?: string;
+    outputPreview?: {
+      durationSeconds: number;
+      mimeType: "video/mp4";
+      signedUrl: string;
+      signedUrlExpiresIn: number;
+    };
   };
 };
 ```
@@ -464,6 +470,7 @@ Rules:
 
 - Image jobs resolve provider output and store ready thumbnail media.
 - Real Seedance video jobs poll the provider task id; on success the server downloads `content.video_url`, stores it in private StoryCam storage, creates a `generated_clip` artifact, and marks the job succeeded.
+- Succeeded video jobs may include a short-lived account preview URL for the stored generated clip.
 - Provider URLs and full prompts are never returned.
 
 ### `POST /api/generation-jobs/:id/cancel`
@@ -489,7 +496,7 @@ Rules:
 
 ### `POST /api/stitch-suggestion`
 
-Create a stitch suggestion for confirmed clips.
+Create a stitch suggestion for one ready generated clip. In the v1 UI, clicking “生成最终作品” is the confirmation action for that clip.
 
 Auth: required.
 
@@ -534,6 +541,12 @@ type FinalWorkResponse = {
   ok: true;
   finalWork: VersionedArtifact;
   media: MediaRef;
+  preview: {
+    durationSeconds: number;
+    mimeType: "video/mp4";
+    signedUrl: string;
+    signedUrlExpiresIn: number;
+  };
 };
 ```
 

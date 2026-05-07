@@ -57,6 +57,7 @@ STORYCAM_MULTIMODAL_PROVIDER=mock
 STORYCAM_IMAGE_PROVIDER=mock
 STORYCAM_VIDEO_PROVIDER=mock
 STORYCAM_FINAL_WORK_PROVIDER=mock
+STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS=3600
 ```
 
 For local UI/E2E smoke without real credentials, the test harness uses mocked HTTP routes.
@@ -117,6 +118,25 @@ INFERENCE_IMAGE_APP=openai/gpt-image-2
 
 The Inference.sh `openai/gpt-image-2` app also requires the required `OPENAI_KEY` secret to be configured in Inference.sh. StoryCam uses the official `@inferencesh/sdk`, downloads the returned file URI server-side, and stores the image in private StoryCam storage.
 
+To test real Seedance clip generation from the browser:
+
+```text
+STORYCAM_GENERATION_MODE=real
+STORYCAM_VIDEO_PROVIDER=seedance_2_0
+SEEDANCE_API_KEY=<your-seedance-key>
+SEEDANCE_MODEL=doubao-seedance-2-0-260128
+```
+
+Real image-reference testing requires public HTTPS media URLs. If `NEXT_PUBLIC_SUPABASE_URL` points to local Supabase (`localhost`, `127.0.0.1`, or `::1`), StoryCam will create a failed local job or placeholder instead of submitting to Seedance/Inference.sh, because external providers cannot fetch local-only StoryCam images.
+
+Recommended environments:
+
+- `local-mock`: local Supabase plus mock providers; local auth bypass may be enabled.
+- `local-real`: local Next.js connected to a hosted Supabase dev/staging project; real provider reference URLs are signed public HTTPS links.
+- `staging/prod`: hosted Supabase private buckets plus real providers.
+
+`STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS` controls provider reference signed URLs and defaults to 3600 seconds. UI preview URLs keep the shorter 5 minute TTL.
+
 For manual browser testing without a Google account, use a Supabase local stack and set:
 
 ```text
@@ -125,7 +145,16 @@ STORYCAM_LOCAL_AUTH_BYPASS=1
 
 This bypass only works outside production and only when `NEXT_PUBLIC_SUPABASE_URL` points to `localhost`, `127.0.0.1`, or `::1`. The server creates or reuses a local Supabase Auth user named `storycam-local-dev@example.test`, so StoryCam metadata still belongs to an `auth.users.id`.
 
-For manual browser testing against a dedicated Supabase test project, keep `STORYCAM_LOCAL_AUTH_BYPASS=0` and log in with Google before creating resources.
+For manual browser testing against a dedicated hosted Supabase dev/staging project, you may opt in to the same dev user without Google login:
+
+```text
+STORYCAM_LOCAL_AUTH_BYPASS=1
+STORYCAM_LOCAL_AUTH_BYPASS_ALLOWED_SUPABASE_REFS=<your-dev-project-ref>
+STORYCAM_LOCAL_AUTH_BYPASS_EMAIL=storycam-local-dev@example.test
+```
+
+Hosted bypass still only works outside production, only for `https://<ref>.supabase.co`, and only when `<ref>` is explicitly allowlisted. Do not enable it for production projects.
+Change `STORYCAM_LOCAL_AUTH_BYPASS_EMAIL` when you need the browser to reuse an existing dev Auth user and see that user's account-scoped recent projects.
 
 ## Google OAuth Local Setup
 

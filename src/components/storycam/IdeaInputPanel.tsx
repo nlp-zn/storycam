@@ -426,7 +426,7 @@ function RecentProjectsDrawer({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="truncate text-lg font-black text-[#e2e2e2]">{project.title}</h3>
                     <span className="rounded-full border border-[#00f0ff]/25 px-3 py-1 text-xs font-black text-[#00f0ff]">
-                      {project.currentStep === "core-storyboard" ? "核心分镜" : "故事世界"}
+                      {projectStepLabel(project.currentStep)}
                     </span>
                   </div>
                   <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{project.summary}</p>
@@ -462,6 +462,21 @@ function formatProjectDate(value: string) {
     minute: "2-digit",
     month: "2-digit"
   }).format(new Date(value));
+}
+
+function projectStepLabel(step: RecentStoryCamProject["currentStep"]) {
+  switch (step) {
+    case "export":
+      return "最终作品";
+    case "clip-review":
+      return "片段确认";
+    case "clip-generation":
+      return "片段生成";
+    case "core-storyboard":
+      return "核心分镜";
+    case "story-world":
+      return "故事世界";
+  }
 }
 
 function authGateMessage(authStatus: AuthStatus) {

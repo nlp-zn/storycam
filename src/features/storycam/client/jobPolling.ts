@@ -5,6 +5,10 @@ export const imageGenerationPollingPolicy = {
   maxConcurrentRequests: 3
 };
 
+export const videoGenerationPollingPolicy = {
+  delayScheduleMs: [2_000, 5_000, 10_000, 20_000, 30_000] as const
+};
+
 export function isTerminalGenerationJobStatus(status: GenerationJobStatus) {
   return status === "succeeded" || status === "failed" || status === "canceled" || status === "expired";
 }
@@ -18,6 +22,14 @@ export function nextImageGenerationPollDelayMs(completedAttempts: number) {
     imageGenerationPollingPolicy.delayScheduleMs[
       Math.min(Math.max(completedAttempts, 0), imageGenerationPollingPolicy.delayScheduleMs.length - 1)
     ] ?? imageGenerationPollingPolicy.delayScheduleMs.at(-1)!
+  );
+}
+
+export function nextVideoGenerationPollDelayMs(completedAttempts: number) {
+  return (
+    videoGenerationPollingPolicy.delayScheduleMs[
+      Math.min(Math.max(completedAttempts, 0), videoGenerationPollingPolicy.delayScheduleMs.length - 1)
+    ] ?? videoGenerationPollingPolicy.delayScheduleMs.at(-1)!
   );
 }
 

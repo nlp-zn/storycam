@@ -43,23 +43,25 @@ describe("final work API routes", () => {
     composeMock.mockClear();
   });
 
-  it("rejects stitch suggestions without confirmed clips", async () => {
+  it("creates a stitch suggestion when a generated clip is ready for final confirmation", async () => {
     const { POST } = await import("@/app/api/stitch-suggestion/route");
 
     requireUserMock.mockResolvedValue({ id: "user-1" });
-    createSupabaseAdminClientMock.mockReturnValue(
-      new FakeSupabaseClient({ artifactRows: [generatedClipArtifact({ reviewState: "pending" })] }).asSupabaseClient()
-    );
+    const client = new FakeSupabaseClient({ artifactRows: [generatedClipArtifact({ reviewState: "pending" })] });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
 
     const response = await POST(jsonRequest("https://storycam.test/api/stitch-suggestion", {
       generatedClipArtifactIds: ["generated-clip-artifact-1"],
       sessionId: "session-1"
     }));
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
-      error: "generated_clip_not_confirmed",
-      redactionApplied: true
+      ok: true,
+      stitchSuggestion: {
+        state: "ready",
+        type: "stitch_suggestion"
+      }
     });
   });
 
@@ -119,10 +121,15 @@ describe("final work API routes", () => {
         kind: "final_work",
         mimeType: "video/mp4"
       },
-      ok: true
+      ok: true,
+      preview: {
+        durationSeconds: 4,
+        mimeType: "video/mp4",
+        signedUrl: expect.stringContaining("https://storycam.test/storage/storycam-generated/users/user-1/sessions/session-1/generated/final/"),
+        signedUrlExpiresIn: 300
+      }
     });
     expect(JSON.stringify(body)).not.toContain("storage_path");
-    expect(JSON.stringify(body)).not.toContain("signedUrl");
     expect(JSON.stringify(body)).not.toContain("share");
     expect(composeMock).toHaveBeenCalledWith({
       clips: [
@@ -224,6 +231,7 @@ type FakeSupabaseClientOptions = {
 
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  readonly signedUrls: Array<{ bucket: string; expiresIn: number; path: string }> = [];
   readonly uploads: Array<{ bucket: string; byteSize: number; contentType: string; path: string; upsert: boolean }> = [];
 
   constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
@@ -234,6 +242,14 @@ class FakeSupabaseClient {
 
   readonly storage = {
     from: (bucket: string) => ({
+      createSignedUrl: (path: string, expiresIn: number) => {
+        this.signedUrls.push({ bucket, expiresIn, path });
+
+        return Promise.resolve({
+          data: { signedUrl: `https://storycam.test/storage/${bucket}/${path}` },
+          error: null
+        });
+      },
       download: (path: string) =>
         Promise.resolve({
           data: new Blob([new TextEncoder().encode("clip-bytes")]),

@@ -23,6 +23,9 @@ describe("story-world asset image prompt", () => {
         apiKey: "inference-key",
         imageApp: "openai/gpt-image-2"
       },
+      media: {
+        providerReferenceSignedUrlTtlSeconds: 3600
+      },
       supabase: {
         anonKey: "anon-key",
         serviceRoleKey: "service-role-key",
@@ -48,8 +51,8 @@ describe("story-world asset image prompt", () => {
     expect(prompt.prompt).toContain("front, side, and back turnaround");
     expect(prompt.prompt).toContain("head, hair, and expression studies");
     expect(prompt.prompt).toContain("wardrobe, footwear, hand, and prop detail callouts");
-    expect(prompt.prompt).toContain("Use the shared StoryCam visual style: 写实韩剧电影感");
-    expect(prompt.prompt).not.toContain("polished Japanese animation concept art");
+    expect(prompt.prompt).toContain("Use the shared StoryCam visual style: 漫画电影/动画分镜风格");
+    expect(prompt.prompt).toContain("not photorealistic people");
     expect(prompt.prompt).toContain("plain white or warm off-white studio background");
   });
 
@@ -69,7 +72,7 @@ describe("story-world asset image prompt", () => {
     expect(prompt.prompt).toContain("Panel 1: 便利店外景");
     expect(prompt.prompt).toContain("Panel 4: 灯光反射");
     expect(prompt.prompt).toContain("All panels must belong to the same single location");
-    expect(prompt.prompt).toContain("Use the shared StoryCam visual style: 写实韩剧电影感");
+    expect(prompt.prompt).toContain("Use the shared StoryCam visual style: 漫画电影/动画分镜风格");
     expect(prompt.prompt).toContain("no people");
     expect(prompt.prompt).toContain("no silhouettes");
     expect(prompt.prompt).toContain("no reflections of people");
@@ -88,7 +91,7 @@ describe("story-world asset image prompt", () => {
       sessionId: "session-1"
     });
 
-    expect(prompt.prompt).toContain("Use the shared StoryCam visual style: 写实电影感");
+    expect(prompt.prompt).toContain("Use the shared StoryCam visual style: 漫画电影/动画分镜风格");
   });
 });
 

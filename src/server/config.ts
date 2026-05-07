@@ -33,6 +33,9 @@ export type StoryCamConfig = {
     anonKey: string;
     serviceRoleKey: string;
   };
+  media: {
+    providerReferenceSignedUrlTtlSeconds: number;
+  };
   generation: {
     mode: GenerationMode;
     textProvider: TextProvider;
@@ -180,6 +183,12 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const needsSeedance = videoProvider === "seedance_2_0";
   const seedanceApiKey = needsSeedance ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
   const seedanceModel = needsSeedance ? required(env, "SEEDANCE_MODEL", issues) : undefined;
+  const providerReferenceSignedUrlTtlSeconds = optionalPositiveInteger(
+    env,
+    "STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS",
+    3600,
+    issues
+  );
 
   if (issues.length > 0) {
     throw new StoryCamConfigError(issues);
@@ -212,6 +221,9 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
       serviceRoleKey: supabaseServiceRoleKey
+    },
+    media: {
+      providerReferenceSignedUrlTtlSeconds
     },
     generation: {
       mode,
@@ -298,6 +310,27 @@ function optionalCsv(env: Env, variable: string) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+function optionalPositiveInteger(env: Env, variable: string, fallback: number, issues: ConfigIssue[]) {
+  const rawValue = env[variable]?.trim();
+
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const value = Number(rawValue);
+
+  if (!Number.isInteger(value) || value <= 0) {
+    issues.push({
+      code: "INVALID_ENV",
+      variable,
+      message: `${variable} must be a positive integer.`
+    });
+    return fallback;
+  }
+
+  return value;
 }
 
 function isValidUrl(value: string) {

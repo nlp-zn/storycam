@@ -228,6 +228,43 @@ describe("POST /api/storyboard", () => {
         .some((call) => call[0] === "insert")
     ).toBe(false);
   });
+
+  it("does not submit the representative storyboard image job when reference signed urls are local", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+    const client = new FakeSupabaseClient({
+      artifactRows: storyWorldRows(),
+      mediaRows: assetImageRows(),
+      signedUrlBase: "http://127.0.0.1:54321/storage"
+    });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        confirmedArtifactVersions: {
+          "character-artifact-1": 1,
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        },
+        sessionId: "session-1"
+      })
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      storyboard: {
+        coreStoryboardGroups: [
+          {
+            representativeImage: { placeholder: true, reason: "reference_images_unsupported", status: "placeholder" }
+          }
+        ]
+      }
+    });
+    expect(generationJobInserts(client)).toHaveLength(0);
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
+  });
 });
 
 function jsonRequest(body: unknown) {
@@ -302,6 +339,7 @@ function artifactRow(id: string, type: string, dataJson: Record<string, unknown>
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
   mediaRows?: unknown[];
+  signedUrlBase?: string;
 };
 
 class FakeSupabaseClient {
@@ -310,7 +348,7 @@ class FakeSupabaseClient {
     from: (bucket: string) => ({
       createSignedUrl: (path: string) =>
         Promise.resolve({
-          data: { signedUrl: `https://storycam.test/storage/${bucket}/${path}` },
+          data: { signedUrl: `${this.options.signedUrlBase ?? "https://storycam.test/storage"}/${bucket}/${path}` },
           error: null
         })
     })
@@ -461,6 +499,8 @@ class FakeQuery {
         created_at: "2026-04-26T00:00:00.000Z",
         ended_at: null,
         error_code: null,
+  provider_error_category: null,
+  provider_http_status: null,
         id: this.client.nextGenerationJobId(),
         max_attempts: 1,
         provider_request_id: null,

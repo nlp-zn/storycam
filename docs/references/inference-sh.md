@@ -67,6 +67,7 @@ For storyboard images, StoryCam uses Inference.sh's `openai/gpt-image-2` app wit
 ```
 
 The StoryCam server maps ready character and scene asset signed URLs into that `images` array, while the frame-specific storyboard instruction remains in `prompt`.
+When a reference URL is local or private-network scoped, such as `http://127.0.0.1:54321/...`, the StoryCam server downloads it first and sends a data URI to the Inference.sh SDK. Inference.sh automatically uploads data URIs, which keeps local Supabase development compatible with cloud workers.
 
 ## Task Status And Output
 
@@ -78,6 +79,7 @@ StoryCam treats these statuses as successful:
 StoryCam treats these statuses as terminal failures:
 
 - official string status: `failed`, `canceled`, or `cancelled`
+- errored task status with an `error` payload, including observed numeric status `11`
 - legacy numeric status: `20`
 
 Image apps usually return completed output under `output.images`. StoryCam reads only the first image URI, downloads it server-side, validates the MIME type, and writes the bytes to private storage. Do not expose provider image URIs to clients or logs.

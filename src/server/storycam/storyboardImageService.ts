@@ -10,7 +10,14 @@ import {
   type WriteGeneratedStoryCamMediaResult
 } from "./generatedMediaService";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
-import { createStoryCamSignedUrl, storyCamGeneratedBucket, storyCamSignedUrlTtlSeconds } from "./mediaStore";
+import {
+  createStoryCamProviderReferenceSignedUrl,
+  createStoryCamSignedUrl,
+  storyCamGeneratedBucket,
+  storyCamProviderReferenceSignedUrlTtlSeconds,
+  storyCamSignedUrlTtlSeconds,
+  StoryCamMediaStoreError
+} from "./mediaStore";
 
 export type StoryboardRepresentativeImageInput = {
   characterAssetIds: string[];
@@ -71,7 +78,7 @@ export type StoryWorldVisualContext =
     }
   | {
       ok: false;
-      reason: "waiting_for_asset_images";
+      reason: "reference_images_unsupported" | "waiting_for_asset_images";
     };
 
 export type StoryboardRepresentativeImageOutput = {
@@ -314,6 +321,7 @@ export async function loadStoryWorldVisualContext(
   userId: string,
   input: {
     coreGroup: CoreStoryboardGroup;
+    providerReferenceSignedUrlTtlSeconds?: number;
     sessionId: string;
   }
 ): Promise<StoryWorldVisualContext> {
@@ -329,24 +337,39 @@ export async function loadStoryWorldVisualContext(
   }
 
   const referenceRows = [...characterRows, sceneRow];
-  const referenceImages = await Promise.all(
-    referenceRows.map(async (artifact) => {
-      const media = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
-        linkedArtifactId: artifact.id,
-        sessionId: input.sessionId
-      });
+  let referenceImages: Array<StoryWorldReferenceImage | null>;
 
-      if (!media) {
-        return null;
-      }
+  try {
+    referenceImages = await Promise.all(
+      referenceRows.map(async (artifact) => {
+        const media = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+          linkedArtifactId: artifact.id,
+          sessionId: input.sessionId
+        });
 
-      return toReferenceImage(client, artifact, media);
-    })
-  );
+        if (!media) {
+          return null;
+        }
+
+        return toReferenceImage(client, artifact, media, {
+          providerReferenceSignedUrlTtlSeconds:
+            input.providerReferenceSignedUrlTtlSeconds ?? storyCamProviderReferenceSignedUrlTtlSeconds
+        });
+      })
+    );
+  } catch (error) {
+    if (error instanceof StoryCamMediaStoreError && error.code === "provider_reference_url_not_public") {
+      return { ok: false, reason: "reference_images_unsupported" };
+    }
+
+    throw error;
+  }
 
   if (referenceImages.some((image) => !image)) {
     return { ok: false, reason: "waiting_for_asset_images" };
   }
+
+  const readyReferenceImages = referenceImages.filter(Boolean) as StoryWorldReferenceImage[];
 
   const storyWorldVersions = Object.fromEntries([...referenceRows, scriptRow].map((row) => [row.id, row.version]));
   const mediaReferences = Object.fromEntries(
@@ -359,7 +382,7 @@ export async function loadStoryWorldVisualContext(
       ...mediaReferences
     },
     ok: true,
-    referenceImages: referenceImages.filter(Boolean) as StoryWorldReferenceImage[],
+    referenceImages: readyReferenceImages,
     storyWorldBasis: {
       characterAssetIds: characterRows.map((row) => row.id),
       sceneAssetId: sceneRow.id,
@@ -385,15 +408,23 @@ function findSceneArtifactRow(rows: StoryCamArtifactRow[], requiredId: string) {
 async function toReferenceImage(
   client: SupabaseClient<Database>,
   artifact: StoryCamArtifactRow,
-  media: MediaAssetRow
+  media: MediaAssetRow,
+  options: {
+    providerReferenceSignedUrlTtlSeconds: number;
+  }
 ): Promise<StoryWorldReferenceImage> {
   return {
     assetArtifactId: artifact.id,
     kind: artifact.type === "character_asset" ? "character" : "scene",
     mediaId: media.id,
     mimeType: media.mime_type,
-    signedUrl: await createStoryCamSignedUrl(client, storyCamGeneratedBucket, media.storage_path, storyCamSignedUrlTtlSeconds),
-    signedUrlExpiresIn: storyCamSignedUrlTtlSeconds
+    signedUrl: await createStoryCamProviderReferenceSignedUrl(
+      client,
+      storyCamGeneratedBucket,
+      media.storage_path,
+      options.providerReferenceSignedUrlTtlSeconds
+    ),
+    signedUrlExpiresIn: options.providerReferenceSignedUrlTtlSeconds
   };
 }
 

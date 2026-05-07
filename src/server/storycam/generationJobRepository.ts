@@ -24,6 +24,8 @@ export type CompleteGenerationJobInput = {
 export type FailGenerationJobInput = {
   endedAt?: Date;
   errorCode: string;
+  providerErrorCategory?: string | null;
+  providerHttpStatus?: number | null;
   redactedError: string;
 };
 
@@ -36,7 +38,7 @@ export type TombstoneGenerationJobInput = {
 };
 
 const jobColumns =
-  "id,user_id,session_id,type,status,idempotency_key_hash,generation_mode,provider_kind,provider_name,provider_request_id,attempts,max_attempts,input_artifact_versions_json,output_artifact_id,error_code,redacted_error,started_at,ended_at,created_at,updated_at,tombstoned_at" as const;
+  "id,user_id,session_id,type,status,idempotency_key_hash,generation_mode,provider_kind,provider_name,provider_request_id,attempts,max_attempts,input_artifact_versions_json,output_artifact_id,error_code,provider_error_category,provider_http_status,redacted_error,started_at,ended_at,created_at,updated_at,tombstoned_at" as const;
 
 export class StoryCamGenerationJobRepository {
   constructor(private readonly client: StoryCamDbClient) {}
@@ -97,6 +99,18 @@ export class StoryCamGenerationJobRepository {
     return unwrapRepositoryResult<GenerationJobRow | null>("find_generation_job", data, error);
   }
 
+  async listBySession(userId: string, sessionId: string) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .select(jobColumns)
+      .eq("user_id", userId)
+      .eq("session_id", sessionId)
+      .is("tombstoned_at", null)
+      .order("created_at", { ascending: true });
+
+    return unwrapRepositoryResult("list_generation_jobs_by_session", data, error);
+  }
+
   async markSucceeded(userId: string, jobId: string, input: CompleteGenerationJobInput) {
     const { data, error } = await this.client
       .from("generation_jobs")
@@ -136,6 +150,8 @@ export class StoryCamGenerationJobRepository {
       .update({
         ended_at: (input.endedAt ?? new Date()).toISOString(),
         error_code: input.errorCode,
+        provider_error_category: input.providerErrorCategory ?? null,
+        provider_http_status: input.providerHttpStatus ?? null,
         redacted_error: input.redactedError,
         status: "failed"
       })

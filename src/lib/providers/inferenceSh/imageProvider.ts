@@ -69,6 +69,7 @@ type InferenceShGetTask = (taskId: string) => Promise<InferenceShTaskResult>;
 const inferenceShGeneratedImageMimeTypes = ["image/png", "image/jpeg", "image/webp"] as const;
 type InferenceShGeneratedImageMimeType = (typeof inferenceShGeneratedImageMimeTypes)[number];
 const inferenceShTaskStatusCompleted = 10;
+const inferenceShTaskStatusErrored = 11;
 const inferenceShTaskStatusFailed = 20;
 
 export type InferenceShAsyncImageProvider<Input> = ImageGenerationProvider<Input, InferenceShImageProviderOutput> & {
@@ -118,6 +119,7 @@ export function createInferenceShImageProvider<Input>(
 
       return submitValidatedImageTask({
         app: options.app,
+        fetchImage,
         identity,
         prompt,
         runTask
@@ -144,7 +146,7 @@ async function generateValidatedImage(input: {
           app: input.app,
           input: {
             height: normalizeDimension(input.prompt.height ?? 864),
-            ...referenceImagesInput(input.prompt),
+            ...(await referenceImagesInput(input.fetchImage, input.prompt)),
             n: 1,
             output_format: "png",
             prompt: input.prompt.prompt,
@@ -155,7 +157,7 @@ async function generateValidatedImage(input: {
         { stream: false, wait: true }
       );
 
-      if (isFailedTaskStatus(task.status)) {
+      if (isFailedTask(task)) {
         lastError = task.error ?? new Error("Inference.sh image task failed.");
         break;
       }
@@ -199,6 +201,7 @@ async function generateValidatedImage(input: {
 
 async function submitValidatedImageTask(input: {
   app: string;
+  fetchImage: FetchImage;
   identity: { providerKind: "image"; providerName: "inference_sh" };
   prompt: InferenceShImagePrompt;
   runTask: InferenceShRunTask;
@@ -209,7 +212,7 @@ async function submitValidatedImageTask(input: {
         app: input.app,
         input: {
           height: normalizeDimension(input.prompt.height ?? 864),
-          ...referenceImagesInput(input.prompt),
+          ...(await referenceImagesInput(input.fetchImage, input.prompt)),
           n: 1,
           output_format: "png",
           prompt: input.prompt.prompt,
@@ -242,7 +245,7 @@ async function resolveValidatedImageTask(input: {
   try {
     const task = await input.getTask(input.taskId);
 
-    if (isFailedTaskStatus(task.status)) {
+    if (isFailedTask(task)) {
       throw task.error ?? new Error("Inference.sh image task failed.");
     }
 
@@ -305,10 +308,63 @@ function createSdkClient(apiKey: string): { getTask: InferenceShGetTask; runTask
   };
 }
 
-function referenceImagesInput(prompt: InferenceShImagePrompt) {
-  const images = prompt.images?.map((image) => image.trim()).filter(Boolean);
+async function referenceImagesInput(fetchImage: FetchImage, prompt: InferenceShImagePrompt) {
+  const images = await Promise.all((prompt.images ?? []).map((image) => toProviderReferenceImage(fetchImage, image)));
+  const readyImages = images.filter(Boolean);
 
-  return images?.length ? { images } : {};
+  return readyImages.length ? { images: readyImages } : {};
+}
+
+async function toProviderReferenceImage(fetchImage: FetchImage, image: string) {
+  const trimmed = image.trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("data:") || isProviderReachableUrl(trimmed)) {
+    return trimmed;
+  }
+
+  const fetched = await fetchImage(trimmed);
+
+  return `data:${fetched.mimeType};base64,${Buffer.from(fetched.bytes).toString("base64")}`;
+}
+
+function isProviderReachableUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      hostname !== "localhost" &&
+      hostname !== "0.0.0.0" &&
+      hostname !== "127.0.0.1" &&
+      hostname !== "::1" &&
+      hostname !== "[::1]" &&
+      !hostname.endsWith(".local") &&
+      !isPrivateIpv4(hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isPrivateIpv4(hostname: string) {
+  const parts = hostname.split(".").map((part) => Number(part));
+
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  return (
+    parts[0] === 10 ||
+    parts[0] === 127 ||
+    (parts[0] === 169 && parts[1] === 254) ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168)
+  );
 }
 
 function parseTaskId(task: InferenceShTaskResult) {
@@ -329,8 +385,18 @@ function isCompletedTaskStatus(status: InferenceShTaskResult["status"]) {
   return status === inferenceShTaskStatusCompleted || status === "completed" || status === "succeeded";
 }
 
+function isFailedTask(task: InferenceShTaskResult) {
+  return Boolean(task.error) || isFailedTaskStatus(task.status);
+}
+
 function isFailedTaskStatus(status: InferenceShTaskResult["status"]) {
-  return status === inferenceShTaskStatusFailed || status === "failed" || status === "canceled" || status === "cancelled";
+  return (
+    status === inferenceShTaskStatusErrored ||
+    status === inferenceShTaskStatusFailed ||
+    status === "failed" ||
+    status === "canceled" ||
+    status === "cancelled"
+  );
 }
 
 function parseFirstImageUri(output: unknown) {

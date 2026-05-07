@@ -279,6 +279,7 @@ function toCreateTaskBody(input: SeedanceVideoGenerationInput, model: string) {
       },
       ...(input.referenceImageUrls ?? []).map((url) => ({
         image_url: { url },
+        role: "reference_image",
         type: "image_url"
       }))
     ],
@@ -305,6 +306,7 @@ function parseCreateTaskResponse(value: unknown) {
 
 function seedanceFailure(error: unknown, httpStatus: number, providerRequestId?: string, taskStatus?: SeedanceTaskStatus) {
   const errorCode = seedanceErrorCode(error, httpStatus, taskStatus);
+  const providerErrorCategory = seedanceErrorCategory(error, httpStatus, taskStatus);
 
   return providerFailure(
     {
@@ -314,6 +316,8 @@ function seedanceFailure(error: unknown, httpStatus: number, providerRequestId?:
     error,
     {
       errorCode,
+      providerErrorCategory,
+      providerHttpStatus: httpStatus,
       retryable: errorCode !== "SEEDANCE_POLICY_REFUSAL"
     }
   );
@@ -339,6 +343,36 @@ function seedanceErrorCode(error: unknown, httpStatus: number, taskStatus?: Seed
   }
 
   return "SEEDANCE_PROVIDER_ERROR";
+}
+
+function seedanceErrorCategory(error: unknown, httpStatus: number, taskStatus?: SeedanceTaskStatus) {
+  if (taskStatus === "expired" || httpStatus === 408 || httpStatus === 504) {
+    return "timeout";
+  }
+
+  if (httpStatus === 402 || httpStatus === 429) {
+    return "quota_or_rate_limit";
+  }
+
+  const serialized = JSON.stringify(error).toLowerCase();
+
+  if (serialized.includes("policy") || serialized.includes("safety") || serialized.includes("审核") || serialized.includes("违规")) {
+    return "policy_refusal";
+  }
+
+  if (httpStatus >= 400 && httpStatus < 500) {
+    return "request_rejected";
+  }
+
+  if (httpStatus >= 500) {
+    return "provider_unavailable";
+  }
+
+  if (taskStatus === "failed") {
+    return "task_failed";
+  }
+
+  return "provider_error";
 }
 
 function normalizeSeedanceStatus(status: unknown): SeedanceTaskStatus | null {

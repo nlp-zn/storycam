@@ -19,7 +19,7 @@ describe("mock story world provider", () => {
     expect(result.ok && result.value.script).toMatchObject({
       id: "script-rainy-kdrama-crush",
       title: "雨夜未发送",
-      visualStyle: expect.stringContaining("写实韩剧电影感")
+      visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
     });
     expect(result.ok && result.value.characterAssets[0]?.stableVisualDescription).toContain("浅色风衣");
     expect(result.ok && result.value.sceneAssets[0]?.location).toContain("便利店");

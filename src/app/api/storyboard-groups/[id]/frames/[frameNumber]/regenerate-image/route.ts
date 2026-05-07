@@ -22,7 +22,10 @@ export async function POST(request: Request, context: RegenerateFrameRouteContex
       params.id,
       await request.json(),
       frameNumber,
-      imageProvider
+      imageProvider,
+      {
+        providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
+      }
     );
 
     return NextResponse.json(

@@ -12,7 +12,7 @@ export function providerSuccess<T>(identity: ProviderIdentity, value: T): Provid
 export function providerFailure(
   identity: ProviderIdentity,
   error: unknown,
-  options: { errorCode?: string; retryable?: boolean } = {}
+  options: { errorCode?: string; providerErrorCategory?: string; providerHttpStatus?: number; retryable?: boolean } = {}
 ): ProviderFailure {
   return {
     ...identity,

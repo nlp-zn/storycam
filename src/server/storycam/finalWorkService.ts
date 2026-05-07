@@ -85,12 +85,12 @@ export async function createStitchSuggestion(client: SupabaseClient<Database>, u
   }
 
   const artifacts = new StoryCamArtifactRepository(client);
-  const generatedClipArtifacts = await loadConfirmedGeneratedClipArtifacts(artifacts, userId, session.id, input.generatedClipArtifactIds);
+  const generatedClipArtifacts = await loadReadyGeneratedClipArtifacts(artifacts, userId, session.id, input.generatedClipArtifactIds);
   const data = {
     generatedClipArtifactIds: generatedClipArtifacts.map((row) => row.id),
     generatedClipIds: generatedClipArtifacts.map((row) => generatedClipSchema.parse(row.data_json).id),
     id: "stitch-suggestion-1",
-    recommendation: "Keep the confirmed clips in story order and render one private final work.",
+    recommendation: "Render the ready 15 second clip as one private final work.",
     sessionId: session.id,
     state: "ready",
     version: 1
@@ -136,7 +136,7 @@ export async function createFinalWorkFromSuggestion(
   }
 
   const suggestionData = parseStitchSuggestionData(stitchSuggestion.data_json);
-  const generatedClipArtifacts = await loadConfirmedGeneratedClipArtifacts(
+  const generatedClipArtifacts = await loadReadyGeneratedClipArtifacts(
     artifacts,
     userId,
     session.id,
@@ -273,7 +273,7 @@ function parseFinalWorkRequest(body: FinalWorkRequestBody) {
   };
 }
 
-async function loadConfirmedGeneratedClipArtifacts(
+async function loadReadyGeneratedClipArtifacts(
   artifacts: StoryCamArtifactRepository,
   userId: string,
   sessionId: string,
@@ -286,14 +286,7 @@ async function loadConfirmedGeneratedClipArtifacts(
     throw new FinalWorkRequestError("generated_clip_not_confirmed");
   }
 
-  const confirmedArtifacts = generatedClipArtifacts.map((row) => row as StoryCamArtifactRow);
-  const hasUnconfirmedClip = confirmedArtifacts.some((row) => generatedClipSchema.parse(row.data_json).reviewState !== "accepted");
-
-  if (hasUnconfirmedClip) {
-    throw new FinalWorkRequestError("generated_clip_not_confirmed");
-  }
-
-  return confirmedArtifacts;
+  return generatedClipArtifacts.map((row) => row as StoryCamArtifactRow);
 }
 
 function parseStitchSuggestionData(value: Json): StitchSuggestionData {

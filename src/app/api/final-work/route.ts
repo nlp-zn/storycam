@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
-import { createFinalWorkFromSuggestion, FinalWorkRequestError } from "@/server/storycam/finalWorkService";
+import { createFinalWorkFromSuggestion, createPrivateFinalWorkPreviewUrl, FinalWorkRequestError } from "@/server/storycam/finalWorkService";
 import { StoryCamMediaStoreError } from "@/server/storycam/mediaStore";
 
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const result = await createFinalWorkFromSuggestion(createSupabaseAdminClient(), user.id, await request.json());
+    const client = createSupabaseAdminClient();
+    const result = await createFinalWorkFromSuggestion(client, user.id, await request.json());
 
     if (!result.ok) {
       return NextResponse.json(
@@ -19,6 +20,9 @@ export async function POST(request: Request) {
         { status: 502 }
       );
     }
+    const preview = await createPrivateFinalWorkPreviewUrl(client, {
+      media: result.value.media
+    });
 
     return NextResponse.json(
       {
@@ -29,7 +33,12 @@ export async function POST(request: Request) {
           kind: "final_work",
           mimeType: result.value.media.mimeType
         },
-        ok: true
+        ok: true,
+        preview: {
+          durationSeconds: result.value.finalWork.durationSeconds,
+          mimeType: result.value.media.mimeType,
+          ...preview
+        }
       },
       { status: 201 }
     );

@@ -113,7 +113,7 @@ describe("deepseek story world provider", () => {
           id: "script-session-1",
           sessionId: "session-1",
           title: "雨夜未发送",
-          visualStyle: "写实韩剧电影感，雨夜冷暖混合光，低饱和色彩"
+          visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
         })
       }
     });

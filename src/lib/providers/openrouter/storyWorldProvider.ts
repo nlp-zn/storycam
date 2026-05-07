@@ -12,6 +12,7 @@ import {
   type StoryWorldProviderOutput
 } from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
+import { normalizeStoryCamVisualStyle } from "@/lib/storycam/visualStylePolicy";
 import { type StoryCamGenerateObject } from "@/server/ai/vercelAiClient";
 import { createOpenRouterTextProvider, type OpenRouterStructuredPrompt } from "./textProvider";
 
@@ -149,7 +150,7 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       "3. script.summary 和 script.beats 只写短剧本层面的剧情、角色动作、对白/可听声音、关键物件和环境变化。",
       "4. script.beats 是剧情节点/故事段落，不是镜头列表、分镜表或拍摄方案；每条用一句可读的剧情动作描述。",
       "5. 不要写镜头编号、景别、机位、运镜、构图、剪辑、转场指令，也不要出现“镜头”“画面”“特写”“推近”“切到”“第 X 镜”等分镜术语。",
-      "6. script.visualStyle 用一句话定义本故事统一视觉风格，供人物资产图和场景资产图共同使用；根据用户输入决定写实、真人电影感、漫画、动画、绘本、胶片等，不要固定成某一种风格。",
+      "6. script.visualStyle 必须定义为漫画电影/动画分镜风格；可以吸收用户的情绪、时代、类型片倾向，但必须转译为非写实真人的虚构漫画角色和动画场景。",
       "7. 只生成 1-3 个主角级/关键对手戏人物资产，不要为背景人群、路人、短暂提及人物建资产。",
       "8. 场景资产必须且只能生成 1 个；把剧本需要的全部环境角度放进这个 scene 的 scenePanels。",
       "9. scenePanels 生成 4-6 个小切图描述，覆盖主场景、关键物件、光线、空的动作空间或转场角度。",
@@ -164,6 +165,7 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       "写作红线：不要写心理描写，不要用括号暗示，不要说教，不要把专业分镜术语暴露给用户。",
       "Story World 的 beats 是剧情节点，不是分镜；专业镜头语言只允许在后续 core storyboard provider 内部使用。",
       "台词和描述要口语、克制、具体；画面内容只写可见元素，声音只写可听元素。",
+      "产品主线是私人漫画电影，不生成写实真人短剧，不做真实人物或名人相似脸。",
       "严格返回 SDK 结构化 JSON 输出要求的对象，不要包裹 Markdown，不要输出额外解释。"
     ].join("\n"),
     temperature: 0.3
@@ -179,7 +181,7 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
   const logline = nonEmptyText(draftScript.logline, input.idea);
   const summary = nonEmptyText(draftScript.summary, logline);
   const beats = nonEmptyList(draftScript.beats, [summary]);
-  const visualStyle = nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title }));
+  const visualStyle = normalizeStoryCamVisualStyle(nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title })));
   const characterDrafts = draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)];
   const sceneDrafts = draftSceneAssets.length ? [draftSceneAssets[0]] : [createFallbackSceneDraft(input, summary)];
   const script = storyScriptSchema.parse({
@@ -204,7 +206,7 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       relationshipToUserStory: nonEmptyText(asset.relationshipToUserStory, "承载用户故事里的核心情绪"),
       role: nonEmptyText(asset.role, index === 0 ? "主角" : "关系人物"),
       sessionId: input.sessionId,
-      stableVisualDescription: nonEmptyText(asset.stableVisualDescription, "普通人外观，衣着朴素，动作克制，便于连续镜头保持一致"),
+      stableVisualDescription: nonEmptyText(asset.stableVisualDescription, "虚构漫画角色外观，衣着朴素，动作克制，便于连续镜头保持一致"),
       state: "ready",
       version: 1,
       ...(asset.wardrobe ? { wardrobe: asset.wardrobe } : {})
@@ -253,18 +255,18 @@ function inferFallbackVisualStyle(input: { idea: string; lightweightChoices?: st
   const source = [input.idea, input.lightweightChoices?.join(" "), script.title, script.logline, script.summary].join(" ").toLowerCase();
 
   if (/(漫画|动漫|动画|二次元|anime|manga|comic)/i.test(source)) {
-    return "漫画/动画设定稿风格，干净线条，低饱和色彩，情绪克制";
+    return normalizeStoryCamVisualStyle("漫画/动画设定稿风格，干净线条，低饱和色彩，情绪克制");
   }
 
   if (/(绘本|童话|storybook|picture book)/i.test(source)) {
-    return "绘本式视觉风格，柔和纸感，温暖色彩，适合私人记忆";
+    return normalizeStoryCamVisualStyle("绘本式视觉风格，柔和纸感，温暖色彩，适合私人记忆");
   }
 
   if (/(胶片|复古|film|retro|vintage)/i.test(source)) {
-    return "复古胶片电影感，柔和颗粒，低对比光影，私人回忆质感";
+    return normalizeStoryCamVisualStyle("复古胶片电影感，柔和颗粒，低对比光影，私人回忆质感");
   }
 
-  return "写实电影感，普通人质感，克制表演，低饱和色彩和自然光线";
+  return normalizeStoryCamVisualStyle();
 }
 
 function createFallbackCharacterDraft(input: StoryWorldProviderInput, summary: string): OpenRouterStoryWorldCharacterDraft {
@@ -275,7 +277,7 @@ function createFallbackCharacterDraft(input: StoryWorldProviderInput, summary: s
     props: ["随身物件"],
     relationshipToUserStory: summary,
     role: "主角",
-    stableVisualDescription: `围绕“${input.idea.slice(0, 40)}”生成的普通人形象，外观稳定，动作克制`,
+    stableVisualDescription: `围绕“${input.idea.slice(0, 40)}”生成的虚构漫画角色形象，外观稳定，动作克制`,
     wardrobe: "日常衣着"
   };
 }

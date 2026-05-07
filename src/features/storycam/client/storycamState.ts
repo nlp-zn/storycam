@@ -21,6 +21,10 @@ export function confirmedArtifactVersionsForClip(
   expansion?: ExpandStoryboardGroupResponse | null
 ) {
   const coreGroup = storyboard.artifacts.coreStoryboardGroups[coreGroupIndex];
+  const expandedCards =
+    expansion?.expandedStoryboardCards ??
+    storyboard.artifacts.expandedStoryboardCards?.filter((card) => card.parentArtifactId === coreGroup?.id) ??
+    [];
 
   if (!coreGroup) {
     return {};
@@ -29,7 +33,7 @@ export function confirmedArtifactVersionsForClip(
   return {
     [coreGroup.id]: coreGroup.version,
     ...Object.fromEntries(
-      (expansion?.expandedStoryboardCards ?? [])
+      expandedCards
         .filter((card) => card.parentArtifactId === coreGroup.id)
         .map((card) => [card.id, card.version])
     )

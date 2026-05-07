@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildUploadStoragePath,
+  createStoryCamProviderReferenceSignedUrl,
   createStoryCamSignedUrl,
   StoryCamMediaStoreError,
+  storyCamProviderReferenceSignedUrlTtlSeconds,
   storyCamSignedUrlTtlSeconds,
   storyCamUploadMaxBytes,
   validateUploadPhoto
@@ -65,6 +67,53 @@ describe("StoryCam media store", () => {
     ]);
     await expect(createStoryCamSignedUrl(client, "public" as "storycam-uploads", "x")).rejects.toMatchObject({
       code: "invalid_bucket"
+    });
+  });
+
+  it("creates provider reference signed URLs with a longer default TTL", async () => {
+    const client = new FakeStorageClient("https://storycam-dev.supabase.co/storage/v1/object/sign/storycam-generated/token");
+
+    const signedUrl = await createStoryCamProviderReferenceSignedUrl(client, "storycam-generated", "users/user-1/file.png");
+
+    expect(signedUrl).toContain("storycam-dev.supabase.co");
+    expect(client.calls).toEqual([
+      {
+        bucket: "storycam-generated",
+        expiresIn: storyCamProviderReferenceSignedUrlTtlSeconds,
+        path: "users/user-1/file.png"
+      }
+    ]);
+  });
+
+  it("rejects provider reference URLs that are not public HTTPS URLs", async () => {
+    await expect(
+      createStoryCamProviderReferenceSignedUrl(
+        new FakeStorageClient("http://127.0.0.1:54321/storage/v1/object/sign/storycam-generated/token"),
+        "storycam-generated",
+        "users/user-1/file.png"
+      )
+    ).rejects.toMatchObject({
+      code: "provider_reference_url_not_public"
+    });
+
+    await expect(
+      createStoryCamProviderReferenceSignedUrl(
+        new FakeStorageClient("https://localhost/storage/v1/object/sign/storycam-generated/token"),
+        "storycam-generated",
+        "users/user-1/file.png"
+      )
+    ).rejects.toMatchObject({
+      code: "provider_reference_url_not_public"
+    });
+
+    await expect(
+      createStoryCamProviderReferenceSignedUrl(
+        new FakeStorageClient("https://192.168.1.10/storage/v1/object/sign/storycam-generated/token"),
+        "storycam-generated",
+        "users/user-1/file.png"
+      )
+    ).rejects.toMatchObject({
+      code: "provider_reference_url_not_public"
     });
   });
 });

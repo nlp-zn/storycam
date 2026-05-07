@@ -18,6 +18,7 @@
 - Use private Supabase Storage buckets.
 - Do not create public sharing links in Phase 1.
 - Preview media with short-lived signed URLs or an authenticated proxy.
+- Provider reference media uses server-created signed URLs with a separate TTL; do not send localhost Storage URLs to external providers.
 - Delete session media from Storage when deleting a session.
 
 ## AI Providers
