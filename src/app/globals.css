@@ -109,13 +109,13 @@ button:disabled {
 }
 
 .storycam-shell {
-  display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
-  gap: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 42px;
   margin: 0 auto;
   width: 100%;
   max-width: 1440px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .storycam-shell--centered {
@@ -156,19 +156,25 @@ button:disabled {
 }
 
 .storycam-stepper {
-  position: sticky;
-  top: 112px;
-  min-height: min(360px, calc(100vh - 220px));
-  padding: 8px 0 8px 12px;
+  position: relative;
+  width: min(100%, 1040px);
+  margin: 0 auto;
+  padding: 22px 16px 34px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.storycam-stepper::-webkit-scrollbar {
+  display: none;
 }
 
 .storycam-stepper-line,
 .storycam-stepper-line-active {
   position: absolute;
-  bottom: 20px;
-  left: 16px;
-  top: 20px;
-  width: 1px;
+  left: 56px;
+  right: 56px;
+  top: 39px;
+  height: 1px;
 }
 
 .storycam-stepper-line {
@@ -176,34 +182,36 @@ button:disabled {
 }
 
 .storycam-stepper-line-active {
-  bottom: auto;
+  right: auto;
   background: rgba(0, 240, 255, 0.72);
-  box-shadow: none;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.62);
 }
 
 .storycam-stepper-items {
   position: relative;
   z-index: 1;
   display: flex;
-  min-height: inherit;
-  flex-direction: column;
+  min-width: 760px;
+  flex-direction: row;
   justify-content: space-between;
 }
 
 .storycam-step {
-  min-height: 36px;
+  width: 112px;
+  min-height: 72px;
   color: rgba(185, 202, 203, 0.54);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
-  text-align: left;
+  text-align: center;
 }
 
 .storycam-step-button {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 12px;
   border: 0;
   background: transparent;
   padding: 0;
@@ -221,16 +229,23 @@ button:disabled {
 
 .storycam-step-dot {
   display: flex;
-  width: 9px;
-  height: 9px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 9999px;
-  background: rgba(185, 202, 203, 0.62);
-  color: transparent;
+  background: rgba(31, 31, 31, 0.88);
+  color: rgba(219, 252, 255, 0.72);
   flex: 0 0 auto;
-  font-size: 0;
+  font-size: 11px;
+  font-weight: 950;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.36);
+}
+
+.storycam-step-label {
+  display: block;
+  white-space: nowrap;
 }
 
 .storycam-step.is-active {
@@ -239,12 +254,13 @@ button:disabled {
 }
 
 .storycam-step.is-active .storycam-step-dot {
-  width: 10px;
-  height: 10px;
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--storycam-primary);
   background: var(--storycam-primary);
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.38);
-  color: transparent;
-  font-size: 0;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.46), 0 0 0 8px rgba(0, 0, 0, 0.42);
+  color: #031013;
+  font-size: 14px;
 }
 
 .storycam-glass {
@@ -431,12 +447,56 @@ button:disabled {
 }
 
 .storycam-story-world {
-  max-width: 1280px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.storycam-story-world-hero {
+  position: relative;
+  margin: 0 auto 48px;
+  max-width: 920px;
+  text-align: center;
+}
+
+.storycam-story-world-hero > p {
+  margin: 16px auto 0;
+  max-width: 680px;
+  color: var(--storycam-on-surface-variant);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.65;
+}
+
+.storycam-story-world-hero > span {
+  position: absolute;
+  right: 0;
+  top: 76px;
+}
+
+.storycam-section-kicker {
+  display: grid;
+  grid-template-columns: minmax(56px, 120px) auto minmax(56px, 120px);
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 18px;
+  color: var(--storycam-primary);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.storycam-section-kicker span {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.74), transparent);
+}
+
+.storycam-section-kicker p {
+  margin: 0;
 }
 
 .storycam-story-world-grid {
   display: grid;
-  grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(380px, 5fr) minmax(0, 6fr);
   gap: 32px;
   align-items: start;
 }
@@ -446,8 +506,101 @@ button:disabled {
 }
 
 .storycam-script-card {
-  min-height: clamp(560px, calc(100vh - 270px), 760px);
-  border-radius: 48px;
+  min-height: clamp(620px, calc(100vh - 250px), 900px);
+  border-radius: 34px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(0, 240, 255, 0.1), transparent 32%),
+    radial-gradient(circle at 78% 6%, rgba(255, 75, 137, 0.08), transparent 26%),
+    rgba(12, 16, 17, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.08), 0 24px 80px rgba(0, 0, 0, 0.36);
+}
+
+.storycam-script-card-texture {
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image:
+    radial-gradient(circle at 1px 1px, #fff 1px, transparent 0),
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.46));
+  background-size: 18px 18px, auto;
+  pointer-events: none;
+}
+
+.storycam-script-icon {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 240, 255, 0.36);
+  border-radius: 999px;
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--storycam-primary);
+  font-size: 18px;
+  font-weight: 950;
+  box-shadow: inset 0 0 18px rgba(0, 240, 255, 0.08);
+}
+
+.storycam-logline-box {
+  position: relative;
+  margin-top: 24px;
+  border: 1px solid rgba(0, 240, 255, 0.18);
+  border-radius: 18px;
+  background: rgba(0, 17, 20, 0.46);
+  padding: 18px 20px;
+}
+
+.storycam-script-body {
+  position: relative;
+  margin-top: 20px;
+  max-height: 460px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 22px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.storycam-script-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.storycam-script-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(0, 240, 255, 0.18);
+}
+
+.storycam-story-beats {
+  display: grid;
+  gap: 8px;
+}
+
+.storycam-story-beats li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 10px 12px;
+}
+
+.storycam-story-beats span {
+  color: var(--storycam-primary);
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.storycam-story-beats p {
+  overflow: hidden;
+  color: #c9d7d8;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .storycam-assets-column {
@@ -457,13 +610,59 @@ button:disabled {
   gap: 40px;
 }
 
+.storycam-asset-generate-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 2px;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 24px;
+  background:
+    linear-gradient(90deg, rgba(0, 240, 255, 0.08), rgba(0, 240, 255, 0.025)),
+    rgba(0, 22, 26, 0.56);
+  padding: 20px 22px;
+  box-shadow: inset 0 0 26px rgba(0, 240, 255, 0.05);
+}
+
+.storycam-asset-generate-banner p {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--storycam-on-surface-variant);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.storycam-asset-generate-banner p span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid rgba(0, 240, 255, 0.44);
+  border-radius: 999px;
+  color: var(--storycam-primary);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.storycam-asset-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
 .storycam-asset-grid {
   display: grid;
   gap: 16px;
 }
 
 .storycam-asset-grid--characters {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   align-items: stretch;
 }
 
@@ -477,7 +676,11 @@ button:disabled {
 }
 
 .storycam-asset-card {
-  border-radius: 32px;
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
+    rgba(14, 18, 19, 0.8);
+  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.24);
 }
 
 .storycam-asset-card--character {
@@ -498,7 +701,51 @@ button:disabled {
 
 .storycam-asset-frame {
   margin-bottom: 12px;
-  border-radius: 24px;
+  border-radius: 18px;
+}
+
+.storycam-asset-frame-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(0, 240, 255, 0.11), transparent 44%),
+    linear-gradient(315deg, rgba(255, 75, 137, 0.09), transparent 48%),
+    rgba(5, 8, 9, 0.8);
+}
+
+.storycam-asset-frame-empty span,
+.storycam-asset-status-pill {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.56);
+  color: var(--storycam-primary-soft);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  padding: 8px 10px;
+  text-transform: uppercase;
+}
+
+.storycam-asset-status-pill {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  backdrop-filter: blur(14px);
+}
+
+.storycam-asset-card--ready .storycam-asset-status-pill {
+  border-color: rgba(0, 240, 255, 0.5);
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--storycam-primary);
+}
+
+.storycam-asset-card--error .storycam-asset-status-pill,
+.storycam-asset-card--error .storycam-asset-frame-empty span {
+  border-color: rgba(255, 177, 195, 0.44);
+  color: #ffb1c3;
 }
 
 .storycam-asset-modal-backdrop {
@@ -520,14 +767,17 @@ button:disabled {
   width: min(100%, 1280px);
   height: min(860px, calc(100dvh - 48px));
   max-height: min(860px, calc(100vh - 48px));
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 32px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 240, 255, 0.18);
   border-radius: 32px;
-  background: #1b1b1b;
+  background:
+    radial-gradient(circle at 12% 10%, rgba(0, 240, 255, 0.12), transparent 32%),
+    radial-gradient(circle at 96% 10%, rgba(255, 75, 137, 0.11), transparent 28%),
+    #0c1011;
   padding: 32px;
-  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.62), inset 0 0 0 1px rgba(255, 255, 255, 0.035);
 }
 
 .storycam-asset-modal--scene {
@@ -609,7 +859,8 @@ button:disabled {
 .storycam-asset-modal-visual {
   min-height: 360px;
   overflow: hidden;
-  border-radius: 18px;
+  border: 1px solid rgba(0, 240, 255, 0.12);
+  border-radius: 24px;
   background: #0e0e0e;
 }
 
@@ -1409,37 +1660,38 @@ button:disabled {
   .storycam-stepper {
     position: relative;
     top: auto;
-    margin-bottom: 44px;
+    width: 100%;
+    margin-bottom: 26px;
     min-height: 0;
     overflow-x: auto;
-    padding: 0 0 8px;
+    padding: 12px 0 22px;
   }
 
   .storycam-stepper-items {
     min-height: 0;
-    min-width: 640px;
+    min-width: 620px;
     flex-direction: row;
   }
 
   .storycam-stepper-line,
   .storycam-stepper-line-active {
     bottom: auto;
-    left: 0;
-    right: 0;
-    top: 5px;
+    left: 18px;
+    right: 18px;
+    top: 29px;
     height: 1px;
-    min-width: 640px;
+    min-width: 584px;
     width: auto;
   }
 
   .storycam-stepper-line-active {
-    width: var(--storycam-mobile-progress, 0%);
+    width: var(--storycam-progress, 0%);
     height: 1px !important;
     background: rgba(0, 240, 255, 0.72);
   }
 
   .storycam-step {
-    width: 72px;
+    width: 96px;
     min-height: 0;
     text-align: center;
   }
@@ -1458,6 +1710,30 @@ button:disabled {
     max-width: none;
   }
 
+  .storycam-story-world-hero {
+    margin-bottom: 30px;
+    text-align: left;
+  }
+
+  .storycam-story-world-hero > p {
+    margin-left: 0;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .storycam-story-world-hero > span {
+    position: static;
+    display: inline-flex;
+    margin-top: 18px;
+  }
+
+  .storycam-section-kicker {
+    grid-template-columns: 44px auto 44px;
+    justify-content: start;
+    gap: 12px;
+    font-size: 13px;
+  }
+
   .storycam-story-world-grid {
     display: block;
   }
@@ -1469,6 +1745,16 @@ button:disabled {
 
   .storycam-assets-column {
     margin-top: 32px;
+  }
+
+  .storycam-asset-generate-banner {
+    align-items: stretch;
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .storycam-asset-generate-banner .storycam-secondary-button {
+    width: 100%;
   }
 
   .storycam-asset-grid--characters,
@@ -1492,6 +1778,13 @@ button:disabled {
     transform: none;
     border-radius: 24px;
     padding: 10px;
+  }
+
+  .storycam-story-world .storycam-bottom-dock {
+    position: relative;
+    inset: auto;
+    margin-top: 28px;
+    width: 100%;
   }
 
   .storycam-bottom-dock > div:first-child {
