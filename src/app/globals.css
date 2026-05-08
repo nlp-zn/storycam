@@ -27,9 +27,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(circle at 12% 8%, rgba(0, 240, 255, 0.12), transparent 34vw),
-    radial-gradient(circle at 88% 72%, rgba(255, 75, 137, 0.11), transparent 36vw),
-    linear-gradient(180deg, #070707, var(--storycam-background) 38%, #080808);
+    linear-gradient(180deg, rgba(0, 240, 255, 0.04), transparent 28%),
+    linear-gradient(180deg, #020303, var(--storycam-background) 42%, #050505);
   font-family: Manrope, Inter, "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
   overflow-x: hidden;
 }
@@ -48,9 +47,24 @@ button:disabled {
 }
 
 .storycam-page {
+  position: relative;
   min-height: 100vh;
   padding: 112px 24px 144px;
   color: var(--storycam-on-surface);
+}
+
+.storycam-page::before {
+  content: "";
+  position: fixed;
+  inset: 80px 0 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(0, 240, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(0, 240, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.78));
+  background-size: 42px 42px, 42px 42px, auto;
+  mask-image: linear-gradient(180deg, black 0, black 72%, transparent 100%);
+  pointer-events: none;
 }
 
 .storycam-topbar {
@@ -106,12 +120,39 @@ button:disabled {
 
 .storycam-shell--centered {
   display: block;
-  max-width: 960px;
+  max-width: 1440px;
 }
 
 .storycam-shell--centered .storycam-workspace-surface {
   margin: 0 auto;
   width: 100%;
+}
+
+.storycam-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.storycam-topbar-status {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  color: var(--storycam-primary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.storycam-topbar-status span:first-child {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(0, 240, 255, 0.42);
+  border-radius: 9999px;
+  background: rgba(0, 240, 255, 0.05);
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.16);
 }
 
 .storycam-stepper {
@@ -312,6 +353,81 @@ button:disabled {
     linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.82)),
     repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 8px);
   pointer-events: none;
+}
+
+.storycam-idea-textarea {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 32px;
+}
+
+.storycam-input-tools {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.storycam-input-photo-button {
+  width: 28px;
+  height: 28px;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.storycam-input-tool-label,
+.storycam-input-tool-chip {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.storycam-input-tool-chip {
+  padding: 7px 10px;
+}
+
+.storycam-discovery-grid {
+  display: grid;
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.storycam-discovery-card {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: var(--storycam-surface-low);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
+}
+
+.storycam-discovery-card img {
+  transition: transform 360ms ease, filter 360ms ease;
+}
+
+.storycam-discovery-card:hover img {
+  filter: saturate(1.08) brightness(1.04);
+  transform: scale(1.035);
+}
+
+.storycam-discovery-card--large {
+  grid-column: span 5;
+  min-height: 420px;
+}
+
+.storycam-discovery-card--wide {
+  grid-column: span 4;
+  min-height: 200px;
+}
+
+.storycam-discovery-card--small {
+  grid-column: span 2;
+  min-height: 204px;
+}
+
+.storycam-discovery-card--banner {
+  grid-column: span 12;
+  min-height: 320px;
 }
 
 .storycam-story-world {
@@ -1248,15 +1364,46 @@ button:disabled {
 
   .storycam-topbar {
     height: 72px;
-    padding: 0 20px;
+    padding: 0 16px;
   }
 
   .storycam-brand {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .storycam-shell {
     display: block;
+  }
+
+  .storycam-topbar-actions {
+    gap: 8px;
+  }
+
+  .storycam-topbar-status {
+    font-size: 9px;
+  }
+
+  .storycam-topbar-status span:first-child {
+    width: 32px;
+    height: 32px;
+  }
+
+  .storycam-discovery-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .storycam-discovery-card,
+  .storycam-discovery-card--large,
+  .storycam-discovery-card--wide,
+  .storycam-discovery-card--small,
+  .storycam-discovery-card--banner {
+    grid-column: auto;
+    min-height: 260px;
+  }
+
+  .storycam-idea-textarea {
+    font-size: 18px;
+    line-height: 30px;
   }
 
   .storycam-stepper {

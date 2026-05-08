@@ -1102,9 +1102,15 @@ function StoryCamTopBar({ onHome }: { onHome: () => void }) {
       <button aria-label="返回首页" className="storycam-brand" onClick={onHome} type="button">
         StoryCam 导演工作台
       </button>
-      <div className="flex items-center gap-4 text-[#00f0ff]">
-        <span className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] bg-[#1f1f1f]">●</span>
-        <span className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] bg-[#1f1f1f]">人</span>
+      <div className="storycam-topbar-actions">
+        <span className="storycam-topbar-status">
+          <span aria-hidden="true">●</span>
+          <span>在线</span>
+        </span>
+        <span className="storycam-topbar-status">
+          <span aria-hidden="true">N</span>
+          <span>账号</span>
+        </span>
       </div>
     </header>
   );

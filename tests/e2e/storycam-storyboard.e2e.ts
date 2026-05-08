@@ -160,7 +160,7 @@ test.describe("StoryCam core storyboard", () => {
     await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toHaveCount(0);
     await expect(page.getByRole("heading", { exact: true, name: "擦肩而过" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "打开 9 帧画布" })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "用这一组生成片段" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "先补齐扩展图 0/8" })).toHaveCount(1);
   });
 
   test("shows an internal waiting state when storyboard images depend on unfinished story-world asset images", async ({ page }) => {
