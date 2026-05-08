@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/storycam_pr_gate_reminder.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking StoryCam PR gate reminder"
+          }
+        ]
+      }
+    ]
+  }
+}

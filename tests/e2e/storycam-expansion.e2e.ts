@@ -66,7 +66,11 @@ test.describe("StoryCam expansion", () => {
             { id: "expanded-7", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 },
             { id: "expanded-8", parentArtifactId: "core-artifact-1", state: "ready", type: "expanded_storyboard_card", version: 1 }
           ],
-          expandedStoryboardImages: [readyImage("media-frame-2"), ...Array.from({ length: 7 }, (_, index) => generatingImage(`job-frame-${index + 3}`))],
+          expandedStoryboardImages: [
+            readyImage("media-frame-2"),
+            readyImage("media-frame-3"),
+            ...Array.from({ length: 6 }, (_, index) => generatingImage(`job-frame-${index + 4}`))
+          ],
           expansionCards: expansionCardsFixture(),
           ok: true,
           sessionId: "session-1"
@@ -111,34 +115,42 @@ test.describe("StoryCam expansion", () => {
     await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
-    await page.getByRole("button", { name: "打开 9 帧画布" }).click();
 
     await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
-    const dialog = page.getByRole("dialog", { name: /未发送短信 9 帧分镜画布/ });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "未发送短信" }).first()).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-01")).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-02")).toHaveCount(0);
-    await dialog.getByRole("button", { name: "点击中心主图生成扩展分镜" }).click();
-    await expect(dialog.getByTestId("storyboard-frame-02").getByRole("heading", { name: "门外停住" })).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-03").getByRole("heading", { name: "听见门铃" })).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-04").getByRole("heading", { name: "删掉那句" })).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-03").getByText("生成中")).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-01").getByText("01")).toBeVisible();
-    await expect(dialog.getByTestId("storyboard-frame-09").getByText("09")).toBeVisible();
-    await dialog.getByRole("button", { name: "查看第 02 帧大图" }).click();
+    await expect(page.getByRole("heading", { name: "未发送短信" }).first()).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01")).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-02")).toBeVisible();
+    const scriptList = page.locator(".storycam-core-script-list");
+    await expect(scriptList.getByText("01")).toBeVisible();
+    await scriptList.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(scriptList.locator("li").nth(8)).toBeVisible();
+    await expect(page.getByRole("dialog", { name: /9 帧分镜画布/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "点击中心主图生成扩展分镜" }).click();
+    await expect(page.getByTestId("storyboard-frame-02").getByRole("heading", { name: "门外停住" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-03").getByRole("heading", { name: "听见门铃" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-04").getByRole("heading", { name: "删掉那句" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-04").locator(".storycam-frame-spinner")).toHaveText("生成中");
+    await expect(page.getByTestId("storyboard-frame-01").getByText("01")).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-09").getByText("09")).toBeVisible();
+    await page.getByRole("button", { name: "查看第 02 帧大图" }).click();
     const preview = page.getByRole("dialog", { name: /第 02 帧大图/ });
     await expect(preview).toBeVisible();
     await expect(preview.getByRole("heading", { name: "门外停住" })).toBeVisible();
-    await expect(preview.getByRole("button", { name: "下一张" })).toBeDisabled();
-    await preview.getByRole("button", { name: "关闭" }).click();
-    await expect(page.getByRole("button", { name: "收起" })).toBeVisible();
+    await preview.getByRole("button", { name: "下一张" }).click();
+    const nextPreview = page.getByRole("dialog", { name: /第 03 帧大图/ });
+    await expect(nextPreview).toBeVisible();
+    await expect(nextPreview.getByRole("heading", { name: "听见门铃" })).toBeVisible();
+    await nextPreview.getByRole("button", { name: "关闭" }).click();
+    await expect(page.getByRole("dialog", { name: /9 帧分镜画布/ })).toHaveCount(0);
     expect(expansionRequestedFor).toContain("/api/storyboard-groups/core-artifact-1/expand");
-    await dialog.getByRole("button", { name: "重生成第 06 帧" }).click();
+    await page.getByRole("button", { name: "重生成第 06 帧" }).click();
     expect(regenerateRequestedFor).toContain("/api/storyboard-groups/core-artifact-1/frames/6/regenerate-image");
-    await expect(dialog.getByRole("textbox")).toHaveCount(0);
+    await expect(page.getByRole("textbox")).toHaveCount(0);
 
-    await expect(dialog.getByRole("button", { name: "等待扩展图 1/8" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "等待分镜完成" })).toBeDisabled();
+    await expect(page.getByText("2 / 8 已完成")).toBeVisible();
     await expect(page.getByText("用「未发送短信」生成一个约 15 秒的私人片段。")).toHaveCount(0);
   });
 });
@@ -241,7 +253,7 @@ function expansionCardsFixture() {
       description: "门铃响起，她下意识抬眼，又立刻低头。",
       frameNumber: 3,
       guidance: "不需要对白，用眼神和玻璃反光完成情绪。",
-      image: generatingImage("job-frame-3"),
+      image: readyImage("media-frame-3"),
       imagePrompt: "Cinematic storyboard still frame 3.",
       sortOrder: 1,
       title: "听见门铃",
