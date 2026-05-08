@@ -11,6 +11,7 @@ This file is a short navigation map for agents. Do not turn it into a handbook. 
 5. Read `docs/SECURITY.md` before touching auth, Supabase, storage, provider keys, logs, uploads, or sharing.
 6. Read `docs/references/providers.md` and `docs/references/local-dev.md` before changing provider wiring, env behavior, or real-provider smoke paths.
 7. Read `docs/FRONTEND.md` and `docs/DESIGN.md` before UI work.
+8. Read `docs/PR_REVIEW.md` before opening, reviewing, or preparing a PR.
 
 ## Project North Star
 
@@ -57,3 +58,15 @@ private idea + optional photos
 ## Agent Readability
 
 Prefer small, indexed, cross-linked docs over long instruction blobs. If you add a new durable decision, put it in the right document and link it from the nearest index.
+
+## PR Gate
+
+When the user asks for "PR gate", "ship review", "pre-PR check", "review before PR", or similar, run the StoryCam PR gate from `docs/PR_REVIEW.md`.
+
+Use three independent perspectives:
+
+- `code-reviewer` for correctness, readability, architecture, security, and performance.
+- `security-auditor` for auth, RLS, storage, provider secrets, logs, signed URLs, and external inputs.
+- `test-engineer` for coverage gaps, edge cases, error paths, concurrency, and E2E needs.
+
+Merge the results into a GO/NO-GO decision with blockers, recommended fixes, accepted risks, verification evidence, and rollback notes. Keep deterministic checks in CI or `scripts/pr-ready.sh`; do not hide AI review inside a git hook.

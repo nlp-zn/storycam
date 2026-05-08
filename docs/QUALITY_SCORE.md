@@ -23,3 +23,12 @@ A change is not ready if it:
 - stores raw private input in logs,
 - creates public sharing in Phase 1,
 - lacks tests or a documented verification path.
+
+## PR Gate
+
+Before opening or merging a meaningful PR, follow `docs/PR_REVIEW.md`:
+
+- run the deterministic local or CI gate,
+- run the Codex PR gate with `code-reviewer`, `security-auditor`, and `test-engineer`,
+- resolve Critical and High findings unless the project owner explicitly accepts the risk,
+- include verification evidence and rollback notes in the PR.

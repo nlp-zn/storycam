@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { AssetCard } from "@/components/storycam/AssetCard";
 import {
   generateStoryWorldAssetImage,
@@ -59,13 +59,23 @@ export function StoryWorldReview({
   storyWorld
 }: StoryWorldReviewProps) {
   const [isEditingScript, setIsEditingScript] = useState(initiallyEditing);
-  const [scriptSummary, setScriptSummary] = useState(storyWorld.storyWorld.script.summary);
-  const [assetImages, setAssetImages] = useState<AssetImageState>(() => initialAssetImages ?? {});
+  const [scriptSummaryState, setScriptSummaryState] = useState(() => ({
+    sessionId: storyWorld.sessionId,
+    sourceSummary: storyWorld.storyWorld.script.summary,
+    value: storyWorld.storyWorld.script.summary
+  }));
+  const [assetImagesState, setAssetImagesState] = useState(() => ({
+    images: initialAssetImages ?? {},
+    initialAssetImages,
+    sessionId: storyWorld.sessionId
+  }));
   const [selectedAsset, setSelectedAsset] = useState<SelectedAsset | null>(null);
   const [assetImageJobs, setAssetImageJobs] = useState<AssetImageJobState>({});
   const [isBatchSubmitting, setIsBatchSubmitting] = useState(false);
   const [assetImageError, setAssetImageError] = useState<string | null>(null);
   const assetImagePollAttemptsRef = useRef<Record<string, number>>({});
+  const scriptSummary = scriptSummaryState.value;
+  const assetImages = assetImagesState.images;
   const scriptParagraphs = scriptParagraphsFor(scriptSummary, storyWorld.storyWorld.script.beats);
   const assetArtifactIds = useMemo(
     () => [
@@ -75,13 +85,50 @@ export function StoryWorldReview({
     [storyWorld.artifacts.characterAssets, storyWorld.artifacts.sceneAssets]
   );
 
-  useEffect(() => {
-    setAssetImages(initialAssetImages ?? {});
-  }, [initialAssetImages, storyWorld.sessionId]);
+  if (
+    scriptSummaryState.sessionId !== storyWorld.sessionId ||
+    scriptSummaryState.sourceSummary !== storyWorld.storyWorld.script.summary
+  ) {
+    setScriptSummaryState({
+      sessionId: storyWorld.sessionId,
+      sourceSummary: storyWorld.storyWorld.script.summary,
+      value: storyWorld.storyWorld.script.summary
+    });
+  }
 
-  useEffect(() => {
-    setScriptSummary(storyWorld.storyWorld.script.summary);
-  }, [storyWorld.sessionId, storyWorld.storyWorld.script.summary]);
+  if (assetImagesState.sessionId !== storyWorld.sessionId || assetImagesState.initialAssetImages !== initialAssetImages) {
+    setAssetImagesState({
+      images: initialAssetImages ?? {},
+      initialAssetImages,
+      sessionId: storyWorld.sessionId
+    });
+  }
+
+  function setScriptSummary(value: SetStateAction<string>) {
+    setScriptSummaryState((current) => ({
+      ...current,
+      value: typeof value === "function" ? value(current.value) : value
+    }));
+  }
+
+  function setAssetImages(value: SetStateAction<AssetImageState>) {
+    setAssetImagesState((current) => ({
+      ...current,
+      images: typeof value === "function" ? value(current.images) : value
+    }));
+  }
+
+  const applyReadyAssetImage = useCallback(
+    (artifactId: string, image: Extract<StoryboardImageState, { status: "ready" }>) => {
+      const media = mediaFromReadyImage(image);
+      setAssetImages((current) => ({
+        ...current,
+        [artifactId]: media
+      }));
+      onAssetImageReady?.(artifactId, media);
+    },
+    [onAssetImageReady]
+  );
 
   useEffect(() => {
     const jobEntries = Object.entries(assetImageJobs);
@@ -170,7 +217,7 @@ export function StoryWorldReview({
       canceled = true;
       window.clearTimeout(timer);
     };
-  }, [assetImageJobs]);
+  }, [applyReadyAssetImage, assetImageJobs]);
 
   function saveScriptEdit() {
     setIsEditingScript(false);
@@ -236,15 +283,6 @@ export function StoryWorldReview({
 
     setAssetImageJobs((current) => removeJob(current, artifactId));
     setAssetImageError("资产图生成失败，可以稍后重试。");
-  }
-
-  function applyReadyAssetImage(artifactId: string, image: Extract<StoryboardImageState, { status: "ready" }>) {
-    const media = mediaFromReadyImage(image);
-    setAssetImages((current) => ({
-      ...current,
-      [artifactId]: media
-    }));
-    onAssetImageReady?.(artifactId, media);
   }
 
   return (
