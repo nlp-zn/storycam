@@ -50,6 +50,14 @@ git config core.hooksPath .githooks
 
 The pre-push hook runs `scripts/pr-ready.sh`. Keep the hook deterministic; do not make it call an AI model.
 
+## Codex Project Hook
+
+StoryCam also includes a repo-local Codex hook in `.codex/hooks.json`.
+
+When Codex itself runs a StoryCam `git push`, the hook injects a reminder to ask whether to run the Codex PR gate. This is project-scoped Codex context, not a replacement for CI and not an automatic AI review. It does not run when you push from a normal terminal outside Codex.
+
+The hook requires Codex hooks to be enabled, which is declared in `.codex/config.toml`.
+
 ## Codex PR Gate
 
 Before opening or merging a meaningful PR, ask Codex:
