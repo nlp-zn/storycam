@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createStoryWorld, getAuthStatus, listRecentStoryCamProjects, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
 import type { CreateStoryWorldResponse, RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
-import { directorChoices, storyModeEntries } from "@/features/storycam/domain/shellContent";
+import { directorChoices, discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
 type SubmitState =
   | { kind: "idle" }
@@ -12,6 +14,7 @@ type SubmitState =
   | { kind: "error"; message: string };
 
 type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
+type RecentProjectsStatus = "idle" | "loading" | "ready" | "error";
 
 type IdeaInputPanelProps = {
   initialChoices?: string[];
@@ -19,6 +22,23 @@ type IdeaInputPanelProps = {
   onProjectSelected?: (sessionId: string) => Promise<void> | void;
   onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) => void;
 };
+
+type RecentProjectsInlineProps = {
+  onOpen: () => void;
+  projects: RecentStoryCamProject[];
+  status: RecentProjectsStatus;
+  totalCount: number;
+};
+
+type RecentProjectsDrawerProps = {
+  onClose: () => void;
+  onContinue: (project: RecentStoryCamProject) => void;
+  projects: RecentStoryCamProject[];
+  restoringProjectId: string | null;
+  status: RecentProjectsStatus;
+};
+
+type RecentProjectsDrawerContentProps = Omit<RecentProjectsDrawerProps, "onClose">;
 
 export function IdeaInputPanel({
   initialChoices = ["像私人回忆"],
@@ -35,11 +55,12 @@ export function IdeaInputPanel({
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [recentProjects, setRecentProjects] = useState<RecentStoryCamProject[]>([]);
-  const [recentProjectsStatus, setRecentProjectsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [recentProjectsStatus, setRecentProjectsStatus] = useState<RecentProjectsStatus>("idle");
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const canSubmit = idea.trim().length > 0 && submitState.kind !== "submitting" && authStatus === "authenticated";
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
+  const recentPreviewProjects = recentProjects.slice(0, 2);
   const ideaLength = idea.trim().length;
 
   useEffect(() => {
@@ -49,6 +70,9 @@ export function IdeaInputPanel({
       .then((response) => {
         if (isMounted) {
           setAuthStatus(response.authenticated ? "authenticated" : "anonymous");
+          if (response.authenticated) {
+            setRecentProjectsStatus("loading");
+          }
         }
       })
       .catch(() => {
@@ -175,42 +199,36 @@ export function IdeaInputPanel({
   }
 
   return (
-    <section className="relative">
-      <div className="mb-10 flex items-center gap-4">
-        <div className="h-px w-12 bg-[#00f0ff]/50" />
-        <span className="storycam-eyebrow tracking-[0.2em]">第一步：核心前提</span>
-      </div>
-
-      <div className="storycam-panel storycam-neon-panel relative overflow-hidden p-5 md:p-7">
-        <div className="absolute inset-0 opacity-[0.06] [background-image:linear-gradient(90deg,#fff_1px,transparent_1px),linear-gradient(#fff_1px,transparent_1px)] [background-size:42px_42px]" />
-        <div className="relative flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <section className="relative mx-auto w-full">
+      <div className="mx-auto flex w-full max-w-[920px] flex-col items-stretch">
+        <div className="mb-8 flex items-center justify-center gap-5 text-center">
+          <div className="hidden h-px w-14 bg-[#00f0ff]/35 sm:block" />
           <div>
-            <p className="storycam-eyebrow">StoryCam</p>
-            <h1 className="mt-2 text-3xl font-black leading-tight text-[#e2e2e2] md:text-4xl">私人小剧场相机</h1>
+            <span className="storycam-eyebrow text-[11px] tracking-[0.18em]">第一步：核心前提</span>
+            <h1 className="mt-3 text-[16px] font-black leading-none tracking-wide text-[#f4ffff] md:text-[18px]">私人小剧场相机</h1>
           </div>
-          <p className="max-w-sm text-sm leading-6 text-[#b9cacb] md:text-right">
-            从一句私人念头开始，先确认故事世界，再生成分镜和片段。
-          </p>
+          <div className="hidden h-px w-14 bg-[#00f0ff]/35 sm:block" />
         </div>
 
-        <label className="relative mt-6 block text-sm font-bold text-[#e2e2e2]" htmlFor="story-idea">
+        <label className="mb-3 ml-1 block text-[14px] font-black leading-none text-[#f4ffff]" htmlFor="story-idea">
           你的这一幕
         </label>
-        <div className="group relative mt-3 max-w-3xl">
-          <div className="absolute -inset-0.5 rounded-[2rem] bg-gradient-to-r from-[#00f0ff]/35 via-transparent to-[#ff4b89]/30 opacity-45 blur transition group-focus-within:opacity-100" />
-          <div className="relative rounded-[2rem] border border-[#3b494b]/70 bg-[#0f1111]/90 p-4 shadow-2xl backdrop-blur-2xl transition group-focus-within:border-[#00f0ff]/60 md:p-5">
+        <div className="group relative">
+          <div className="absolute -inset-0.5 rounded-[2rem] bg-gradient-to-r from-[#ff4b89]/80 via-[#dbfcff]/25 to-[#00f0ff]/90 opacity-75 blur-sm transition group-focus-within:opacity-100" />
+          <div className="relative overflow-hidden rounded-[2rem] border border-[#00f0ff]/70 bg-[#0b0e0e]/90 p-5 shadow-[0_0_34px_rgba(0,240,255,0.14)] backdrop-blur-2xl transition group-focus-within:border-[#dbfcff] md:p-7">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,75,137,0.09),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.05),transparent_42%)]" />
             <textarea
-              className="min-h-[88px] w-full resize-none border-none bg-transparent p-0 text-base font-semibold leading-7 text-[#e2e2e2] outline-none placeholder:text-[#849495]/45 focus:ring-0 md:min-h-[104px] md:text-lg"
+              className="storycam-idea-textarea relative min-h-[92px] w-full resize-none border-none bg-transparent p-0 text-[#e2e2e2] outline-none placeholder:text-[#849495]/45 focus:ring-0 md:min-h-[108px]"
               id="story-idea"
               onChange={(event) => setIdea(event.target.value)}
-              placeholder="拖拽/粘贴图片，或写下你想拍成电影的一幕..."
+              placeholder="描述电影般的瞬间..."
               value={idea}
             />
-            <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-              <div className="flex flex-1 flex-wrap items-center gap-2" data-testid="story-idea-params">
-                <label className="inline-flex size-9 cursor-pointer items-center justify-center rounded-full border border-[#3b494b] bg-[#2a2a2a]/70 text-[#b9cacb] transition hover:border-[#00f0ff]/60 hover:text-white">
+            <div className="relative mt-5 flex flex-col gap-3 border-t border-white/[0.08] pt-3 md:flex-row md:items-center md:justify-between">
+              <div className="storycam-input-tools flex flex-1 flex-wrap items-center gap-1.5" data-testid="story-idea-params">
+                <label className="storycam-input-photo-button inline-flex cursor-pointer items-center justify-center rounded-full border border-white/[0.14] bg-white/[0.04] text-[#aebcbd] transition hover:border-[#00f0ff]/55 hover:text-white">
                   <span className="sr-only">上传一张参考照片</span>
-                  <span aria-hidden="true" className="text-lg font-black">+</span>
+                  <span aria-hidden="true">+</span>
                   <input
                     accept="image/jpeg,image/png,image/webp"
                     className="sr-only"
@@ -219,32 +237,30 @@ export function IdeaInputPanel({
                     type="file"
                   />
                 </label>
-                {selectedChoices.length > 0 ? (
-                  selectedChoices.map((choice) => (
+                <span className="storycam-input-tool-label px-1.5 text-[#aebcbd]">拍法倾向</span>
+                {directorChoices.map((choice) => {
+                  const isSelected = selectedChoiceSet.has(choice);
+
+                  return (
                     <button
-                      aria-label={`移除 ${choice}`}
-                      className="rounded-full border border-[#3b494b] bg-[#2a2a2a]/60 px-3 py-2 text-xs font-black text-[#b9cacb] transition hover:border-[#00f0ff]/60 hover:text-white"
+                      aria-label={isSelected ? `移除 ${choice}` : choice}
+                      aria-pressed={isSelected}
+                      className={inputToolChipClassName(isSelected)}
                       key={choice}
                       onClick={() => toggleChoice(choice)}
                       type="button"
                     >
                       {choice}
-                      <span className="ml-2" aria-hidden="true">
-                        ×
-                      </span>
+                      {isSelected ? <span className="ml-2" aria-hidden="true">×</span> : null}
                     </button>
-                  ))
-                ) : (
-                  <span className="rounded-full border border-dashed border-[#3b494b] px-3 py-2 text-xs font-black text-[#849495]">
-                    未选择拍法
-                  </span>
-                )}
+                  );
+                })}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="storycam-eyebrow text-[#849495]">{ideaLength} / 120</span>
+              <div className="flex shrink-0 items-center justify-end gap-4">
+                <span className="storycam-eyebrow text-[12px] text-[#00f0ff]">{ideaLength} / 120</span>
                 <button
                   aria-label={submitState.kind === "submitting" ? submitState.message : "生成故事雏形"}
-                  className="flex size-10 items-center justify-center rounded-full border border-[#ff4b89]/50 bg-[#ff4b89] text-xl font-black text-black shadow-[0_0_22px_rgba(255,75,137,0.38)] transition hover:brightness-110 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
+                  className="flex size-12 items-center justify-center rounded-full border border-[#ff4b89]/70 bg-[#ff4b89] text-2xl font-black text-black shadow-[0_0_28px_rgba(255,75,137,0.48)] transition hover:scale-105 hover:brightness-110 disabled:scale-100 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
                   disabled={!canSubmit}
                   onClick={submitStoryWorld}
                   type="button"
@@ -255,42 +271,26 @@ export function IdeaInputPanel({
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-5 space-y-4 px-1">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-full border border-[#ff4b89]/40 bg-[#ff4b89]/10 text-sm font-black text-[#ffb1c3]">
-            调
-          </span>
-          <h2 className="storycam-eyebrow text-[#b9cacb]">拍法倾向</h2>
-        </div>
-        <div className="flex flex-wrap gap-4">
-          {directorChoices.map((choice) => {
-            const isSelected = selectedChoiceSet.has(choice);
-
-            return (
+        <div className="mt-7 px-1">
+          <div className="flex flex-wrap justify-center gap-3">
+            {storyModeEntries.map((entry) => (
               <button
-                aria-pressed={isSelected}
-                className={`rounded-full border px-7 py-4 text-left text-xs font-black uppercase tracking-widest transition ${
-                  isSelected
-                    ? "border-[#00f0ff] bg-[#00f0ff] text-black shadow-[0_0_18px_rgba(0,240,255,0.35)]"
-                    : "border-[#3b494b] bg-[#2a2a2a]/50 text-[#e2e2e2] hover:border-[#00f0ff]/60 hover:bg-[#353535]"
-                }`}
-                key={choice}
-                onClick={() => toggleChoice(choice)}
+                aria-label={`${entry.label}：${entry.text}`}
+                className={storyModeButtonClassName(entry.status === "当前主线")}
+                key={entry.label}
                 type="button"
               >
-                {choice}
-                {isSelected ? <span className="ml-2" aria-hidden="true">×</span> : null}
+                <span aria-hidden="true" className="mr-2 text-[#dbfcff]">♡</span>
+                {entry.label}
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </div>
 
       {photoPreviewUrl ? (
-        <div className="mt-4 overflow-hidden rounded-[1.5rem] border border-[#3b494b] bg-[#1b1b1b]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+        <div className="mx-auto mt-5 max-w-[920px] overflow-hidden rounded-[1.5rem] border border-[#3b494b] bg-[#1b1b1b]">
           <img alt="上传照片预览" className="h-40 w-full object-cover opacity-90" src={photoPreviewUrl} />
           <div className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-[#b9cacb]">
             <span className="truncate">{photo?.name}</span>
@@ -302,14 +302,14 @@ export function IdeaInputPanel({
       ) : null}
 
       {authStatus !== "authenticated" ? (
-        <p className="mx-auto mt-4 max-w-xl rounded-2xl border border-[#3b494b] bg-black/30 px-4 py-3 text-center text-sm leading-6 text-[#b9cacb]" role="status">
+        <p className="mx-auto mt-5 max-w-xl rounded-2xl border border-[#3b494b] bg-black/40 px-4 py-3 text-center text-sm leading-6 text-[#b9cacb]" role="status">
           {authGateMessage(authStatus)}
         </p>
       ) : null}
 
       {submitState.kind === "success" || submitState.kind === "error" ? (
         <p
-          className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+          className={`mx-auto mt-5 max-w-[920px] rounded-2xl border px-4 py-3 text-sm ${
             submitState.kind === "success" ? "border-[#00f0ff]/50 text-[#dbfcff]" : "border-[#ff4b89]/60 text-[#ffd9e0]"
           }`}
           role="status"
@@ -318,49 +318,14 @@ export function IdeaInputPanel({
         </p>
       ) : null}
 
-      <section className="mt-8" aria-label="最近项目">
-        <button
-          className="group flex w-full items-center justify-between gap-4 rounded-[1.25rem] border border-[#3b494b] bg-[#111616]/80 px-5 py-4 text-left transition hover:border-[#00f0ff]/60 hover:bg-[#162020]"
-          onClick={() => setIsRecentProjectsOpen(true)}
-          type="button"
-        >
-          <span>
-            <span className="block text-sm font-extrabold text-[#e2e2e2]">最近项目</span>
-            <span className="mt-1 block text-xs leading-5 text-[#849495]">
-              {recentProjectsStatus === "loading"
-                ? "正在查找你账号里的最近创作。"
-                : recentProjects.length
-                  ? `${recentProjects.length} 个可继续的项目`
-                  : "从这里继续上次保存的故事世界或核心分镜。"}
-            </span>
-          </span>
-          <span className="shrink-0 rounded-full border border-[#00f0ff]/30 px-4 py-2 text-xs font-black text-[#00f0ff] transition group-hover:bg-[#00f0ff] group-hover:text-black">
-            打开
-          </span>
-        </button>
-      </section>
+      <RecentProjectsInline
+        onOpen={() => setIsRecentProjectsOpen(true)}
+        projects={recentPreviewProjects}
+        status={recentProjectsStatus}
+        totalCount={recentProjects.length}
+      />
 
-      <div className="mt-8 space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-extrabold text-[#e2e2e2]">创作入口</h2>
-          <span className="text-xs text-[#849495]">Web first</span>
-        </div>
-        <div className="grid gap-2">
-          {storyModeEntries.map((entry) => (
-            <button
-              className="rounded-[1.25rem] border border-[#353535] bg-[#1b1b1b]/70 p-4 text-left transition hover:border-[#00f0ff]/60"
-              key={entry.label}
-              type="button"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-extrabold text-[#e2e2e2]">{entry.label}</span>
-                <span className="shrink-0 rounded-full border border-[#3b494b] px-3 py-1 text-xs text-[#b9cacb]">{entry.status}</span>
-              </div>
-              <p className="mt-2 text-xs leading-5 text-[#849495]">{entry.text}</p>
-            </button>
-          ))}
-        </div>
-      </div>
+      <DiscoveryWall />
 
       {isRecentProjectsOpen ? (
         <RecentProjectsDrawer
@@ -375,19 +340,163 @@ export function IdeaInputPanel({
   );
 }
 
+function RecentProjectsInline({
+  onOpen,
+  projects,
+  status,
+  totalCount
+}: RecentProjectsInlineProps) {
+  const hasProjects = projects.length > 0;
+
+  return (
+    <section
+      aria-label="最近项目"
+      className="mx-auto mt-9 w-full max-w-[1180px] rounded-[1.5rem] border border-white/10 bg-[#101313]/[0.78] p-5 shadow-[0_0_38px_rgba(0,240,255,0.08)] backdrop-blur-2xl md:p-6"
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-[18px] font-black leading-tight text-[#f4ffff]">最近项目</h2>
+          <p className="mt-1 text-[14px] leading-6 text-[#849495]">
+            {recentProjectsSummary(status, totalCount)}
+          </p>
+        </div>
+        <button
+          className="self-start rounded-full border border-white/[0.12] bg-black/20 px-6 py-3 text-[14px] font-black leading-none text-[#00f0ff] transition hover:border-[#00f0ff] hover:bg-[#00f0ff] hover:text-black md:self-center"
+          onClick={onOpen}
+          type="button"
+        >
+          打开
+        </button>
+      </div>
+
+      {hasProjects ? (
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {projects.map((project) => (
+            <article className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-4 rounded-[1rem] border border-white/10 bg-white/[0.04] p-4" key={project.sessionId}>
+              <div className="flex size-12 items-center justify-center rounded-xl border border-[#ff4b89]/40 bg-[#ff4b89]/20 text-xl font-black text-[#ff4b89]">
+                ▣
+              </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-[14px] font-black leading-tight text-[#e2e2e2]">{project.title}</h3>
+                <p className="mt-1 truncate text-[12px] font-bold leading-tight text-[#849495]">
+                  最后编辑：{formatProjectDate(project.updatedAt)}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-[1rem] border border-white/[0.08] bg-white/[0.03] px-4 py-5 text-[14px] font-bold text-[#849495]">
+          {recentProjectsEmptyMessage(status)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DiscoveryWall() {
+  return (
+    <section className="mx-auto mt-11 w-full max-w-[1320px]" aria-label="发现更多">
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-3xl font-black text-[#00f0ff]">✦</span>
+          <div>
+            <h2 className="text-[24px] font-black leading-tight text-[#f4ffff]">发现更多</h2>
+            <p className="mt-1 text-[14px] font-bold leading-5 text-[#849495]">灵感样片，仅用于启发你的私人创作</p>
+          </div>
+        </div>
+        <button className="self-start rounded-full px-4 py-2 text-[14px] font-black leading-none text-[#b9cacb] transition hover:text-[#00f0ff] md:self-auto" type="button">
+          换一批 ↻
+        </button>
+      </div>
+
+      <div className="storycam-discovery-grid">
+        {discoveryEntries.map((entry) => (
+          <article className={`group storycam-discovery-card storycam-discovery-card--${entry.size}`} key={entry.title}>
+            <img alt={`${entry.title} 样片画面`} className="size-full object-cover" src={entry.imageSrc} />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/[0.82] via-black/[0.12] to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 md:p-5">
+              <h3 className="min-w-0 truncate text-[18px] font-black leading-tight text-white">{entry.title}</h3>
+              <span className="shrink-0 text-[14px] font-bold leading-none text-[#e2e2e2]">{entry.duration}</span>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+              <span className="flex size-14 items-center justify-center rounded-full bg-black/50 text-lg font-black text-white backdrop-blur-md">
+                ▶
+              </span>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <p className="mt-8 text-center text-sm leading-6 text-[#6f7d7e]">
+        所有内容由 AI 生成，仅供个人创作参考，请勿用于任何公开传播或商业用途。
+      </p>
+    </section>
+  );
+}
+
+function inputToolChipClassName(isSelected: boolean): string {
+  const baseClassName = "storycam-input-tool-chip rounded-full border transition";
+
+  if (isSelected) {
+    return `${baseClassName} border-[#00f0ff]/70 bg-[#00dbe9] text-black shadow-[0_0_8px_rgba(0,240,255,0.18)]`;
+  }
+
+  return `${baseClassName} border-white/[0.12] bg-white/[0.035] text-[#9eadae] hover:border-[#00f0ff]/45 hover:bg-white/[0.07] hover:text-white`;
+}
+
+function storyModeButtonClassName(isActive: boolean): string {
+  const baseClassName = "rounded-full border px-5 py-3 text-left text-[15px] font-black leading-none transition";
+
+  if (isActive) {
+    return `${baseClassName} border-[#ff4b89]/70 bg-[#ff4b89]/[0.22] text-[#ffe4ee] shadow-[0_0_22px_rgba(255,75,137,0.24)]`;
+  }
+
+  return `${baseClassName} border-white/[0.12] bg-white/[0.06] text-[#e2e2e2] hover:border-[#00f0ff]/60 hover:bg-white/10`;
+}
+
+function recentProjectsSummary(status: RecentProjectsStatus, totalCount: number): string {
+  if (status === "loading") {
+    return "正在查找你账号里的最近创作。";
+  }
+
+  if (status === "error") {
+    return "最近项目暂时载入失败，可以打开面板稍后重试。";
+  }
+
+  if (totalCount > 0) {
+    return `${totalCount} 个可继续的项目`;
+  }
+
+  return "从这里继续上次保存的故事世界或核心分镜。";
+}
+
+function recentProjectsEmptyMessage(status: RecentProjectsStatus): string {
+  if (status === "loading") {
+    return "正在载入最近项目。";
+  }
+
+  if (status === "error") {
+    return "最近项目暂时载入失败。";
+  }
+
+  return "还没有可继续的项目。";
+}
+
 function RecentProjectsDrawer({
   onClose,
   onContinue,
   projects,
   restoringProjectId,
   status
-}: {
-  onClose: () => void;
-  onContinue: (project: RecentStoryCamProject) => void;
-  projects: RecentStoryCamProject[];
-  restoringProjectId: string | null;
-  status: "idle" | "loading" | "ready" | "error";
-}) {
+}: RecentProjectsDrawerProps) {
+  const content = renderRecentProjectsDrawerContent({
+    onContinue,
+    projects,
+    restoringProjectId,
+    status
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-label="最近项目">
       <div className="w-full max-w-3xl rounded-[1.5rem] border border-[#3b494b] bg-[#141717] p-5 shadow-2xl">
@@ -406,51 +515,65 @@ function RecentProjectsDrawer({
           </button>
         </div>
 
-        {status === "loading" ? (
-          <p className="py-8 text-sm font-bold text-[#b9cacb]" role="status">正在载入最近项目。</p>
-        ) : status === "error" ? (
-          <p className="py-8 text-sm font-bold text-[#ffb1c3]" role="status">最近项目暂时载入失败，可以刷新后再试。</p>
-        ) : projects.length ? (
-          <div className="mt-5 grid gap-3">
-            {projects.map((project) => (
-              <article className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/25 p-3 sm:grid-cols-[160px_1fr]" key={project.sessionId}>
-                <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#0e1111]">
-                  {project.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img alt={`${project.title} 缩略图`} className="size-full object-cover" src={project.thumbnail.signedUrl} />
-                  ) : (
-                    <div className="storycam-cinematic-frame size-full rounded-none" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="truncate text-lg font-black text-[#e2e2e2]">{project.title}</h3>
-                    <span className="rounded-full border border-[#00f0ff]/25 px-3 py-1 text-xs font-black text-[#00f0ff]">
-                      {projectStepLabel(project.currentStep)}
-                    </span>
-                  </div>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{project.summary}</p>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs font-bold text-[#849495]">
-                      1 组 · 约 15 秒 · {formatProjectDate(project.updatedAt)}
-                    </span>
-                    <button
-                      className="storycam-primary-button px-4 py-2 text-xs"
-                      disabled={Boolean(restoringProjectId)}
-                      onClick={() => onContinue(project)}
-                      type="button"
-                    >
-                      {restoringProjectId === project.sessionId ? "恢复中" : "继续创作"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="py-8 text-sm font-bold leading-6 text-[#b9cacb]">还没有可继续的项目。生成故事世界后，它会出现在这里。</p>
-        )}
+        {content}
       </div>
+    </div>
+  );
+}
+
+function renderRecentProjectsDrawerContent({
+  onContinue,
+  projects,
+  restoringProjectId,
+  status
+}: RecentProjectsDrawerContentProps): ReactNode {
+  if (status === "loading") {
+    return <p className="py-8 text-sm font-bold text-[#b9cacb]" role="status">正在载入最近项目。</p>;
+  }
+
+  if (status === "error") {
+    return <p className="py-8 text-sm font-bold text-[#ffb1c3]" role="status">最近项目暂时载入失败，可以刷新后再试。</p>;
+  }
+
+  if (!projects.length) {
+    return <p className="py-8 text-sm font-bold leading-6 text-[#b9cacb]">还没有可继续的项目。生成故事世界后，它会出现在这里。</p>;
+  }
+
+  return (
+    <div className="mt-5 grid gap-3">
+      {projects.map((project) => (
+        <article className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/25 p-3 sm:grid-cols-[160px_1fr]" key={project.sessionId}>
+          <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#0e1111]">
+            {project.thumbnail ? (
+              <img alt={`${project.title} 缩略图`} className="size-full object-cover" src={project.thumbnail.signedUrl} />
+            ) : (
+              <div className="storycam-cinematic-frame size-full rounded-none" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="truncate text-lg font-black text-[#e2e2e2]">{project.title}</h3>
+              <span className="rounded-full border border-[#00f0ff]/25 px-3 py-1 text-xs font-black text-[#00f0ff]">
+                {projectStepLabel(project.currentStep)}
+              </span>
+            </div>
+            <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{project.summary}</p>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs font-bold text-[#849495]">
+                1 组 · 约 15 秒 · {formatProjectDate(project.updatedAt)}
+              </span>
+              <button
+                className="storycam-primary-button px-4 py-2 text-xs"
+                disabled={Boolean(restoringProjectId)}
+                onClick={() => onContinue(project)}
+                type="button"
+              >
+                {restoringProjectId === project.sessionId ? "恢复中" : "继续创作"}
+              </button>
+            </div>
+          </div>
+        </article>
+      ))}
     </div>
   );
 }

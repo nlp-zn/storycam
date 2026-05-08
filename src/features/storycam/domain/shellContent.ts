@@ -23,6 +23,45 @@ export const storyModeEntries = [
   }
 ] as const;
 
+export const discoveryEntries = [
+  {
+    title: "雨夜未发送",
+    duration: "00:32",
+    imageSrc: "/storycam/discovery/rainy-night-unsent.png",
+    size: "large"
+  },
+  {
+    title: "宠物回家之前",
+    duration: "00:41",
+    imageSrc: "/storycam/discovery/pet-before-home.png",
+    size: "large"
+  },
+  {
+    title: "小说角色初登场",
+    duration: "00:28",
+    imageSrc: "/storycam/discovery/novel-character-arrival.png",
+    size: "wide"
+  },
+  {
+    title: "只差一句话",
+    duration: "00:25",
+    imageSrc: "/storycam/discovery/one-line-away.png",
+    size: "small"
+  },
+  {
+    title: "把难过留在风里",
+    duration: "00:34",
+    imageSrc: "/storycam/discovery/sadness-in-wind.png",
+    size: "small"
+  },
+  {
+    title: "旧房间里的光",
+    duration: "00:36",
+    imageSrc: "/storycam/discovery/old-room-light.png",
+    size: "banner"
+  }
+] as const;
+
 export const storyAssets = [
   {
     label: "我的剧本",
