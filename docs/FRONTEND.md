@@ -22,7 +22,7 @@
 - Recent projects entry above the creation-entry list; homepage stays on input and lets users choose a project instead of auto-jumping.
 - Story world confirmation.
 - One 15-second core storyboard group with a generated first-frame main storyboard image.
-- 9-frame expansion canvas as a modal overlay from the selected main storyboard image; first open shows only frame 01, then clicking the center image generates frames 02-09 without navigating away from `/storycam/core-storyboard`.
+- Inline 9-frame core storyboard workbench: frame 01 stays in the center, frames 02-09 wait around it, and clicking the center image generates the eight expansion frames without navigating away from `/storycam/core-storyboard`.
 - Provider-send confirmation.
 - Clip generation status.
 - Clip review and retry.

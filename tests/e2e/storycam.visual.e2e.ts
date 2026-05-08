@@ -39,11 +39,11 @@ test.describe("StoryCam visual smoke", () => {
 
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
-    await page.getByRole("button", { name: "打开扩展画布" }).click();
-    await expect(page.getByRole("dialog", { name: /9 帧分镜画布/ })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-09")).toBeVisible();
+    await expect(page.getByRole("button", { name: "用这一组生成片段" })).toBeEnabled();
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole("dialog", { name: /9 帧分镜画布/ }).getByRole("button", { name: "用这一组生成片段" }).click();
+    await page.getByRole("button", { name: "用这一组生成片段" }).click();
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
     await expect(page.getByText("任务 job-1")).toBeVisible();
     await page.getByRole("button", { name: "取消生成" }).click();

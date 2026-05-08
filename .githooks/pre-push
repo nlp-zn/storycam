@@ -2,3 +2,20 @@
 set -euo pipefail
 
 scripts/pr-ready.sh
+
+cat <<'MSG'
+
+Pre-push deterministic checks passed.
+
+Before opening or merging the PR, ask Codex:
+
+Run the StoryCam PR gate on the current diff.
+
+Use three independent review perspectives:
+1. code-reviewer: correctness, readability, architecture, security, performance
+2. security-auditor: auth, RLS, storage, provider secrets, logs, signed URLs, external inputs
+3. test-engineer: test coverage, edge cases, error paths, concurrency, E2E needs
+
+Return GO/NO-GO with blockers, recommended fixes, accepted risks,
+verification evidence, coverage gaps, and rollback plan.
+MSG

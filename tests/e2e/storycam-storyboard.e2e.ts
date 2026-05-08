@@ -155,12 +155,13 @@ test.describe("StoryCam core storyboard", () => {
 
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page.getByText("1 个核心分镜组，控制在 45 秒内。")).toHaveCount(0);
-    await expect(page.getByText("1 个核心分镜组，控制在 15 秒内。")).toBeVisible();
+    await expect(page.getByText("1 组 · 约 15 秒内")).toBeVisible();
     await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
     await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toHaveCount(0);
     await expect(page.getByRole("heading", { exact: true, name: "擦肩而过" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "打开 9 帧画布" })).toHaveCount(1);
-    await expect(page.getByRole("button", { name: "先补齐扩展图 0/8" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "点击中心主图生成扩展分镜" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "等待分镜完成" })).toBeDisabled();
+    await expect(page.getByText("0 / 8 已完成")).toBeVisible();
   });
 
   test("shows an internal waiting state when storyboard images depend on unfinished story-world asset images", async ({ page }) => {

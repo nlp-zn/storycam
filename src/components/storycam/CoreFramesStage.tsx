@@ -1,175 +1,478 @@
-import type { ReactNode } from "react";
-import type { CreateStoryboardResponse, StoryboardImageState } from "@/features/storycam/client/storycamApi";
+import { useMemo, useState, type ReactNode } from "react";
+import type {
+  CreateStoryboardResponse,
+  ExpandStoryboardGroupResponse,
+  StoryboardImageState
+} from "@/features/storycam/client/storycamApi";
+
+type StoryboardScriptView =
+  | CreateStoryboardResponse["storyboard"]["storyboardScript"]
+  | NonNullable<CreateStoryboardResponse["storyboard"]["storyboardScripts"]>[number];
 
 type CoreFramesStageProps = {
+  expansion: ExpandStoryboardGroupResponse | null;
   generationPanel?: ReactNode;
   isBusy?: boolean;
-  onExpandGroup: (index: number) => void;
+  isExpansionLoading: boolean;
+  isRegeneratingFrame: (frameNumber: number) => boolean;
+  onBackToStoryWorld: () => void;
+  onConfirmExpansion: (index: number) => void;
   onGenerateClip: (index: number) => void;
   onMediaLoadError?: () => void;
+  onRegenerateFrame: (index: number, frameNumber: number) => void;
   onSelectGroup: (index: number) => void;
   selectedIndex: number;
   storyboard: CreateStoryboardResponse;
 };
 
+type FrameView = {
+  description: string;
+  frameNumber: number;
+  image?: StoryboardImageState;
+  label: string;
+  position: string;
+  title: string;
+};
+
 const requiredExpandedFrameCount = 8;
 
+const canvasSlots = [
+  { frameNumber: 2, label: "左上", position: "top-left" },
+  { frameNumber: 3, label: "上方", position: "top" },
+  { frameNumber: 4, label: "右上", position: "top-right" },
+  { frameNumber: 5, label: "右侧", position: "right" },
+  { frameNumber: 6, label: "右下", position: "bottom-right" },
+  { frameNumber: 7, label: "下方", position: "bottom" },
+  { frameNumber: 8, label: "左下", position: "bottom-left" },
+  { frameNumber: 9, label: "左侧", position: "left" }
+] as const;
+
+const placeholderImage: StoryboardImageState = {
+  placeholder: true,
+  status: "placeholder"
+};
+const emptyExpandedImages: StoryboardImageState[] = [];
+const emptyExpansionCards: ExpandStoryboardGroupResponse["expansionCards"] = [];
+
 export function CoreFramesStage({
+  expansion,
   generationPanel,
   isBusy = false,
-  onExpandGroup,
+  isExpansionLoading,
+  isRegeneratingFrame,
+  onBackToStoryWorld,
+  onConfirmExpansion,
   onGenerateClip,
   onMediaLoadError,
+  onRegenerateFrame,
   onSelectGroup,
   selectedIndex,
   storyboard
 }: CoreFramesStageProps) {
+  const [previewFrameNumber, setPreviewFrameNumber] = useState<number | null>(null);
   const coreGroups = storyboard.storyboard.coreStoryboardGroups.slice(0, 1);
-  const selectedGroup = coreGroups[0];
+  const activeIndex = Math.min(selectedIndex, coreGroups.length - 1);
+  const selectedGroup = coreGroups[activeIndex] ?? coreGroups[0];
+  const selectedScript = storyboard.storyboard.storyboardScripts?.[activeIndex] ?? storyboard.storyboard.storyboardScript;
+  const expandedImages = expansion?.expandedStoryboardImages.length
+    ? expansion.expandedStoryboardImages
+    : selectedGroup?.expandedStoryboardImages ?? emptyExpandedImages;
+  const expansionCards = expansion?.expansionCards ?? emptyExpansionCards;
+  const hasStartedExpansion = isExpansionLoading || expansionCards.length > 0 || expandedImages.length > 0;
+  const readyExpandedCount = readyExpandedFrameCount(expandedImages);
+  const canGenerateClip = readyExpandedCount >= requiredExpandedFrameCount;
+  const frames = useMemo(
+    () =>
+      selectedGroup
+        ? buildFrameViews({
+            cards: expansionCards,
+            expandedImages,
+            selectedGroup,
+            selectedScript
+          })
+        : [],
+    [expandedImages, expansionCards, selectedGroup, selectedScript]
+  );
+  const readyFrames = frames.filter((frame) => frame.image?.status === "ready");
+  const previewFrame = frames.find((frame) => frame.frameNumber === previewFrameNumber && frame.image?.status === "ready");
+
+  if (!selectedGroup) {
+    return null;
+  }
+
+  function movePreview(delta: number) {
+    setPreviewFrameNumber((currentFrameNumber) => {
+      if (readyFrames.length <= 1) {
+        return currentFrameNumber;
+      }
+
+      const currentIndex = readyFrames.findIndex((frame) => frame.frameNumber === currentFrameNumber);
+      const nextIndex = currentIndex === -1 ? 0 : (currentIndex + delta + readyFrames.length) % readyFrames.length;
+
+      return readyFrames[nextIndex]?.frameNumber ?? currentFrameNumber;
+    });
+  }
+
+  function expandSelectedGroup() {
+    onSelectGroup(activeIndex);
+    onConfirmExpansion(activeIndex);
+  }
 
   return (
-    <section className="storycam-core-stage relative">
-      <header className="mb-16 max-w-3xl">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#00f0ff]/20 bg-[#00f0ff]/10 px-4 py-2">
-          <span className="size-2 rounded-full bg-[#00f0ff]" />
-          <span className="storycam-eyebrow">步骤 3</span>
+    <section className="storycam-core-stage relative" data-testid="core-storyboard-card">
+      <header className="storycam-core-hero">
+        <div className="storycam-section-kicker">
+          <span />
+          <p>第三部：核心分镜</p>
+          <span />
         </div>
         <h1 className="storycam-heading-xl">核心分镜</h1>
-        <p className="mt-6 text-lg leading-8 text-[#b9cacb]">
-          这一张主分镜是一段 15 秒内短片的中心图。点开主图后，可以在当前页生成周围 8 张扩展分镜图。
-        </p>
-        <p className="mt-5 text-sm font-bold text-[#dbfcff]">
-          1 个核心分镜组，控制在 15 秒内。
-        </p>
+        <p>点击中心主帧后，系统自动延展周围 8 张分镜图，确认后生成 Seedance 片段。</p>
+        <span className="storycam-core-status-pill">{isExpansionLoading ? "生成中" : `${readyExpandedCount} / 8`}</span>
       </header>
 
-      <div className="storycam-core-grid" data-core-count={1}>
-        {coreGroups.map((group, index) => {
-          const isSelected = selectedIndex === index;
-          const representativeImage = group.representativeImage ?? placeholderImage;
-          const expandedStoryboardImages = group.expandedStoryboardImages ?? [];
-          const readyExpandedCount = readyExpandedFrameCount(expandedStoryboardImages);
-          const canGenerateClip = readyExpandedCount >= requiredExpandedFrameCount;
+      <div className="storycam-core-workbench">
+        <div className="storycam-core-board-panel">
+          <div className="storycam-core-board-header">
+            <h2>01 · 自动延展画布</h2>
+            <div className="storycam-core-board-status">
+              <span>中心主图</span>
+              <strong>{storyboardImageStateLabel(selectedGroup.representativeImage ?? placeholderImage)}</strong>
+              <span>扩展中</span>
+              <strong>{readyExpandedCount} / 8</strong>
+            </div>
+          </div>
 
-          return (
-            <article
-              className={`storycam-core-card group relative flex flex-col justify-end overflow-hidden border transition duration-500 ${
-                isSelected
-                  ? "border-[#00f0ff] shadow-[0_0_34px_rgba(0,240,255,0.24)]"
-                  : "border-white/10 shadow-[0_0_24px_rgba(0,0,0,0.35)]"
-              }`}
-              data-testid="core-storyboard-card"
-              key={`${group.title}-${index}`}
-            >
-              <button
-                aria-label={`打开${group.title}扩展画布`}
-                className="absolute inset-0 z-0 text-left"
-                onClick={() => {
-                  onSelectGroup(index);
-                  onExpandGroup(index);
-                }}
-                type="button"
-              >
-                {representativeImage.status === "ready" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    alt={`${group.title} 主分镜图`}
-                    className="size-full object-cover transition duration-700 group-hover:scale-105"
-                    onError={(event) => {
-                      event.currentTarget.hidden = true;
-                      onMediaLoadError?.();
-                    }}
-                    src={representativeImage.signedUrl}
-                  />
-                ) : (
-                  <div className="storycam-cinematic-frame relative size-full rounded-none transition duration-700 group-hover:scale-105">
-                    <span className="storycam-core-image-status">
-                      {storyboardImageStatusLabel(representativeImage, "主分镜图")}
-                    </span>
-                  </div>
-                )}
-              </button>
-              <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black via-black/55 to-transparent" />
-              <div className="pointer-events-none relative z-10 p-6 md:p-8">
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <span className="storycam-eyebrow">镜头 {String(index + 1).padStart(2, "0")}</span>
-                  <span className="rounded-full border border-white/15 bg-black/30 px-3 py-1 text-xs font-black text-[#e2e2e2]">
-                    {formatDuration(group.estimatedClipDurationSeconds)}
-                  </span>
+          <div className="storycam-expansion-board storycam-core-inline-board" data-expanded={hasStartedExpansion ? "true" : "false"}>
+            {canvasSlots.map((slot) => {
+              const frame = frames.find((item) => item.frameNumber === slot.frameNumber);
+
+              return (
+                <ExpansionSlot
+                  frame={frame}
+                  hasStartedExpansion={hasStartedExpansion}
+                  isGenerating={isExpansionLoading || frame?.image?.status === "generating"}
+                  isRegenerating={isRegeneratingFrame(slot.frameNumber)}
+                  key={slot.position}
+                  onMediaLoadError={onMediaLoadError}
+                  onPreview={() => setPreviewFrameNumber(slot.frameNumber)}
+                  onRegenerate={() => onRegenerateFrame(activeIndex, slot.frameNumber)}
+                  position={slot.position}
+                  selectedGroupTitle={selectedGroup.title}
+                />
+              );
+            })}
+            <CoreSlot
+              frame={frames[0]}
+              hasStartedExpansion={hasStartedExpansion}
+              isLoading={isExpansionLoading}
+              isRegenerating={isRegeneratingFrame(1)}
+              onConfirmExpansion={expandSelectedGroup}
+              onMediaLoadError={onMediaLoadError}
+              onPreview={() => setPreviewFrameNumber(1)}
+              onRegenerate={() => onRegenerateFrame(activeIndex, 1)}
+              selectedGroupTitle={selectedGroup.title}
+            />
+          </div>
+        </div>
+
+        <aside className="storycam-core-script-panel">
+          <div className="storycam-core-script-header">
+            <div>
+              <p className="storycam-eyebrow">分镜脚本</p>
+              <h2>{selectedScript?.planSummary ?? selectedGroup.storyPurpose}</h2>
+            </div>
+            <span>{frames.length} 帧</span>
+          </div>
+          <p className="storycam-core-script-rhythm">{selectedScript?.rhythm ?? selectedGroup.emotionalTurn}</p>
+          <ol className="storycam-script-frame-list storycam-core-script-list">
+            {frames.map((frame) => (
+              <li key={frame.frameNumber}>
+                <span>{String(frame.frameNumber).padStart(2, "0")}</span>
+                <div>
+                  <strong>{frame.title}</strong>
+                  <p>{frame.description}</p>
                 </div>
-                <h2 className="text-3xl font-black leading-tight text-[#e2e2e2]">{group.title}</h2>
-                <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{group.storyPurpose}</p>
-                <p className="mt-3 text-sm font-bold leading-6 text-[#dbfcff]">{group.emotionalTurn}</p>
-                {expandedStoryboardImages.length ? (
-                  <div className="mt-4 grid grid-cols-4 gap-2">
-                    {expandedStoryboardImages.slice(0, 8).map((image, imageIndex) => (
-                      <div
-                        className="aspect-video overflow-hidden rounded border border-white/10 bg-black/40"
-                        key={`${group.title}-expanded-${imageIndex}`}
-                      >
-                        {image.status === "ready" ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            alt={`${group.title} 扩展分镜 ${imageIndex + 1}`}
-                            className="size-full object-cover"
-                            onError={(event) => {
-                              event.currentTarget.hidden = true;
-                              onMediaLoadError?.();
-                            }}
-                            src={image.signedUrl}
-                          />
-                        ) : (
-                          <div className="storycam-cinematic-frame size-full rounded-none opacity-70" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <button
-                    className="storycam-secondary-button pointer-events-auto px-4 py-3 text-xs"
-                    disabled={isBusy}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onExpandGroup(index);
-                    }}
-                    type="button"
-                  >
-                    打开 9 帧画布
-                  </button>
-                  <button
-                    className="storycam-primary-button pointer-events-auto px-4 py-3 text-xs"
-                    disabled={isBusy}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onGenerateClip(index);
-                    }}
-                    type="button"
-                  >
-                    {canGenerateClip ? "用这一组生成片段" : `先补齐扩展图 ${readyExpandedCount}/8`}
-                  </button>
-                </div>
-              </div>
-            </article>
-          );
-        })}
+              </li>
+            ))}
+          </ol>
+          <p className="storycam-core-script-more">共 9 个分镜，滚动查看更多</p>
+          <div className="storycam-core-audio-note">
+            <p className="storycam-eyebrow">音频提示</p>
+            <span>音频：雨声 / 门铃 / 脚步 / 环境音乐 / 低声对白</span>
+          </div>
+        </aside>
       </div>
 
       {generationPanel ? <div className="mt-8">{generationPanel}</div> : null}
 
-      {!generationPanel && selectedGroup ? (
-        <div className="storycam-bottom-dock">
+      {!generationPanel ? (
+        <div className="storycam-bottom-dock storycam-core-dock">
+          <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
+            1 组 · 约 {formatDuration(selectedGroup.estimatedClipDurationSeconds)}内
+          </div>
+          <button className="storycam-secondary-button" onClick={onBackToStoryWorld} type="button">
+            返回故事世界
+          </button>
           <button
             className="storycam-primary-button"
-            disabled={isBusy}
-            onClick={() => onExpandGroup(selectedIndex)}
+            disabled={isBusy || !canGenerateClip}
+            onClick={() => onGenerateClip(activeIndex)}
             type="button"
           >
-            打开扩展画布
+            {canGenerateClip ? "用这一组生成片段" : "等待分镜完成"}
           </button>
+          <div className="storycam-core-dock-progress">
+            <span />
+            {readyExpandedCount} / 8 已完成
+          </div>
         </div>
       ) : null}
+
+      {previewFrame ? (
+        <FramePreviewModal
+          canStep={readyFrames.length > 1}
+          frame={previewFrame}
+          key={previewFrame.frameNumber}
+          onClose={() => setPreviewFrameNumber(null)}
+          onMediaLoadError={onMediaLoadError}
+          onNext={() => movePreview(1)}
+          onPrevious={() => movePreview(-1)}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function CoreSlot({
+  frame,
+  hasStartedExpansion,
+  isLoading,
+  isRegenerating,
+  onConfirmExpansion,
+  onMediaLoadError,
+  onPreview,
+  onRegenerate,
+  selectedGroupTitle
+}: {
+  frame?: FrameView;
+  hasStartedExpansion: boolean;
+  isLoading: boolean;
+  isRegenerating: boolean;
+  onConfirmExpansion: () => void;
+  onMediaLoadError?: () => void;
+  onPreview: () => void;
+  onRegenerate: () => void;
+  selectedGroupTitle: string;
+}) {
+  const canPreview = hasStartedExpansion && frame?.image?.status === "ready";
+
+  return (
+    <article className="storycam-expansion-slot storycam-expansion-slot--center" data-testid="storyboard-frame-01">
+      <button
+        aria-label={hasStartedExpansion ? "查看第 01 帧大图" : "点击中心主图生成扩展分镜"}
+        className="storycam-expansion-image-button"
+        disabled={isLoading || (hasStartedExpansion && !canPreview)}
+        onClick={hasStartedExpansion ? onPreview : onConfirmExpansion}
+        type="button"
+      >
+        <StoryboardImage
+          alt={`${selectedGroupTitle} 主分镜图`}
+          image={frame?.image}
+          onMediaLoadError={onMediaLoadError}
+          variant="core"
+        />
+      </button>
+      <div className="storycam-expansion-slot-overlay" />
+      <FrameLabel frameNumber={1} label="中心主图" />
+      <div className="storycam-expansion-slot-copy">
+        <h3>{frame?.title ?? selectedGroupTitle}</h3>
+        <p>{hasStartedExpansion ? frame?.description : "点击中心主图，沿这一帧展开 8 张扩展分镜。"}</p>
+      </div>
+      {isLoading ? <FrameSpinner label="拓展中" /> : null}
+      {hasStartedExpansion ? (
+        <button
+          aria-label="重生成第 01 帧"
+          className="storycam-frame-retry"
+          disabled={isRegenerating}
+          onClick={onRegenerate}
+          type="button"
+        >
+          {isRegenerating ? "生成中" : "重生成"}
+        </button>
+      ) : null}
+    </article>
+  );
+}
+
+function ExpansionSlot({
+  frame,
+  hasStartedExpansion,
+  isGenerating,
+  isRegenerating,
+  onMediaLoadError,
+  onPreview,
+  onRegenerate,
+  position,
+  selectedGroupTitle
+}: {
+  frame?: FrameView;
+  hasStartedExpansion: boolean;
+  isGenerating: boolean;
+  isRegenerating: boolean;
+  onMediaLoadError?: () => void;
+  onPreview: () => void;
+  onRegenerate: () => void;
+  position: string;
+  selectedGroupTitle: string;
+}) {
+  const frameNumber = frame?.frameNumber ?? frameNumberForPosition(position);
+  const canPreview = frame?.image?.status === "ready";
+  const canRegenerate = hasStartedExpansion && Boolean(frame);
+
+  return (
+    <article
+      className="storycam-expansion-slot"
+      data-position={position}
+      data-testid={`storyboard-frame-${String(frameNumber).padStart(2, "0")}`}
+    >
+      <button
+        aria-label={`查看第 ${String(frameNumber).padStart(2, "0")} 帧大图`}
+        className="storycam-expansion-image-button"
+        disabled={!canPreview}
+        onClick={onPreview}
+        type="button"
+      >
+        <StoryboardImage
+          alt={`${selectedGroupTitle} 扩展分镜 ${frameNumber - 1}`}
+          image={frame?.image}
+          onMediaLoadError={onMediaLoadError}
+          variant="expanded"
+        />
+      </button>
+      <div className="storycam-expansion-slot-overlay" />
+      <FrameLabel frameNumber={frameNumber} label={frame?.label ?? "扩展帧"} />
+      <div className="storycam-expansion-slot-copy">
+        <h3>{frame?.title ?? "等待生成"}</h3>
+        <p>{frame?.description ?? "点击中心主图后，这一帧会承接对应的动作或反应。"}</p>
+      </div>
+      {isGenerating ? <FrameSpinner label="生成中" /> : null}
+      {canRegenerate ? (
+        <button
+          aria-label={`重生成第 ${String(frameNumber).padStart(2, "0")} 帧`}
+          className="storycam-frame-retry"
+          disabled={isRegenerating}
+          onClick={onRegenerate}
+          type="button"
+        >
+          {isRegenerating ? "生成中" : "重生成"}
+        </button>
+      ) : null}
+    </article>
+  );
+}
+
+function FramePreviewModal({
+  canStep,
+  frame,
+  onClose,
+  onMediaLoadError,
+  onNext,
+  onPrevious
+}: {
+  canStep: boolean;
+  frame: FrameView;
+  onClose: () => void;
+  onMediaLoadError?: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+}) {
+  return (
+    <div aria-label={`第 ${String(frame.frameNumber).padStart(2, "0")} 帧大图`} className="storycam-frame-preview" role="dialog">
+      <div className="storycam-frame-preview-card">
+        <div className="storycam-frame-preview-header">
+          <div>
+            <p className="storycam-eyebrow">
+              {String(frame.frameNumber).padStart(2, "0")} · {frame.label}
+            </p>
+            <h3>{frame.title}</h3>
+          </div>
+          <button aria-label="关闭大图" className="storycam-secondary-button px-4 py-2 text-xs" onClick={onClose} type="button">
+            关闭
+          </button>
+        </div>
+        <div className="storycam-frame-preview-image">
+          <StoryboardImage
+            alt={`第 ${String(frame.frameNumber).padStart(2, "0")} 帧大图`}
+            image={frame.image}
+            onMediaLoadError={onMediaLoadError}
+            variant="expanded"
+          />
+        </div>
+        <div className="storycam-frame-preview-footer">
+          <p>{frame.description}</p>
+          <div className="flex gap-2">
+            <button className="storycam-secondary-button px-4 py-2 text-xs" disabled={!canStep} onClick={onPrevious} type="button">
+              上一张
+            </button>
+            <button className="storycam-secondary-button px-4 py-2 text-xs" disabled={!canStep} onClick={onNext} type="button">
+              下一张
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StoryboardImage({
+  alt,
+  image,
+  onMediaLoadError,
+  variant
+}: {
+  alt: string;
+  image?: StoryboardImageState;
+  onMediaLoadError?: () => void;
+  variant: "core" | "expanded";
+}) {
+  if (image?.status === "ready") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        alt={alt}
+        className="size-full object-cover"
+        onError={(event) => {
+          event.currentTarget.hidden = true;
+          onMediaLoadError?.();
+        }}
+        src={image.signedUrl}
+      />
+    );
+  }
+
+  return (
+    <div className={`storycam-cinematic-frame storycam-frame-placeholder storycam-frame-placeholder--${variant}`}>
+      <span>{storyboardImageStatusLabel(image)}</span>
+    </div>
+  );
+}
+
+function FrameLabel({ frameNumber, label }: { frameNumber: number; label: string }) {
+  return (
+    <div className="storycam-frame-label">
+      <span>{String(frameNumber).padStart(2, "0")}</span>
+      <strong>{label}</strong>
+    </div>
+  );
+}
+
+function FrameSpinner({ label }: { label: string }) {
+  return (
+    <div className="storycam-frame-spinner" role="status">
+      <span />
+      <strong>{label}</strong>
+    </div>
   );
 }
 
@@ -177,27 +480,76 @@ function formatDuration(seconds: number) {
   return `${seconds.toFixed(1).replace(".0", "")} 秒`;
 }
 
-const placeholderImage: StoryboardImageState = {
-  placeholder: true,
-  status: "placeholder"
-};
-
-function storyboardImageStatusLabel(image: StoryboardImageState, label: string) {
-  if (image.status === "generating") {
-    return `${label}生成中`;
+function storyboardImageStateLabel(image: StoryboardImageState) {
+  if (image.status === "ready") {
+    return "READY";
   }
 
-  if (image.status === "placeholder" && image.reason === "waiting_for_asset_images") {
+  if (image.status === "generating") {
+    return "生成中";
+  }
+
+  return "等待中";
+}
+
+function storyboardImageStatusLabel(image?: StoryboardImageState) {
+  if (image?.status === "generating") {
+    return "生成中";
+  }
+
+  if (image?.status === "placeholder" && image.reason === "waiting_for_asset_images") {
     return "等待角色/场景资产图";
   }
 
-  if (image.status === "placeholder" && image.reason === "reference_images_unsupported") {
-    return "当前生图服务未启用资产图参考";
+  if (image?.status === "placeholder" && image.reason === "reference_images_unsupported") {
+    return "未启用资产图参考";
   }
 
-  return `等待${label}`;
+  return "等待生成";
 }
 
 function readyExpandedFrameCount(images: StoryboardImageState[]) {
   return images.filter((image) => image.status === "ready").length;
+}
+
+function frameNumberForPosition(position: string) {
+  return canvasSlots.find((slot) => slot.position === position)?.frameNumber ?? 2;
+}
+
+function buildFrameViews(input: {
+  cards: ExpandStoryboardGroupResponse["expansionCards"];
+  expandedImages: StoryboardImageState[];
+  selectedGroup: CreateStoryboardResponse["storyboard"]["coreStoryboardGroups"][number];
+  selectedScript?: StoryboardScriptView;
+}): FrameView[] {
+  const scriptFrames = input.selectedScript?.frames ?? [];
+  const centerFrame = scriptFrames.find((frame) => frame.frameNumber === 1);
+
+  return [
+    {
+      description: centerFrame?.visualContent ?? input.selectedGroup.storyPurpose,
+      frameNumber: 1,
+      image: input.selectedGroup.representativeImage ?? placeholderImage,
+      label: "中心主图",
+      position: "center",
+      title: centerFrame?.title ?? input.selectedGroup.title
+    },
+    ...canvasSlots.map((slot) => {
+      const card = cardForFrame(input.cards, slot.frameNumber);
+      const scriptFrame = scriptFrames.find((frame) => frame.frameNumber === slot.frameNumber);
+
+      return {
+        description: card?.description ?? scriptFrame?.visualContent ?? scriptFrame?.narrativePurpose ?? "沿中心主图补全这一拍。",
+        frameNumber: slot.frameNumber,
+        image: card?.image ?? input.expandedImages[slot.frameNumber - 2],
+        label: slot.label,
+        position: slot.position,
+        title: card?.title ?? scriptFrame?.title ?? `分镜 ${String(slot.frameNumber).padStart(2, "0")}`
+      };
+    })
+  ];
+}
+
+function cardForFrame(cards: ExpandStoryboardGroupResponse["expansionCards"], frameNumber: number) {
+  return cards.find((card) => (card.frameNumber ?? card.sortOrder + 2) === frameNumber);
 }

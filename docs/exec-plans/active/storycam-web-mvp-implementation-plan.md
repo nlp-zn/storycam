@@ -1143,7 +1143,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 **Files likely touched:**
 
-- `src/components/storycam/ExpansionCanvas.tsx`
+- `src/components/storycam/CoreFramesStage.tsx`
 - `src/components/storycam/ExpandedStoryboardCard.tsx`
 - `src/features/storycam/client/storycamState.ts`
 - `e2e/storycam-expansion.spec.ts`

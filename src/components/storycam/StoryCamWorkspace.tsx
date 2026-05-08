@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
 import { ClipReview } from "@/components/storycam/ClipReview";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
-import { ExpansionCanvas } from "@/components/storycam/ExpansionCanvas";
 import { FinalWorkPanel } from "@/components/storycam/FinalWorkPanel";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import { ProviderSendConfirm } from "@/components/storycam/ProviderSendConfirm";
@@ -62,7 +61,6 @@ export function StoryCamWorkspace() {
   const [storyWorldConfirmed, setStoryWorldConfirmed] = useState(false);
   const [storyboard, setStoryboard] = useState<CreateStoryboardResponse | null>(null);
   const [selectedCoreGroupIndex, setSelectedCoreGroupIndex] = useState<number | null>(null);
-  const [expansionModalIndex, setExpansionModalIndex] = useState<number | null>(null);
   const [expansion, setExpansion] = useState<ExpandStoryboardGroupResponse | null>(null);
   const [isExpansionLoading, setIsExpansionLoading] = useState(false);
   const [regeneratingFrameKey, setRegeneratingFrameKey] = useState<string | null>(null);
@@ -206,7 +204,6 @@ export function StoryCamWorkspace() {
     setCoreGroupTargetCount(1);
     setSelectedCoreGroupIndex(restored.storyboard ? 0 : null);
     setExpansion(null);
-    setExpansionModalIndex(null);
     setClipConfirmationSummary(null);
     setClipJob(restored.clipJob ?? null);
     setFinalWork(restored.finalWork ?? null);
@@ -249,7 +246,7 @@ export function StoryCamWorkspace() {
       setStoryboard((current) => (current?.sessionId === sessionId && restored.storyboard ? restored.storyboard : current));
       setExpansion((current) =>
         current && restored.storyboard
-          ? refreshExpansionMediaFromStoryboard(current, restored.storyboard, expansionModalIndex ?? selectedCoreGroupIndex ?? 0)
+          ? refreshExpansionMediaFromStoryboard(current, restored.storyboard, selectedCoreGroupIndex ?? 0)
           : current
       );
       setClipJob((current) => (current && restored.clipJob ? restored.clipJob : current));
@@ -259,7 +256,7 @@ export function StoryCamWorkspace() {
     } finally {
       mediaRefreshInFlightRef.current = false;
     }
-  }, [expansion, expansionModalIndex, selectedCoreGroupIndex, storyboard, storyWorld?.sessionId]);
+  }, [expansion, selectedCoreGroupIndex, storyboard, storyWorld?.sessionId]);
 
   useEffect(() => {
     if (window.location.pathname === "/" || window.location.pathname === "/storycam") {
@@ -459,7 +456,6 @@ export function StoryCamWorkspace() {
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
-    setExpansionModalIndex(null);
     setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
@@ -494,7 +490,6 @@ export function StoryCamWorkspace() {
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
-    setExpansionModalIndex(null);
     setExpansion(null);
     setClipConfirmationSummary(null);
     setClipJob(null);
@@ -526,7 +521,6 @@ export function StoryCamWorkspace() {
       setStoryWorldConfirmed(false);
       setStoryboard(null);
       setSelectedCoreGroupIndex(null);
-      setExpansionModalIndex(null);
       setExpansion(null);
       setClipConfirmationSummary(null);
       setClipJob(null);
@@ -689,14 +683,8 @@ export function StoryCamWorkspace() {
     const readyCount = readyExpandedFrameCount(group);
 
     if (readyCount < requiredExpandedFrameCount) {
-      setExpansionModalIndex(index);
       setClipConfirmationSummary(null);
       setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
-
-      if (!isExpansionLoading) {
-        void expandCoreGroup(index, requiredExpandedFrameCount);
-      }
-
       return;
     }
 
@@ -722,7 +710,6 @@ export function StoryCamWorkspace() {
     const readyCount = readyExpandedFrameCount(selectedGroup);
 
     if (readyCount < requiredExpandedFrameCount) {
-      setExpansionModalIndex(selectedCoreGroupIndex);
       setClipConfirmationSummary(null);
       setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
       return;
@@ -811,8 +798,6 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
-  const expansionModalGroup =
-    storyboard && expansionModalIndex !== null ? storyboard.storyboard.coreStoryboardGroups[expansionModalIndex] : undefined;
   const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld });
   const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
 
@@ -892,49 +877,34 @@ export function StoryCamWorkspace() {
       ) : generationPanel ? (
         generationPanel
       ) : activeStepIndex >= 2 && storyboard && !isStoryWorldEditorOpen ? (
-        <>
-          <CoreFramesStage
-            generationPanel={generationPanel}
-            isBusy={isExpansionLoading || isClipSubmitting}
-            onExpandGroup={(index) => {
-              setSelectedCoreGroupIndex(index);
-              setExpansionModalIndex(index);
-            }}
-            onGenerateClip={prepareClipGeneration}
-            onMediaLoadError={refreshSessionMediaUrls}
-            onSelectGroup={selectCoreGroup}
-            selectedIndex={selectedCoreGroupIndex ?? 0}
-            storyboard={storyboard}
-          />
-          {expansionModalIndex !== null && expansionModalGroup ? (
-            <ExpansionCanvas
-              expansion={expansion}
-              isLoading={isExpansionLoading}
-              isRegeneratingFrame={(frameNumber) => regeneratingFrameKey === `${expansionModalIndex}:${frameNumber}`}
-              onClose={() => setExpansionModalIndex(null)}
-              onConfirmExpansion={() => expandCoreGroup(expansionModalIndex, 8)}
-              onGenerateClip={() => prepareClipGeneration(expansionModalIndex)}
-              onMediaLoadError={refreshSessionMediaUrls}
-              onRegenerateFrame={(frameNumber) => regenerateFrameImage(expansionModalIndex, frameNumber)}
-              selectedGroup={expansionModalGroup}
-              selectedIndex={expansionModalIndex}
-              selectedScript={storyboard.storyboard.storyboardScripts?.[expansionModalIndex] ?? storyboard.storyboard.storyboardScript}
-            />
-          ) : null}
-        </>
+        <CoreFramesStage
+          expansion={expansion}
+          generationPanel={generationPanel}
+          isBusy={isExpansionLoading || isClipSubmitting}
+          isExpansionLoading={isExpansionLoading}
+          isRegeneratingFrame={(frameNumber) => regeneratingFrameKey === `${selectedCoreGroupIndex ?? 0}:${frameNumber}`}
+          onBackToStoryWorld={() => navigateToStep(1)}
+          onConfirmExpansion={(index) => expandCoreGroup(index, 8)}
+          onGenerateClip={prepareClipGeneration}
+          onMediaLoadError={refreshSessionMediaUrls}
+          onRegenerateFrame={regenerateFrameImage}
+          onSelectGroup={selectCoreGroup}
+          selectedIndex={selectedCoreGroupIndex ?? 0}
+          storyboard={storyboard}
+        />
       ) : (
-          <StoryWorldReview
-            initiallyEditing={isStoryWorldEditorOpen}
-            isGeneratingStoryboard={storyboardStatus === "generating"}
-            isConfirmed={storyWorldConfirmed}
-            initialAssetImages={storyWorld.assetImagesByArtifactId}
-            key={storyWorld.artifacts.script.id}
-            onAssetImageReady={rememberStoryWorldAssetImage}
-            onConfirm={confirmStoryWorld}
-            onEditSaved={handleStoryWorldEdit}
-            onMediaLoadError={refreshSessionMediaUrls}
-            storyWorld={storyWorld}
-          />
+        <StoryWorldReview
+          initiallyEditing={isStoryWorldEditorOpen}
+          isGeneratingStoryboard={storyboardStatus === "generating"}
+          isConfirmed={storyWorldConfirmed}
+          initialAssetImages={storyWorld.assetImagesByArtifactId}
+          key={storyWorld.artifacts.script.id}
+          onAssetImageReady={rememberStoryWorldAssetImage}
+          onConfirm={confirmStoryWorld}
+          onEditSaved={handleStoryWorldEdit}
+          onMediaLoadError={refreshSessionMediaUrls}
+          storyWorld={storyWorld}
+        />
       )}
     </div>
   ) : (
