@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { AssetCard } from "@/components/storycam/AssetCard";
 import {
   generateStoryWorldAssetImage,
@@ -77,13 +77,9 @@ export function StoryWorldReview({
   const scriptSummary = scriptSummaryState.value;
   const assetImages = assetImagesState.images;
   const scriptParagraphs = scriptParagraphsFor(scriptSummary, storyWorld.storyWorld.script.beats);
-  const assetArtifactIds = useMemo(
-    () => [
-      ...storyWorld.artifacts.characterAssets.map((artifact) => artifact.id),
-      ...storyWorld.artifacts.sceneAssets.slice(0, 1).map((artifact) => artifact.id)
-    ],
-    [storyWorld.artifacts.characterAssets, storyWorld.artifacts.sceneAssets]
-  );
+  const assetIds = storyWorldAssetIds(storyWorld);
+  const readyCharacterAssetCount = readyAssetCount(assetIds.character, assetImages);
+  const readySceneAssetCount = readyAssetCount(assetIds.scene, assetImages);
 
   if (
     scriptSummaryState.sessionId !== storyWorld.sessionId ||
@@ -252,7 +248,7 @@ export function StoryWorldReview({
       setIsBatchSubmitting(true);
       setAssetImageError(null);
       const result = await generateStoryWorldAssetImages({
-        assetArtifactIds,
+        assetArtifactIds: assetIds.all,
         sessionId: storyWorld.sessionId
       });
 
@@ -287,11 +283,14 @@ export function StoryWorldReview({
 
   return (
     <section className="storycam-story-world relative" data-testid="story-world-review">
-      <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="storycam-heading-lg">确认故事世界</h1>
-          <p className="mt-3 text-lg leading-8 text-[#b9cacb]">审查你的生成资产和剧本组件。</p>
+      <div className="storycam-story-world-hero">
+        <div className="storycam-section-kicker">
+          <span />
+          <p>第二部：故事世界</p>
+          <span />
         </div>
+        <h1 className="storycam-heading-lg">确认故事世界</h1>
+        <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
         <span
           className={`rounded-full border px-4 py-2 text-sm font-bold ${
             isConfirmed ? "border-[#00f0ff] text-[#00f0ff]" : "border-[#ffcfbe]/80 text-[#ffcfbe]"
@@ -304,10 +303,10 @@ export function StoryWorldReview({
       <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">
         <div className="storycam-script-column">
           <div className="storycam-glass storycam-script-card relative overflow-hidden p-6 md:p-8" data-testid="story-world-script-card">
-            <div className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(circle_at_1px_1px,#fff_1px,transparent_0)] [background-size:18px_18px]" />
+            <div className="storycam-script-card-texture" />
             <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">
-                <span className="flex size-10 items-center justify-center rounded-full border border-[#00f0ff]/30 bg-[#00f0ff]/10 text-sm font-black text-[#00f0ff]">
+                <span className="storycam-script-icon">
                   文
                 </span>
                 <div>
@@ -326,7 +325,7 @@ export function StoryWorldReview({
               </button>
             </div>
 
-            <div className="relative mt-6 rounded-[1.25rem] border border-[#00f0ff]/20 bg-[#00191d]/35 px-4 py-3">
+            <div className="storycam-logline-box">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#00f0ff]">故事一句话</p>
               <p className="mt-2 text-lg font-black leading-8 text-[#eefbfc]">{storyWorld.storyWorld.script.logline}</p>
             </div>
@@ -351,7 +350,7 @@ export function StoryWorldReview({
                 </button>
               </div>
             ) : (
-              <article className="relative mt-5 max-h-[500px] overflow-y-auto rounded-[1.5rem] border border-white/10 bg-black/25 px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <article className="storycam-script-body">
                 <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-[#849495]">完整剧本</p>
                 <div className="space-y-5">
                   {scriptParagraphs.map((paragraph, index) => (
@@ -368,23 +367,26 @@ export function StoryWorldReview({
                 <p className="storycam-eyebrow">关键片段</p>
                 <span className="text-xs font-bold text-[#849495]">{storyWorld.storyWorld.script.beats.length} 段</span>
               </div>
-              <ol className="grid gap-2">
-              {storyWorld.storyWorld.script.beats.map((beat, index) => (
-                <li className="flex gap-3 rounded-[1rem] border border-white/10 bg-black/20 px-3 py-3 text-sm leading-6 text-[#b9cacb]" key={beat}>
-                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-[#00f0ff]/30 bg-[#00f0ff]/10 text-[10px] font-black text-[#00f0ff]">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <span>{beat}</span>
-                </li>
-              ))}
+              <ol className="storycam-story-beats">
+                {storyWorld.storyWorld.script.beats.map((beat, index) => (
+                  <li key={beat}>
+                    <span>
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <p>{beat}</p>
+                  </li>
+                ))}
               </ol>
             </div>
           </div>
         </div>
 
         <div className="storycam-assets-column">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-[#00f0ff]/20 bg-[#001d21]/45 px-4 py-3">
-            <p className="text-sm font-bold text-[#b9cacb]">资产图会并发提交，完成后逐张出现。</p>
+          <div className="storycam-asset-generate-banner">
+            <p>
+              <span aria-hidden="true">i</span>
+              资产图会并发提交，完成后逐张出现。
+            </p>
             <button
               className="storycam-secondary-button px-4 py-2 text-xs"
               disabled={isBatchSubmitting || Object.keys(assetImageJobs).length > 0}
@@ -395,9 +397,9 @@ export function StoryWorldReview({
             </button>
           </div>
           <section>
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="storycam-asset-section-header">
               <h2 className="text-2xl font-black text-[#e2e2e2]">角色资产</h2>
-              <span className="storycam-eyebrow">{storyWorld.storyWorld.characterAssets.length} ready</span>
+              <span className="storycam-eyebrow">{readyCharacterAssetCount} READY</span>
             </div>
             <div
               className="storycam-asset-grid storycam-asset-grid--characters"
@@ -443,9 +445,9 @@ export function StoryWorldReview({
           </section>
 
           <section>
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="storycam-asset-section-header">
               <h2 className="text-2xl font-black text-[#e2e2e2]">场景资产</h2>
-              <span className="storycam-eyebrow">{storyWorld.storyWorld.sceneAssets.length} ready</span>
+              <span className="storycam-eyebrow">{readySceneAssetCount} READY</span>
             </div>
             <div className="storycam-asset-grid storycam-asset-grid--scenes">
               {storyWorld.storyWorld.sceneAssets.slice(0, 1).map((asset, index) => {
@@ -707,6 +709,21 @@ function statusForAsset(
   }
 
   return error ? "error" : "empty";
+}
+
+function storyWorldAssetIds(storyWorld: CreateStoryWorldResponse) {
+  const character = storyWorld.artifacts.characterAssets.map((artifact) => artifact.id);
+  const scene = storyWorld.artifacts.sceneAssets.slice(0, 1).map((artifact) => artifact.id);
+
+  return {
+    all: [...character, ...scene],
+    character,
+    scene
+  };
+}
+
+function readyAssetCount(assetArtifactIds: string[], assetImages: AssetImageState) {
+  return assetArtifactIds.filter((artifactId) => Boolean(assetImages[artifactId])).length;
 }
 
 function mediaFromReadyImage(image: Extract<StoryboardImageState, { status: "ready" }>): NonNullable<AssetImageState[string]> {

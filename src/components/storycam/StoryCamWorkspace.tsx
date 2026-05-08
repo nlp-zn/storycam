@@ -1127,11 +1127,11 @@ function StoryCamProgress({
 }) {
   const progressStages = workflowStages.slice(1);
   const progressReachedIndex = Math.max(0, Math.min(progressStages.length - 1, reachedIndex - 1));
-  const activeHeight =
+  const activeSize =
     progressStages.length > 1 ? `${(progressReachedIndex / (progressStages.length - 1)) * 100}%` : "0%";
   const activeStyle = {
-    "--storycam-mobile-progress": activeHeight,
-    height: activeHeight
+    "--storycam-progress": activeSize,
+    width: activeSize
   } as CSSProperties;
 
   return (
@@ -1157,7 +1157,7 @@ function StoryCamProgress({
                 type="button"
               >
                 <span className="storycam-step-dot">{stepIndex}</span>
-                <span>{stage}</span>
+                <span className="storycam-step-label">{stage}</span>
               </button>
             </li>
           );

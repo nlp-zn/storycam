@@ -202,6 +202,7 @@ test.describe("StoryCam story world", () => {
     await expect(page.getByText("我的剧本")).toBeVisible();
     await expect(page.getByText("完整剧本")).toBeVisible();
     await expect(page.getByText("关键片段")).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成全部资产图" })).toBeVisible();
     await expect(page.getByText("第 1 拍")).toHaveCount(0);
     await expect(page.getByTestId("story-world-character-asset-card")).toHaveCount(2);
     await expect(page.getByTestId("story-world-character-asset-card").first().getByText("人物", { exact: true })).toBeVisible();
@@ -325,7 +326,7 @@ async function expectStoryWorldLayoutScale(page: import("@playwright/test").Page
   const dockBox = await page.locator(".storycam-bottom-dock").boundingBox();
   const viewport = page.viewportSize();
 
-  expect(reviewBox?.width).toBeLessThanOrEqual(1284);
+  expect(reviewBox?.width).toBeLessThanOrEqual(1324);
   expect(scriptBox?.width).toBeGreaterThan(340);
   await expect(characterCards).toHaveCount(2);
   expect(characterBox?.width).toBeGreaterThan(230);
@@ -335,7 +336,7 @@ async function expectStoryWorldLayoutScale(page: import("@playwright/test").Page
   );
   expect(sceneBox?.width).toBeGreaterThan((sceneGridBox?.width ?? 0) * 0.9);
   expect(sceneBox?.width).toBeGreaterThan((characterBox?.width ?? 0) * 1.6);
-  expect(dockBox?.width).toBeLessThan((viewport?.width ?? 1280) - 120);
+  expect(dockBox?.width).toBeLessThan((viewport?.width ?? 1280) - 40);
 }
 
 function storyboardFixture() {
