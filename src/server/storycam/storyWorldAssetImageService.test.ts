@@ -23,11 +23,13 @@ describe("story-world asset image service", () => {
 
     expect(result.value.imagesByArtifactId["character-artifact-1"]?.image).toEqual({
       placeholder: true,
+      reason: "storage_failed",
       redactedError: "Image job metadata is unavailable.",
       status: "placeholder"
     });
     expect(result.value.imagesByArtifactId["scene-artifact-1"]?.image).toEqual({
       placeholder: true,
+      reason: "storage_failed",
       redactedError: "Image job metadata is unavailable.",
       status: "placeholder"
     });

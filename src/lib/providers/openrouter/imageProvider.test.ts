@@ -143,6 +143,16 @@ describe("openrouter-image-provider", () => {
 
     expect(result).toMatchObject({
       coreGroupId: "core-group-1",
+      image: {
+        mediaId: "media-1",
+        mimeType: "image/png",
+        placeholder: false,
+        signedUrl: expect.stringMatching(
+          /^https:\/\/storycam\.example\/signed\/storycam-generated\/users\/user-1\/sessions\/session-1\/generated\/storyboards\/.+\.png$/
+        ),
+        signedUrlExpiresIn: 300,
+        status: "ready"
+      },
       placeholder: false,
       status: "ready"
     });
@@ -197,6 +207,11 @@ describe("openrouter-image-provider", () => {
 
     expect(result).toEqual({
       coreGroupId: "core-group-1",
+      image: {
+        placeholder: true,
+        reason: "provider_failed",
+        status: "placeholder"
+      },
       media: null,
       placeholder: true,
       reason: "provider_failed",
@@ -234,6 +249,10 @@ class FakeSupabaseClient {
 
   readonly storage = {
     from: (bucket: string) => ({
+      createSignedUrl: (path: string) => Promise.resolve({
+        data: { signedUrl: `https://storycam.example/signed/${bucket}/${path}` },
+        error: null
+      }),
       upload: (path: string, body: Uint8Array, options: { contentType: string; upsert: boolean }) => {
         this.uploads.push({ bucket, byteSize: body.byteLength, contentType: options.contentType, path, upsert: options.upsert });
         return Promise.resolve({
