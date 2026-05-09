@@ -101,7 +101,5 @@ export const workflowStages = [
   "输入创意",
   "故事世界",
   "核心分镜",
-  "片段生成",
-  "片段确认",
-  "导出"
+  "片段生成"
 ] as const;

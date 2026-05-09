@@ -590,9 +590,8 @@ function formatProjectDate(value: string) {
 function projectStepLabel(step: RecentStoryCamProject["currentStep"]) {
   switch (step) {
     case "export":
-      return "最终作品";
+      return "片段已保存";
     case "clip-review":
-      return "片段确认";
     case "clip-generation":
       return "片段生成";
     case "core-storyboard":

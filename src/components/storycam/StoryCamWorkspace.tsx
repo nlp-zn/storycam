@@ -2,12 +2,9 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClipGenerationStatus } from "@/components/storycam/ClipGenerationStatus";
-import { ClipReview } from "@/components/storycam/ClipReview";
+import { ClipGenerationWorkspace } from "@/components/storycam/ClipGenerationWorkspace";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
-import { FinalWorkPanel } from "@/components/storycam/FinalWorkPanel";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
-import { ProviderSendConfirm } from "@/components/storycam/ProviderSendConfirm";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
 import {
   confirmedArtifactVersionsForClip,
@@ -48,9 +45,7 @@ const stepPaths = [
   "/storycam/input",
   "/storycam/story-world",
   "/storycam/core-storyboard",
-  "/storycam/clip-generation",
-  "/storycam/clip-review",
-  "/storycam/export"
+  "/storycam/clip-generation"
 ] as const;
 
 type StoryWorldAssetImage = NonNullable<GenerateStoryWorldAssetImageResponse["media"]>;
@@ -262,6 +257,10 @@ export function StoryCamWorkspace() {
     if (window.location.pathname === "/" || window.location.pathname === "/storycam") {
       window.history.replaceState(null, "", stepPaths[0]);
     }
+
+    if (window.location.pathname === "/storycam/clip-review" || window.location.pathname === "/storycam/export") {
+      window.history.replaceState(null, "", stepPaths[3]);
+    }
   }, []);
 
   useEffect(() => {
@@ -371,7 +370,7 @@ export function StoryCamWorkspace() {
     return () => {
       canceled = true;
     };
-  }, [clipJob?.id, clipJob?.outputArtifactId, clipJob?.outputPreview, clipJob?.status]);
+  }, [clipJob]);
 
   useEffect(() => {
     const imageJobIds = collectStoryboardImageJobIds(storyboard, expansion);
@@ -770,7 +769,7 @@ export function StoryCamWorkspace() {
 
   async function createFinalWorkFromAcceptedClip() {
     if (!clipJob?.outputArtifactId || !storyboard) {
-      return;
+      return null;
     }
 
     try {
@@ -788,9 +787,11 @@ export function StoryCamWorkspace() {
       setFinalWork(nextFinalWork);
       setSelectedStepIndex(null);
       setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
-      syncStepPath(5);
+      syncStepPath(3);
+      return nextFinalWork;
     } catch {
       setStoryboardMessage("最终作品生成失败，请稍后再试。");
+      return null;
     } finally {
       setIsFinalWorkSubmitting(false);
     }
@@ -798,7 +799,7 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
-  const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld });
+  const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, finalWork, storyboard, storyWorld });
   const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
 
   useEffect(() => {
@@ -812,32 +813,27 @@ export function StoryCamWorkspace() {
 
     return () => window.removeEventListener("popstate", handlePopState);
   }, [reachedStepIndex]);
-  const generationPanel = activeStepIndex >= 4 && clipJob?.status === "succeeded" && clipJob.outputArtifactId ? (
-    <ClipReview
-      clipArtifactId={clipJob.outputArtifactId}
-      durationSeconds={clipJob.outputPreview?.durationSeconds ?? selectedGroup?.estimatedClipDurationSeconds ?? 15}
-      isSubmittingFinalWork={isFinalWorkSubmitting}
-      onCreateFinalWork={createFinalWorkFromAcceptedClip}
-      onRetake={retryClipGeneration}
-      preview={clipJob.outputPreview}
-      title={selectedGroup?.title}
-    />
-  ) : activeStepIndex >= 3 && clipJob ? (
-    <ClipGenerationStatus
-      isDeletingStory={isDeletingStory}
-      job={clipJob}
-      onCancel={cancelClipJob}
-      onDeleteStory={deleteCurrentStory}
-      onRetry={retryClipGeneration}
-    />
-  ) : activeStepIndex >= 3 && clipConfirmationSummary ? (
-    <ProviderSendConfirm
-      confirmationSummary={clipConfirmationSummary}
-      isSubmitting={isClipSubmitting}
-      onCancel={() => setClipConfirmationSummary(null)}
-      onConfirm={confirmClipGeneration}
-    />
-  ) : null;
+  const clipGenerationPanel =
+    activeStepIndex >= 3 && (clipConfirmationSummary || clipJob || finalWork) ? (
+      <ClipGenerationWorkspace
+        clipConfirmationSummary={clipConfirmationSummary}
+        clipJob={clipJob}
+        durationSeconds={clipJob?.outputPreview?.durationSeconds ?? finalWork?.preview?.durationSeconds ?? selectedGroup?.estimatedClipDurationSeconds ?? 15}
+        finalWork={finalWork}
+        isClipSubmitting={isClipSubmitting}
+        isDeletingStory={isDeletingStory}
+        isFinalWorkSubmitting={isFinalWorkSubmitting}
+        onBackToCoreStoryboard={() => navigateToStep(2)}
+        onCancelClip={cancelClipJob}
+        onCancelProviderSend={() => setClipConfirmationSummary(null)}
+        onConfirmProviderSend={confirmClipGeneration}
+        onCreateFinalWork={createFinalWorkFromAcceptedClip}
+        onDeleteStory={deleteCurrentStory}
+        onRetake={retryClipGeneration}
+        posterImageUrl={selectedGroup?.representativeImage.status === "ready" ? selectedGroup.representativeImage.signedUrl : undefined}
+        title={selectedGroup?.title}
+      />
+    ) : null;
   function navigateToStep(index: number) {
     if (index > reachedStepIndex) {
       return;
@@ -872,14 +868,11 @@ export function StoryCamWorkspace() {
     </div>
   ) : storyWorld ? (
     <div>
-      {activeStepIndex >= 5 && finalWork ? (
-        <FinalWorkPanel finalWork={finalWork} />
-      ) : generationPanel ? (
-        generationPanel
+      {clipGenerationPanel ? (
+        clipGenerationPanel
       ) : activeStepIndex >= 2 && storyboard && !isStoryWorldEditorOpen ? (
         <CoreFramesStage
           expansion={expansion}
-          generationPanel={generationPanel}
           isBusy={isExpansionLoading || isClipSubmitting}
           isExpansionLoading={isExpansionLoading}
           isRegeneratingFrame={(frameNumber) => regeneratingFrameKey === `${selectedCoreGroupIndex ?? 0}:${frameNumber}`}
@@ -925,12 +918,14 @@ export function StoryCamWorkspace() {
   const isInputStep = activeStepIndex === 0;
 
   return (
-    <main className="storycam-page">
-      <StoryCamTopBar onHome={goHome} />
+    <main className={`storycam-page ${isInputStep ? "" : "storycam-page--with-progress"}`}>
+      <StoryCamTopBar
+        activeStepIndex={isInputStep ? null : activeStepIndex}
+        onHome={goHome}
+        onSelectStep={navigateToStep}
+        reachedStepIndex={reachedStepIndex}
+      />
       <div className={`storycam-shell ${isInputStep ? "storycam-shell--centered" : ""}`}>
-        {isInputStep ? null : (
-          <StoryCamProgress activeIndex={activeStepIndex} onSelectStep={navigateToStep} reachedIndex={reachedStepIndex} />
-        )}
         <div className="storycam-workspace-surface">{mainSurface}</div>
       </div>
     </main>
@@ -940,26 +935,13 @@ export function StoryCamWorkspace() {
 type CurrentStepInput = {
   clipConfirmationSummary: string | null;
   clipJob: GenerationJobSummary | null;
-  expansion: ExpandStoryboardGroupResponse | null;
   finalWork: FinalWorkResponse | null;
   storyboard: CreateStoryboardResponse | null;
   storyWorld: CreateStoryWorldResponse | null;
 };
 
-function currentStepIndex({ clipConfirmationSummary, clipJob, expansion, finalWork, storyboard, storyWorld }: CurrentStepInput) {
-  if (finalWork) {
-    return 5;
-  }
-
-  if (clipJob?.status === "succeeded") {
-    return 4;
-  }
-
-  if (clipJob) {
-    return 3;
-  }
-
-  if (clipConfirmationSummary) {
+function currentStepIndex({ clipConfirmationSummary, clipJob, finalWork, storyboard, storyWorld }: CurrentStepInput) {
+  if (finalWork || clipJob || clipConfirmationSummary) {
     return 3;
   }
 
@@ -1010,7 +992,15 @@ function syncStepPath(index: number) {
 function stepIndexFromPath(pathname: string) {
   const index = stepPaths.findIndex((path) => path === pathname);
 
-  return index >= 0 ? index : null;
+  if (index >= 0) {
+    return index;
+  }
+
+  if (pathname === "/storycam/clip-review" || pathname === "/storycam/export") {
+    return 3;
+  }
+
+  return null;
 }
 
 type RestoredCurrentStep = Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>["currentStep"];
@@ -1024,9 +1014,8 @@ function stepIndexForRestoredCurrentStep(step: RestoredCurrentStep) {
     case "clip-generation":
       return 3;
     case "clip-review":
-      return 4;
     case "export":
-      return 5;
+      return 3;
   }
 }
 
@@ -1066,12 +1055,27 @@ function readyExpandedFrameCount(group: CreateStoryboardResponse["storyboard"]["
   return (group.expandedStoryboardImages ?? []).filter((image) => image.status === "ready").length;
 }
 
-function StoryCamTopBar({ onHome }: { onHome: () => void }) {
+function StoryCamTopBar({
+  activeStepIndex,
+  onHome,
+  onSelectStep,
+  reachedStepIndex
+}: {
+  activeStepIndex: number | null;
+  onHome: () => void;
+  onSelectStep: (index: number) => void;
+  reachedStepIndex: number;
+}) {
   return (
-    <header className="storycam-topbar">
+    <header className={`storycam-topbar ${activeStepIndex === null ? "" : "storycam-topbar--with-progress"}`}>
       <button aria-label="返回首页" className="storycam-brand" onClick={onHome} type="button">
         StoryCam 导演工作台
       </button>
+      {activeStepIndex === null ? null : (
+        <div className="storycam-topbar-progress">
+          <StoryCamProgress activeIndex={activeStepIndex} onSelectStep={onSelectStep} reachedIndex={reachedStepIndex} />
+        </div>
+      )}
       <div className="storycam-topbar-actions">
         <span className="storycam-topbar-status">
           <span aria-hidden="true">●</span>
@@ -1126,7 +1130,7 @@ function StoryCamProgress({
                 onClick={() => onSelectStep(stepIndex)}
                 type="button"
               >
-                <span className="storycam-step-dot">{stepIndex}</span>
+                <span className="storycam-step-dot">{stepIndex < activeIndex ? "✓" : stepIndex}</span>
                 <span className="storycam-step-label">{stage}</span>
               </button>
             </li>
