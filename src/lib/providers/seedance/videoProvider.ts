@@ -1,5 +1,6 @@
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
 import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
+import type { StoryCamVideoOutputResolution } from "@/features/storycam/domain/videoSettings";
 
 export type SeedanceVideoGenerationInput = {
   callbackUrl?: string;
@@ -8,6 +9,7 @@ export type SeedanceVideoGenerationInput = {
   prompt: string;
   ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "adaptive";
   referenceImageUrls?: string[];
+  resolution?: StoryCamVideoOutputResolution;
   seed?: number;
   watermark?: boolean;
 };
@@ -287,6 +289,7 @@ function toCreateTaskBody(input: SeedanceVideoGenerationInput, model: string) {
     generate_audio: input.generateAudio ?? false,
     model,
     ratio: input.ratio ?? "16:9",
+    resolution: input.resolution ?? "720p",
     ...(input.seed !== undefined ? { seed: input.seed } : {}),
     watermark: input.watermark ?? false
   };

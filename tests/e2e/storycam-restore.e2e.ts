@@ -38,12 +38,14 @@ test.describe("StoryCam session restore", () => {
 
     await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
     await expect(page).toHaveURL(/\/storycam\/input$/);
-    await expect(page.getByRole("button", { name: /最近项目/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "最近项目" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "打开" })).toBeVisible();
     expect(currentRestoreCalls).toBe(0);
 
-    await page.getByRole("button", { name: /最近项目/ }).click();
-    await expect(page.getByRole("dialog", { name: "最近项目" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+    await page.getByRole("button", { name: "打开" }).click();
+    const recentProjectsDialog = page.getByRole("dialog", { name: "最近项目" });
+    await expect(recentProjectsDialog).toBeVisible();
+    await expect(recentProjectsDialog.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
     await page.getByRole("button", { name: "继续创作" }).click();
 
     await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
@@ -106,6 +108,30 @@ test.describe("StoryCam session restore", () => {
     await expect(page.getByAltText("未发送短信 主分镜图")).toBeVisible();
     await expect(page.getByAltText("未发送短信 扩展分镜 1")).toBeVisible();
     expect(storyboardCalls).toBe(0);
+  });
+
+  test("maps legacy clip review and export routes into the merged clip generation workbench", async ({ page }) => {
+    await mockAuthenticated(page);
+    await mockRestore(page, {
+      clipJob: restoredClipJob(),
+      coreGroupTargetCount: 1,
+      currentStep: "export",
+      finalWork: restoredFinalWork(),
+      ok: true,
+      restored: true,
+      sessionId: "session-restored-2",
+      storyboard: restoredStoryboard(),
+      storyWorld: restoredStoryWorld(),
+      storyWorldConfirmed: true
+    });
+
+    await page.goto("/storycam/export");
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByRole("heading", { name: "生成片段" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" }).first()).toBeVisible();
+    await expect(page.getByText("打开最终作品")).toBeVisible();
   });
 });
 
@@ -284,6 +310,39 @@ function restoredStoryboard() {
         tone: "韩剧雨夜，私人回忆",
         version: 1
       }
+    }
+  };
+}
+
+function restoredClipJob() {
+  return {
+    attempts: 0,
+    id: "job-restored-final",
+    outputArtifactId: "clip-artifact-restored",
+    outputPreview: {
+      durationSeconds: 15,
+      mimeType: "video/mp4",
+      signedUrl: "data:video/mp4;base64,AAAA",
+      signedUrlExpiresIn: 300
+    },
+    providerKind: "video",
+    providerName: "mock",
+    sessionId: "session-restored-2",
+    status: "succeeded",
+    type: "video_clip"
+  };
+}
+
+function restoredFinalWork() {
+  return {
+    finalWork: { id: "final-work-restored", state: "ready", type: "final_work", version: 1 },
+    media: { byteSize: 1024, id: "media-final-restored", kind: "final_work", mimeType: "video/mp4" },
+    ok: true,
+    preview: {
+      durationSeconds: 15,
+      mimeType: "video/mp4",
+      signedUrl: "data:video/mp4;base64,AAAA",
+      signedUrlExpiresIn: 300
     }
   };
 }

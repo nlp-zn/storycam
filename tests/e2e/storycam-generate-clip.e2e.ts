@@ -145,6 +145,8 @@ test.describe("StoryCam generate clip", () => {
     await expect(page.getByText("redactedPromptSummary")).toHaveCount(0);
 
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByRole("heading", { name: "生成片段" })).toBeVisible();
     await expect(page.getByText("任务 job-1")).toBeVisible();
     expect(generateCalls).toBe(1);
 

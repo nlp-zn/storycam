@@ -45,6 +45,7 @@ test.describe("StoryCam visual smoke", () => {
 
     await page.getByRole("button", { name: "用这一组生成片段" }).click();
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByText("任务 job-1")).toBeVisible();
     await page.getByRole("button", { name: "取消生成" }).click();
     await expect(page.getByText("已取消", { exact: true })).toBeVisible();
@@ -63,7 +64,9 @@ test.describe("StoryCam visual smoke", () => {
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "生成最终作品" }).first().click();
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" }).first()).toBeVisible();
     await expect(page.getByText("打开最终作品")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });

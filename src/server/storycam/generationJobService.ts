@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { clipPromptPacketSchema, generatedClipSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { ClipPromptPacket } from "@/features/storycam/domain/artifacts";
+import { storyCamSeedanceOutputResolution, type StoryCamVideoOutputResolution } from "@/features/storycam/domain/videoSettings";
 import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
 import type { Database, GenerationJobRow } from "@/server/db/types";
@@ -59,6 +60,7 @@ export type GenerationJobServiceVideoInput = {
   prompt: string;
   ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "adaptive";
   referenceImageUrls?: string[];
+  resolution?: StoryCamVideoOutputResolution;
   watermark?: boolean;
 };
 export type GenerationJobServiceVideoOutput = {
@@ -582,6 +584,7 @@ async function toVideoProviderInput(
     prompt: packet.providerPrompt ?? packet.redactedPromptSummary,
     ratio: "16:9",
     referenceImageUrls: referenceImageUrls.filter((url): url is string => Boolean(url)),
+    resolution: storyCamSeedanceOutputResolution,
     watermark: false
   };
 }

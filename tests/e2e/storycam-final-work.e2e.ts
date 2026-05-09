@@ -199,13 +199,16 @@ test.describe("StoryCam final work", () => {
     await page.getByRole("button", { name: "用这一组生成片段" }).click();
     await page.getByRole("button", { name: "确认发送生成片段" }).click();
 
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByRole("heading", { name: "片段已生成" })).toBeVisible();
     await page.getByRole("button", { name: "重拍这个片段" }).click();
-    await expect(page.getByText("clip-artifact-2")).toBeVisible();
+    await expect(page.getByText("任务 job-2")).toBeVisible();
     expect(generateCalls).toBe(2);
 
     await page.getByRole("button", { name: "生成最终作品" }).first().click();
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" }).first()).toBeVisible();
     await expect(page.getByText("打开最终作品")).toBeVisible();
     await expect(page.getByText("分享")).toHaveCount(0);
     await expect(page.getByText("prompt packet")).toHaveCount(0);

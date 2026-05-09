@@ -50,6 +50,7 @@ describe("seedance video provider", () => {
           generate_audio: false,
           model: "doubao-seedance-2-0-260128",
           ratio: "16:9",
+          resolution: "720p",
           watermark: false
         }),
         headers: expect.objectContaining({
