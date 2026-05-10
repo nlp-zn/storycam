@@ -149,28 +149,174 @@ button:disabled {
 .storycam-topbar-actions {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 
-.storycam-topbar-status {
-  display: grid;
-  place-items: center;
-  gap: 5px;
-  color: var(--storycam-primary);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.storycam-topbar-status span:first-child {
+.storycam-account-entry {
+  position: relative;
   display: flex;
-  width: 40px;
-  height: 40px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.storycam-account-button {
+  display: inline-flex;
+  min-width: 112px;
+  max-width: 230px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   border: 1px solid rgba(0, 240, 255, 0.42);
   border-radius: 9999px;
+  padding: 6px 14px 6px 7px;
   background: rgba(0, 240, 255, 0.05);
+  color: var(--storycam-primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
   box-shadow: 0 0 18px rgba(0, 240, 255, 0.16);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.storycam-account-button:hover:not(:disabled),
+.storycam-account-button:focus-visible {
+  border-color: rgba(0, 240, 255, 0.78);
+  background: rgba(0, 240, 255, 0.1);
+  color: #dbfcff;
+}
+
+.storycam-account-button:focus-visible {
+  outline: 2px solid rgba(0, 240, 255, 0.62);
+  outline-offset: 4px;
+}
+
+.storycam-account-button:disabled {
+  cursor: default;
+  opacity: 0.78;
+}
+
+.storycam-account-button--icon-only {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  min-height: 44px;
+  gap: 0;
+  border-color: transparent;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.storycam-account-button--icon-only:hover:not(:disabled),
+.storycam-account-button--icon-only:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  color: #dbfcff;
+}
+
+.storycam-account-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(0, 240, 255, 0.38);
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.38);
+  color: var(--storycam-primary);
+  font-size: 11px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.storycam-account-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storycam-account-button--icon-only .storycam-account-label {
+  display: none;
+}
+
+.storycam-account-error {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: max-content;
+  max-width: 220px;
+  border: 1px solid rgba(255, 75, 137, 0.3);
+  border-radius: 9999px;
+  background: rgba(28, 7, 15, 0.92);
+  padding: 6px 10px;
+  color: #ffd9e0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  box-shadow: 0 0 18px rgba(255, 75, 137, 0.18);
+}
+
+.storycam-account-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 70;
+  width: min(240px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 14px;
+  background: rgba(9, 15, 17, 0.96);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.44), 0 0 24px rgba(0, 240, 255, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.storycam-account-menu-email {
+  overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 14px 10px;
+  color: rgba(219, 252, 255, 0.72);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storycam-account-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #ffd9e0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.storycam-account-menu-item:hover:not(:disabled),
+.storycam-account-menu-item:focus-visible {
+  background: rgba(255, 75, 137, 0.12);
+  color: #ffffff;
+}
+
+.storycam-account-menu-item:focus-visible {
+  outline: 2px solid rgba(255, 75, 137, 0.5);
+  outline-offset: -2px;
+}
+
+.storycam-account-menu-item:disabled {
+  cursor: default;
+  opacity: 0.64;
 }
 
 .storycam-stepper {
@@ -2224,13 +2370,36 @@ button:disabled {
     gap: 8px;
   }
 
-  .storycam-topbar-status {
-    font-size: 9px;
+  .storycam-account-button {
+    min-width: 76px;
+    max-width: 118px;
+    min-height: 40px;
+    gap: 7px;
+    padding: 5px 10px 5px 5px;
+    font-size: 10px;
   }
 
-  .storycam-topbar-status span:first-child {
-    width: 32px;
-    height: 32px;
+  .storycam-account-button--icon-only {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    min-height: 40px;
+    padding: 0;
+  }
+
+  .storycam-account-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 10px;
+  }
+
+  .storycam-account-error {
+    max-width: 180px;
+    white-space: normal;
+  }
+
+  .storycam-account-menu {
+    width: min(220px, calc(100vw - 24px));
   }
 
   .storycam-topbar-progress {

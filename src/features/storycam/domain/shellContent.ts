@@ -2,24 +2,36 @@ export const directorChoices = ["更遗憾一点", "像私人回忆", "少说话
 
 export const storyModeEntries = [
   {
+    id: "personal-memory",
     label: "私人记忆",
-    status: "当前主线",
-    text: "把一句真实念头拍成 10-15 秒私人短片。"
+    sampleIdea: "我想把暗恋拍成韩剧雨夜",
+    text: "把一句真实念头拍成 10-15 秒私人短片。",
+    directorChoices,
+    defaultChoices: ["像私人回忆"]
   },
   {
+    id: "pet-theater",
     label: "宠物小剧场",
-    status: "暂不完整支持",
-    text: "可先记录想法，后续补齐宠物稳定角色和动作。"
+    sampleIdea: "我想拍一只小狗等主人回家的十秒小剧场",
+    text: "让宠物变成这一幕里的主角。",
+    directorChoices: ["等它回头", "日常可爱", "少说话", "加旁白"],
+    defaultChoices: ["等它回头"]
   },
   {
+    id: "novel-character",
     label: "小说角色",
-    status: "暂不完整支持",
-    text: "适合角色气质预演，第一版不做完整连载。"
+    sampleIdea: "我想让我的小说女主第一次走进雨夜城市",
+    text: "把角色出场拍成短短一段预告。",
+    directorChoices: ["初登场感", "世界观更强", "少说话", "加旁白"],
+    defaultChoices: ["初登场感"]
   },
   {
+    id: "emotion-short",
     label: "情绪短片",
-    status: "暂不完整支持",
-    text: "可尝试氛围方向，视频生成仍以主线流程为准。"
+    sampleIdea: "我想把一种说不出口的难过拍成风里的短片",
+    text: "把一种情绪变成可看见的画面。",
+    directorChoices: ["留白多一点", "像一阵风", "少说话", "加旁白"],
+    defaultChoices: ["留白多一点"]
   }
 ] as const;
 

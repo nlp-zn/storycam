@@ -2,6 +2,36 @@ import { expect, test } from "@playwright/test";
 import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam story input", () => {
+  test("selects rounded story mode templates without overwriting custom writing", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.goto("/");
+
+    const ideaInput = page.getByLabel("你的这一幕");
+    const memoryMode = page.getByRole("button", { name: /私人记忆/ });
+    const petMode = page.getByRole("button", { name: /宠物小剧场/ });
+    const novelMode = page.getByRole("button", { name: /小说角色/ });
+
+    await expect(memoryMode).toHaveAttribute("aria-pressed", "true");
+    await expect(ideaInput).toHaveValue("我想把暗恋拍成韩剧雨夜");
+    await expect(page.getByRole("button", { name: "移除 像私人回忆" })).toHaveAttribute("aria-pressed", "true");
+
+    await ideaInput.fill("");
+    await petMode.click();
+
+    await expect(petMode).toHaveAttribute("aria-pressed", "true");
+    await expect(ideaInput).toHaveValue("我想拍一只小狗等主人回家的十秒小剧场");
+    await expect(page.getByRole("button", { name: "移除 等它回头" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { exact: true, name: "像私人回忆" })).toHaveCount(0);
+
+    await ideaInput.fill("这是我自己写的一段，不要被模板覆盖");
+    await novelMode.click();
+
+    await expect(novelMode).toHaveAttribute("aria-pressed", "true");
+    await expect(ideaInput).toHaveValue("这是我自己写的一段，不要被模板覆盖");
+    await expect(page.getByRole("button", { name: "移除 初登场感" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText("已切换方向，不会覆盖你的文字。")).toBeVisible();
+  });
+
   test("story input uploads a photo preview and calls story-world", async ({ page }) => {
     let uploadCalled = false;
     let storyWorldCalled = false;

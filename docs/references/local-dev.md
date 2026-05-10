@@ -144,6 +144,7 @@ STORYCAM_LOCAL_AUTH_BYPASS=1
 ```
 
 This bypass only works outside production and only when `NEXT_PUBLIC_SUPABASE_URL` points to `localhost`, `127.0.0.1`, or `::1`. The server creates or reuses a local Supabase Auth user named `storycam-local-dev@example.test`, so StoryCam metadata still belongs to an `auth.users.id`.
+Clicking the in-app sign-out button opts the current browser out of local auth bypass with a session cookie, so logout can still be tested without changing `.env.local`. Clear site cookies or open a fresh browser session to use the bypass user again.
 
 For manual browser testing against a dedicated hosted Supabase dev/staging project, you may opt in to the same dev user without Google login:
 
@@ -158,10 +159,16 @@ Change `STORYCAM_LOCAL_AUTH_BYPASS_EMAIL` when you need the browser to reuse an 
 
 ## Google OAuth Local Setup
 
-Create a Google OAuth web client and add this authorized redirect URI:
+Create a Google OAuth web client for the Supabase Auth project you are testing against. For the local Supabase CLI stack, add this authorized redirect URI:
 
 ```text
 http://127.0.0.1:54321/auth/v1/callback
+```
+
+For a dedicated hosted Supabase test/staging project, add that project's Supabase Auth callback instead:
+
+```text
+https://<test-ref>.supabase.co/auth/v1/callback
 ```
 
 Use these authorized JavaScript origins for local browser testing:
@@ -190,6 +197,24 @@ supabase start
 ```
 
 Then start the app with `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321` and open `http://localhost:3000`. StoryCam redirects Google login back to `/auth/callback`, exchanges the OAuth code for a Supabase session, and returns to `/`.
+
+For local browser testing against a hosted test/staging Supabase project, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to that project, enable Google under Supabase Auth Providers, and add the exact StoryCam callback URL to Supabase Auth URL Configuration:
+
+```text
+http://localhost:3000/auth/callback
+http://127.0.0.1:3000/auth/callback
+```
+
+For production, configure the production Supabase project with:
+
+```text
+Site URL: https://<production-origin>
+Redirect URL: https://<production-origin>/auth/callback
+Google authorized JavaScript origin: https://<production-origin>
+Google authorized redirect URI: https://<prod-ref>.supabase.co/auth/v1/callback
+```
+
+Do not commit Google OAuth client secrets. Keep them in the Supabase dashboard for hosted projects or in local shell environment variables for the Supabase CLI stack.
 
 ## 10-Minute Mock Flow
 
