@@ -63,6 +63,8 @@ Prefer small, indexed, cross-linked docs over long instruction blobs. If you add
 
 When the user asks for "PR gate", "ship review", "pre-PR check", "review before PR", or similar, run the StoryCam PR gate from `docs/PR_REVIEW.md`.
 
+When the StoryCam Codex hook injects a PR gate reminder after a successful Codex-run `git push`, ask the user whether to run the StoryCam PR gate before ending the turn. Do not run the AI review without confirmation.
+
 Use three independent perspectives:
 
 - `code-reviewer` for correctness, readability, architecture, security, and performance.
