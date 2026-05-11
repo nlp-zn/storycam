@@ -11,11 +11,12 @@ Before opening or merging the PR, ask Codex:
 
 Run the StoryCam PR gate on the current diff.
 
-Use three independent review perspectives:
-1. code-reviewer: correctness, readability, architecture, security, performance
-2. security-auditor: auth, RLS, storage, provider secrets, logs, signed URLs, external inputs
-3. test-engineer: test coverage, edge cases, error paths, concurrency, E2E needs
+Produce three independent reviewer reports:
+1. code-reviewer: docs/pr-reviewers/code-reviewer.md
+2. security-auditor: docs/pr-reviewers/security-auditor.md
+3. test-engineer: docs/pr-reviewers/test-engineer.md
 
-Return GO/NO-GO with blockers, recommended fixes, accepted risks,
-verification evidence, coverage gaps, and rollback plan.
+Merge them into GO/NO-GO with deterministic evidence, blockers,
+recommended fixes, accepted risks, coverage gaps, verification evidence,
+and rollback notes.
 MSG

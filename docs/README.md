@@ -16,6 +16,7 @@ This directory is the source of truth for StoryCam. The repo knowledge structure
 - `FRONTEND.md` — frontend implementation rules.
 - `PLANS.md` — how to create, update, and retire plans.
 - `PR_REVIEW.md` — PR quality gate, Codex review flow, CI checks, and optional local hook.
+- `pr-reviewers/` — fixed prompts for the three independent PR Gate reviewer perspectives.
 - `PRODUCT_SENSE.md` — product judgment and positioning.
 - `QUALITY_SCORE.md` — how to score readiness and quality.
 - `RELIABILITY.md` — jobs, provider failures, recovery, observability.
@@ -27,6 +28,7 @@ This directory is the source of truth for StoryCam. The repo knowledge structure
 ## Directories
 
 - `product-specs/` — product specs and product index.
+- `pr-reviewers/` — code-reviewer, security-auditor, and test-engineer prompt contracts.
 - `exec-plans/` — active and completed implementation plans plus tech debt tracker.
 - `design-docs/` — design briefs, design references, and core beliefs.
 - `generated/` — generated schemas and machine-readable summaries.
