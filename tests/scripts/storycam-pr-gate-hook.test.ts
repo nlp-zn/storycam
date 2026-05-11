@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const repoRoot = resolve(__dirname, "../..");
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const hookScript = resolve(repoRoot, ".codex/hooks/storycam_pr_gate_reminder.py");
 
 function gitOutput(args: string[]): string {
