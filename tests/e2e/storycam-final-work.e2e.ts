@@ -197,7 +197,6 @@ test.describe("StoryCam final work", () => {
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
     await page.getByRole("button", { name: "用这一组生成片段" }).click();
-    await page.getByRole("button", { name: "确认发送生成片段" }).click();
 
     await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByRole("heading", { name: "片段已生成" })).toBeVisible();

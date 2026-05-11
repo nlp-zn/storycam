@@ -53,6 +53,8 @@ const placeholderImage: StoryboardImageState = {
 };
 const emptyExpandedImages: StoryboardImageState[] = [];
 const emptyExpansionCards: ExpandStoryboardGroupResponse["expansionCards"] = [];
+const maxAudioCueCount = 6;
+const audioCueSeparatorPattern = /[、/，,；;]+/;
 
 export function CoreFramesStage({
   expansion,
@@ -95,6 +97,8 @@ export function CoreFramesStage({
   );
   const readyFrames = frames.filter((frame) => frame.image?.status === "ready");
   const previewFrame = frames.find((frame) => frame.frameNumber === previewFrameNumber && frame.image?.status === "ready");
+  const audioSummary = audioSummaryForScript(selectedScript);
+  const canStartExpansion = canAttemptExpansionFromImage(selectedGroup?.representativeImage);
 
   if (!selectedGroup) {
     return null;
@@ -114,8 +118,37 @@ export function CoreFramesStage({
   }
 
   function expandSelectedGroup() {
+    if (!canStartExpansion) {
+      return;
+    }
+
     onSelectGroup(activeIndex);
     onConfirmExpansion(activeIndex);
+  }
+
+  function renderExpansionSlots() {
+    if (!hasStartedExpansion) {
+      return null;
+    }
+
+    return canvasSlots.map((slot) => {
+      const frame = frames.find((item) => item.frameNumber === slot.frameNumber);
+
+      return (
+        <ExpansionSlot
+          frame={frame}
+          hasStartedExpansion={hasStartedExpansion}
+          isGenerating={isExpansionLoading || frame?.image?.status === "generating"}
+          isRegenerating={isRegeneratingFrame(slot.frameNumber)}
+          key={slot.position}
+          onMediaLoadError={onMediaLoadError}
+          onPreview={() => setPreviewFrameNumber(slot.frameNumber)}
+          onRegenerate={() => onRegenerateFrame(activeIndex, slot.frameNumber)}
+          position={slot.position}
+          selectedGroupTitle={selectedGroup.title}
+        />
+      );
+    });
   }
 
   return (
@@ -144,25 +177,9 @@ export function CoreFramesStage({
           </div>
 
           <div className="storycam-expansion-board storycam-core-inline-board" data-expanded={hasStartedExpansion ? "true" : "false"}>
-            {canvasSlots.map((slot) => {
-              const frame = frames.find((item) => item.frameNumber === slot.frameNumber);
-
-              return (
-                <ExpansionSlot
-                  frame={frame}
-                  hasStartedExpansion={hasStartedExpansion}
-                  isGenerating={isExpansionLoading || frame?.image?.status === "generating"}
-                  isRegenerating={isRegeneratingFrame(slot.frameNumber)}
-                  key={slot.position}
-                  onMediaLoadError={onMediaLoadError}
-                  onPreview={() => setPreviewFrameNumber(slot.frameNumber)}
-                  onRegenerate={() => onRegenerateFrame(activeIndex, slot.frameNumber)}
-                  position={slot.position}
-                  selectedGroupTitle={selectedGroup.title}
-                />
-              );
-            })}
+            {renderExpansionSlots()}
             <CoreSlot
+              canStartExpansion={canStartExpansion}
               frame={frames[0]}
               hasStartedExpansion={hasStartedExpansion}
               isLoading={isExpansionLoading}
@@ -199,7 +216,7 @@ export function CoreFramesStage({
           <p className="storycam-core-script-more">共 9 个分镜，滚动查看更多</p>
           <div className="storycam-core-audio-note">
             <p className="storycam-eyebrow">音频提示</p>
-            <span>音频：雨声 / 门铃 / 脚步 / 环境音乐 / 低声对白</span>
+            <span>{audioSummary}</span>
           </div>
         </aside>
       </div>
@@ -245,6 +262,7 @@ export function CoreFramesStage({
 }
 
 function CoreSlot({
+  canStartExpansion,
   frame,
   hasStartedExpansion,
   isLoading,
@@ -255,6 +273,7 @@ function CoreSlot({
   onRegenerate,
   selectedGroupTitle
 }: {
+  canStartExpansion: boolean;
   frame?: FrameView;
   hasStartedExpansion: boolean;
   isLoading: boolean;
@@ -266,13 +285,17 @@ function CoreSlot({
   selectedGroupTitle: string;
 }) {
   const canPreview = hasStartedExpansion && frame?.image?.status === "ready";
+  const isDisabled = isLoading || (!hasStartedExpansion && !canStartExpansion) || (hasStartedExpansion && !canPreview);
+  const canRegenerate =
+    hasStartedExpansion ||
+    (frame?.image?.status === "placeholder" && Boolean(frame.image.reason) && frame.image.reason !== "waiting_for_asset_images");
 
   return (
     <article className="storycam-expansion-slot storycam-expansion-slot--center" data-testid="storyboard-frame-01">
       <button
         aria-label={hasStartedExpansion ? "查看第 01 帧大图" : "点击中心主图生成扩展分镜"}
         className="storycam-expansion-image-button"
-        disabled={isLoading || (hasStartedExpansion && !canPreview)}
+        disabled={isDisabled}
         onClick={hasStartedExpansion ? onPreview : onConfirmExpansion}
         type="button"
       >
@@ -287,10 +310,16 @@ function CoreSlot({
       <FrameLabel frameNumber={1} label="中心主图" />
       <div className="storycam-expansion-slot-copy">
         <h3>{frame?.title ?? selectedGroupTitle}</h3>
-        <p>{hasStartedExpansion ? frame?.description : "点击中心主图，沿这一帧展开 8 张扩展分镜。"}</p>
+        <p>
+          {hasStartedExpansion
+            ? frame?.description
+            : canStartExpansion
+              ? "点击中心主图，沿这一帧展开 8 张扩展分镜。"
+              : "等待第 01 帧主分镜图生成后再展开 8 张扩展分镜。"}
+        </p>
       </div>
       {isLoading ? <FrameSpinner label="拓展中" /> : null}
-      {hasStartedExpansion ? (
+      {canRegenerate ? (
         <button
           aria-label="重生成第 01 帧"
           className="storycam-frame-retry"
@@ -345,6 +374,7 @@ function ExpansionSlot({
       >
         <StoryboardImage
           alt={`${selectedGroupTitle} 扩展分镜 ${frameNumber - 1}`}
+          hideStatusLabel={isGenerating}
           image={frame?.image}
           onMediaLoadError={onMediaLoadError}
           variant="expanded"
@@ -427,11 +457,13 @@ function FramePreviewModal({
 
 function StoryboardImage({
   alt,
+  hideStatusLabel = false,
   image,
   onMediaLoadError,
   variant
 }: {
   alt: string;
+  hideStatusLabel?: boolean;
   image?: StoryboardImageState;
   onMediaLoadError?: () => void;
   variant: "core" | "expanded";
@@ -453,7 +485,7 @@ function StoryboardImage({
 
   return (
     <div className={`storycam-cinematic-frame storycam-frame-placeholder storycam-frame-placeholder--${variant}`}>
-      <span>{storyboardImageStatusLabel(image)}</span>
+      {hideStatusLabel ? null : <span>{storyboardImageStatusLabel(image)}</span>}
     </div>
   );
 }
@@ -506,6 +538,49 @@ function storyboardImageStatusLabel(image?: StoryboardImageState) {
   }
 
   return "等待生成";
+}
+
+function canAttemptExpansionFromImage(image?: StoryboardImageState) {
+  if (image?.status === "ready") {
+    return true;
+  }
+
+  return image?.status === "placeholder" && Boolean(image.reason) && image.reason !== "waiting_for_asset_images";
+}
+
+function audioSummaryForScript(script?: StoryboardScriptView) {
+  const cues = uniqueAudioCues((script?.frames ?? []).map((frame) => frame.sound));
+
+  if (cues.length === 0) {
+    return "音频：跟随当前画面生成环境声与动作声";
+  }
+
+  return `音频：${cues.slice(0, maxAudioCueCount).join(" / ")}`;
+}
+
+function uniqueAudioCues(sounds: string[]) {
+  const seen = new Set<string>();
+  const cues: string[] = [];
+
+  for (const sound of sounds) {
+    for (const part of audioCueParts(sound)) {
+      const normalized = part.replace(/\s+/g, "");
+
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        cues.push(part);
+      }
+    }
+  }
+
+  return cues;
+}
+
+function audioCueParts(sound: string) {
+  return sound
+    .split(audioCueSeparatorPattern)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function readyExpandedFrameCount(images: StoryboardImageState[]) {

@@ -23,6 +23,7 @@ import {
   deleteStoryCamSession,
   expandStoryboardGroup,
   generateClipJob,
+  generateStoryWorldAssetImages,
   getGenerationJob,
   regenerateStoryboardFrameImage,
   restoreCurrentStoryCamSession,
@@ -64,7 +65,39 @@ type StoryWorldGenerationState =
   | { kind: "idle" }
   | { kind: "pending"; request: StoryWorldGenerationRequest }
   | { kind: "error"; message: string; request: StoryWorldGenerationRequest };
+type StoryboardGenerationRequest = {
+  coreGroupTargetCount: 1 | 2 | 3;
+  requestId: number;
+  storyWorld: CreateStoryWorldResponse;
+};
+type StoryboardGenerationState =
+  | { kind: "idle" }
+  | { kind: "pending"; request: StoryboardGenerationRequest }
+  | { kind: "error"; message: string; request: StoryboardGenerationRequest };
+type ClipGenerationRequest = {
+  coreArtifactId: string;
+  coreGroupIndex: number;
+  durationSeconds: number;
+  requestId: number;
+  sessionId: string;
+};
+type ClipGenerationState =
+  | { kind: "idle" }
+  | { kind: "pending"; request: ClipGenerationRequest }
+  | { kind: "error"; message: string; request: ClipGenerationRequest };
 const requiredExpandedFrameCount = 8;
+const initialStoryboardImageRetryDelayMs = 2500;
+const maxInitialStoryboardImageRetryCount = 12;
+
+function useLatestRef<T>(value: T) {
+  const ref = useRef(value);
+
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+
+  return ref;
+}
 
 export function StoryCamWorkspace() {
   const [storyWorld, setStoryWorld] = useState<CreateStoryWorldResponse | null>(null);
@@ -90,11 +123,23 @@ export function StoryCamWorkspace() {
   );
   const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["像私人回忆"] });
   const [storyWorldGeneration, setStoryWorldGeneration] = useState<StoryWorldGenerationState>({ kind: "idle" });
+  const [storyboardGeneration, setStoryboardGeneration] = useState<StoryboardGenerationState>({ kind: "idle" });
+  const [clipGeneration, setClipGeneration] = useState<ClipGenerationState>({ kind: "idle" });
+  const [storyWorldAssetImageJobs, setStoryWorldAssetImageJobs] = useState<Record<string, string>>({});
   const [coreGroupTargetCount, setCoreGroupTargetCount] = useState<1 | 2 | 3>(1);
   const imagePollAttemptsRef = useRef<Record<string, number>>({});
+  const storyWorldAssetImagePollAttemptsRef = useRef<Record<string, number>>({});
   const videoPollAttemptsRef = useRef<Record<string, number>>({});
   const mediaRefreshInFlightRef = useRef(false);
   const storyWorldRequestIdRef = useRef(0);
+  const storyboardRequestIdRef = useRef(0);
+  const initialStoryboardImageRetryAttemptsRef = useRef<Record<number, number>>({});
+  const clipRequestIdRef = useRef(0);
+  const storyWorldRef = useLatestRef(storyWorld);
+  const storyboardRef = useLatestRef(storyboard);
+  const expansionRef = useLatestRef(expansion);
+  const selectedCoreGroupIndexRef = useLatestRef(selectedCoreGroupIndex);
+  const storyboardGenerationRef = useLatestRef(storyboardGeneration);
 
   const rememberStoryWorldAssetImage = useCallback((artifactId: string, media: StoryWorldAssetImage) => {
     setStoryWorld((current) => {
@@ -111,6 +156,24 @@ export function StoryCamWorkspace() {
       };
     });
   }, []);
+
+  const applyStoryWorldAssetImageResult = useCallback((artifactId: string, image: StoryboardImageState) => {
+    if (image.status === "ready") {
+      rememberStoryWorldAssetImage(artifactId, mediaFromReadyStoryboardImage(image));
+      setStoryWorldAssetImageJobs((current) => removeJob(current, artifactId));
+      return;
+    }
+
+    if (image.status === "generating") {
+      setStoryWorldAssetImageJobs((current) => ({
+        ...current,
+        [artifactId]: image.jobId
+      }));
+      return;
+    }
+
+    setStoryWorldAssetImageJobs((current) => removeJob(current, artifactId));
+  }, [rememberStoryWorldAssetImage]);
 
   function replaceStoryboardImage(jobId: string, nextImage: StoryboardImageState) {
     setStoryboard((current) => {
@@ -211,6 +274,7 @@ export function StoryCamWorkspace() {
 
   function hydrateRestoredProject(restored: Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>) {
     setStoryWorld(restored.storyWorld);
+    setStoryWorldAssetImageJobs({});
     setStoryWorldConfirmed(restored.storyWorldConfirmed);
     setStoryboard(restored.storyboard);
     setCoreGroupTargetCount(1);
@@ -221,6 +285,8 @@ export function StoryCamWorkspace() {
     setFinalWork(restored.finalWork ?? null);
     setIsStoryWorldEditorOpen(false);
     setStoryWorldGeneration({ kind: "idle" });
+    setStoryboardGeneration({ kind: "idle" });
+    setClipGeneration({ kind: "idle" });
     setSelectedStepIndex(null);
     setWorkspaceNotice(null);
     setStoryboardStatus(restored.storyboard ? "ready" : "idle");
@@ -230,12 +296,25 @@ export function StoryCamWorkspace() {
         : "已恢复上次生成的故事世界，请确认后继续。"
     );
     syncStepPath(stepIndexForRestoredCurrentStep(restored.currentStep));
+
+    if (restored.storyboard && shouldSubmitInitialStoryboardImage(restored.storyboard)) {
+      const requestId = storyboardRequestIdRef.current + 1;
+      storyboardRequestIdRef.current = requestId;
+      window.setTimeout(() => {
+        void ensureStoryWorldAssetImages(restored.storyWorld);
+        void submitInitialStoryboardImage(restored.storyboard!, requestId);
+      }, 0);
+    }
   }
 
-  const refreshSessionMediaUrls = useCallback(async () => {
-    const sessionId = storyWorld?.sessionId;
+  const refreshSessionMediaUrls = useCallback(async (sessionId: string) => {
+    const hasPendingImageJobs = collectStoryboardImageJobIds(storyboardRef.current, expansionRef.current).length > 0;
 
-    if (!sessionId || mediaRefreshInFlightRef.current || collectStoryboardImageJobIds(storyboard, expansion).length > 0) {
+    if (
+      mediaRefreshInFlightRef.current ||
+      storyboardGenerationRef.current.kind !== "idle" ||
+      hasPendingImageJobs
+    ) {
       return;
     }
 
@@ -256,10 +335,14 @@ export function StoryCamWorkspace() {
             }
           : current
       );
-      setStoryboard((current) => (current?.sessionId === sessionId && restored.storyboard ? restored.storyboard : current));
+      setStoryboard((current) =>
+        current?.sessionId === sessionId && restored.storyboard
+          ? refreshStoryboardMediaFromRestored(current, restored.storyboard)
+          : current
+      );
       setExpansion((current) =>
         current && restored.storyboard
-          ? refreshExpansionMediaFromStoryboard(current, restored.storyboard, selectedCoreGroupIndex ?? 0)
+          ? refreshExpansionMediaFromStoryboard(current, restored.storyboard, selectedCoreGroupIndexRef.current ?? 0)
           : current
       );
       setClipJob((current) => (current && restored.clipJob ? restored.clipJob : current));
@@ -269,7 +352,13 @@ export function StoryCamWorkspace() {
     } finally {
       mediaRefreshInFlightRef.current = false;
     }
-  }, [expansion, selectedCoreGroupIndex, storyboard, storyWorld?.sessionId]);
+  }, [expansionRef, selectedCoreGroupIndexRef, storyboardGenerationRef, storyboardRef]);
+
+  const refreshCurrentSessionMediaUrls = useCallback(() => {
+    if (storyWorld?.sessionId) {
+      void refreshSessionMediaUrls(storyWorld.sessionId);
+    }
+  }, [refreshSessionMediaUrls, storyWorld?.sessionId]);
 
   useEffect(() => {
     if (window.location.pathname === "/" || window.location.pathname === "/storycam") {
@@ -287,10 +376,10 @@ export function StoryCamWorkspace() {
     }
 
     const initialRefresh = window.setTimeout(() => {
-      void refreshSessionMediaUrls();
+      void refreshSessionMediaUrls(storyWorld.sessionId);
     }, 0);
     const interval = window.setInterval(() => {
-      void refreshSessionMediaUrls();
+      void refreshSessionMediaUrls(storyWorld.sessionId);
     }, 4 * 60 * 1000);
 
     return () => {
@@ -336,6 +425,8 @@ export function StoryCamWorkspace() {
     return () => {
       isCanceled = true;
     };
+    // Restore runs only once on mount so it does not replay user navigation state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -466,11 +557,105 @@ export function StoryCamWorkspace() {
     };
   }, [storyboard, expansion]);
 
+  useEffect(() => {
+    const jobEntries = Object.entries(storyWorldAssetImageJobs);
+
+    if (jobEntries.length === 0) {
+      storyWorldAssetImagePollAttemptsRef.current = {};
+      return;
+    }
+
+    const pendingJobIds = new Set(jobEntries.map(([, jobId]) => jobId));
+    storyWorldAssetImagePollAttemptsRef.current = Object.fromEntries(
+      Object.entries(storyWorldAssetImagePollAttemptsRef.current).filter(([jobId]) => pendingJobIds.has(jobId))
+    );
+
+    let canceled = false;
+    let isPolling = false;
+    let timer: number | undefined;
+
+    const pollAssetImages = async () => {
+      if (isPolling) {
+        return;
+      }
+
+      isPolling = true;
+      const results = await mapWithConcurrencyLimit(
+        jobEntries,
+        imageGenerationPollingPolicy.maxConcurrentRequests,
+        async ([artifactId, jobId]) => ({
+          artifactId,
+          jobId,
+          result: await getGenerationJob(jobId)
+        })
+      );
+      isPolling = false;
+
+      if (canceled) {
+        return;
+      }
+
+      for (const [index, result] of results.entries()) {
+        const fallbackJobId = jobEntries[index]?.[1];
+
+        if (!fallbackJobId) {
+          continue;
+        }
+
+        if (result.status !== "fulfilled") {
+          storyWorldAssetImagePollAttemptsRef.current[fallbackJobId] =
+            (storyWorldAssetImagePollAttemptsRef.current[fallbackJobId] ?? 0) + 1;
+          continue;
+        }
+
+        const { jobId } = result.value;
+        storyWorldAssetImagePollAttemptsRef.current[jobId] =
+          (storyWorldAssetImagePollAttemptsRef.current[jobId] ?? 0) + 1;
+
+        if (result.value.result.job.sessionId !== storyWorldRef.current?.sessionId) {
+          delete storyWorldAssetImagePollAttemptsRef.current[jobId];
+          setStoryWorldAssetImageJobs((current) => removeJob(current, result.value.artifactId));
+          continue;
+        }
+
+        const image = result.value.result.image;
+
+        if (!image || image.status === "generating") {
+          continue;
+        }
+
+        delete storyWorldAssetImagePollAttemptsRef.current[jobId];
+        applyStoryWorldAssetImageResult(result.value.artifactId, image);
+      }
+
+      const remainingJobIds = jobEntries
+        .map(([, jobId]) => jobId)
+        .filter((jobId) => storyWorldAssetImagePollAttemptsRef.current[jobId] !== undefined);
+
+      if (remainingJobIds.length > 0) {
+        const completedAttempts = Math.min(
+          ...remainingJobIds.map((jobId) => storyWorldAssetImagePollAttemptsRef.current[jobId] ?? 0)
+        );
+        timer = window.setTimeout(pollAssetImages, nextImageGenerationPollDelayMs(completedAttempts));
+      }
+    };
+
+    timer = window.setTimeout(pollAssetImages, nextImageGenerationPollDelayMs(0));
+
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [applyStoryWorldAssetImageResult, storyWorldAssetImageJobs, storyWorldRef]);
+
   function applyStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) {
     setInputDraft(draft);
     setWorkspaceNotice(null);
     setStoryWorld(nextStoryWorld);
+    setStoryWorldAssetImageJobs({});
     setStoryWorldGeneration({ kind: "idle" });
+    setStoryboardGeneration({ kind: "idle" });
+    setClipGeneration({ kind: "idle" });
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
@@ -495,6 +680,7 @@ export function StoryCamWorkspace() {
     setInputDraft({ idea: draft.idea, selectedChoices: draft.selectedChoices });
     setWorkspaceNotice(null);
     setStoryWorld(null);
+    setStoryWorldAssetImageJobs({});
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
@@ -506,6 +692,8 @@ export function StoryCamWorkspace() {
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("正在生成故事雏形。");
+    setStoryboardGeneration({ kind: "idle" });
+    setClipGeneration({ kind: "idle" });
     setStoryWorldGeneration({ kind: "pending", request });
     syncStepPath(1);
     void runStoryWorldGeneration(request);
@@ -603,14 +791,33 @@ export function StoryCamWorkspace() {
   }
 
   async function confirmStoryWorld(_nextCoreGroupTargetCount: 1 | 2 | 3 = 1) {
-    if (!storyWorld || storyboardStatus === "generating") {
+    if (!storyWorld || storyboardGeneration.kind === "pending") {
       return;
     }
+
+    const request = {
+      coreGroupTargetCount: 1 as const,
+      requestId: storyboardRequestIdRef.current + 1,
+      storyWorld
+    };
+    storyboardRequestIdRef.current = request.requestId;
 
     setStoryWorldConfirmed(true);
     setIsStoryWorldEditorOpen(false);
     setCoreGroupTargetCount(1);
-    await generateStoryboardFromStoryWorld(storyWorld, 1);
+    setStoryboard(null);
+    setSelectedCoreGroupIndex(null);
+    setExpansion(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
+    setFinalWork(null);
+    setClipGeneration({ kind: "idle" });
+    setSelectedStepIndex(null);
+    setStoryboardStatus("generating");
+    setStoryboardMessage("正在生成核心分镜。");
+    setStoryboardGeneration({ kind: "pending", request });
+    syncStepPath(2);
+    void runStoryboardGeneration(request);
   }
 
   function handleStoryWorldEdit() {
@@ -621,6 +828,8 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    abandonStoryboardGeneration();
+    abandonClipGeneration();
     setIsStoryWorldEditorOpen(false);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
     setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
@@ -638,6 +847,7 @@ export function StoryCamWorkspace() {
     try {
       setIsDeletingStory(true);
       setStoryboardMessage("正在删除这个故事。");
+      abandonClipGeneration();
 
       if (runningClipJob?.status === "queued" || runningClipJob?.status === "running") {
         await cancelGenerationJob(runningClipJob.id).catch(() => undefined);
@@ -645,6 +855,7 @@ export function StoryCamWorkspace() {
 
       await deleteStoryCamSession(sessionId);
       setStoryWorld(null);
+      setStoryWorldAssetImageJobs({});
       setStoryWorldConfirmed(false);
       setStoryboard(null);
       setSelectedCoreGroupIndex(null);
@@ -654,6 +865,8 @@ export function StoryCamWorkspace() {
       setFinalWork(null);
       setIsStoryWorldEditorOpen(false);
       setStoryWorldGeneration({ kind: "idle" });
+      setStoryboardGeneration({ kind: "idle" });
+      setClipGeneration({ kind: "idle" });
       setSelectedStepIndex(null);
       setStoryboardStatus("idle");
       setStoryboardMessage("这个故事已删除，可以重新开始。");
@@ -665,22 +878,21 @@ export function StoryCamWorkspace() {
     }
   }
 
-  async function generateStoryboardFromStoryWorld(
-    currentStoryWorld: CreateStoryWorldResponse,
-    _nextCoreGroupTargetCount: 1 | 2 | 3
-  ) {
-    if (storyboardStatus === "generating") {
-      return;
-    }
-
+  async function runStoryboardGeneration(request: StoryboardGenerationRequest) {
     try {
       setStoryboardStatus("generating");
       setStoryboardMessage("正在生成核心分镜。");
+      void ensureStoryWorldAssetImages(request.storyWorld);
       const storyboard = await createStoryboard({
-        confirmedArtifactVersions: confirmedArtifactVersionsFromStoryWorld(currentStoryWorld),
-        coreGroupTargetCount: 1,
-        sessionId: currentStoryWorld.sessionId
+        confirmedArtifactVersions: confirmedArtifactVersionsFromStoryWorld(request.storyWorld),
+        coreGroupTargetCount: request.coreGroupTargetCount,
+        deferRepresentativeImages: true,
+        sessionId: request.storyWorld.sessionId
       });
+
+      if (!isActiveStoryboardRequest(request.requestId)) {
+        return;
+      }
 
       setStoryboard(storyboard);
       setSelectedCoreGroupIndex(0);
@@ -688,16 +900,195 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
+      setClipGeneration({ kind: "idle" });
       setIsStoryWorldEditorOpen(false);
       setSelectedStepIndex(null);
+      setStoryboardGeneration({ kind: "idle" });
       setStoryboardStatus("ready");
       setStoryboardMessage(
         `分镜已准备好：1 个核心分镜组，控制在 ${storyboard.durationPlan.plannedDurationSeconds} 秒内。`
       );
       syncStepPath(2);
+      void submitInitialStoryboardImage(storyboard, request.requestId);
     } catch {
+      if (!isActiveStoryboardRequest(request.requestId)) {
+        return;
+      }
+
       setStoryboardStatus("error");
-      setStoryboardMessage("核心分镜生成失败，请重新确认后再试。");
+      setStoryboardMessage("核心分镜生成失败，可以重试或返回故事世界。");
+      setStoryboardGeneration({
+        kind: "error",
+        message: "核心分镜生成失败，可以重试或返回故事世界。",
+        request
+      });
+    }
+  }
+
+  async function ensureStoryWorldAssetImages(targetStoryWorld: CreateStoryWorldResponse) {
+    const assetIds = storyWorldAssetIds(targetStoryWorld);
+    const readyAssetImages = targetStoryWorld.assetImagesByArtifactId ?? {};
+    const missingAssetIds = assetIds.filter((artifactId) => !readyAssetImages[artifactId]);
+
+    if (missingAssetIds.length === 0) {
+      return;
+    }
+
+    try {
+      const result = await generateStoryWorldAssetImages({
+        assetArtifactIds: missingAssetIds,
+        sessionId: targetStoryWorld.sessionId
+      });
+
+      if (storyWorldRef.current?.sessionId !== targetStoryWorld.sessionId) {
+        return;
+      }
+
+      for (const [artifactId, item] of Object.entries(result.imagesByArtifactId)) {
+        applyStoryWorldAssetImageResult(artifactId, item.image);
+      }
+    } catch {
+      setStoryboardMessage("分镜脚本会先生成，资产图稍后可回到故事世界重试。");
+    }
+  }
+
+  function retryStoryboardGeneration() {
+    if (storyboardGeneration.kind !== "error") {
+      return;
+    }
+
+    const request = {
+      ...storyboardGeneration.request,
+      requestId: storyboardRequestIdRef.current + 1
+    };
+    storyboardRequestIdRef.current = request.requestId;
+
+    setStoryboardGeneration({ kind: "pending", request });
+    setStoryboardStatus("generating");
+    setStoryboardMessage("正在生成核心分镜。");
+    setSelectedStepIndex(null);
+    syncStepPath(2);
+    void runStoryboardGeneration(request);
+  }
+
+  function returnToStoryWorldFromStoryboardGeneration() {
+    abandonStoryboardGeneration();
+    setSelectedStepIndex(1);
+    setStoryboardStatus("idle");
+    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
+    syncStepPath(1);
+  }
+
+  function abandonStoryboardGeneration() {
+    if (storyboardGeneration.kind === "idle") {
+      return;
+    }
+
+    storyboardRequestIdRef.current += 1;
+    setStoryboardGeneration({ kind: "idle" });
+    setStoryboardStatus("idle");
+    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
+  }
+
+  function isActiveStoryboardRequest(requestId: number) {
+    return storyboardRequestIdRef.current === requestId;
+  }
+
+  async function submitInitialStoryboardImage(nextStoryboard: CreateStoryboardResponse, requestId: number) {
+    const firstGroup = nextStoryboard.storyboard.coreStoryboardGroups[0];
+    const firstArtifact = nextStoryboard.artifacts.coreStoryboardGroups[0];
+
+    if (!firstGroup || !firstArtifact || !shouldSubmitInitialStoryboardImage(storyboardRef.current ?? nextStoryboard)) {
+      return;
+    }
+
+    try {
+      const result = await regenerateStoryboardFrameImage({
+        coreStoryboardGroupId: firstArtifact.id,
+        frameNumber: 1,
+        sessionId: nextStoryboard.sessionId
+      });
+
+      if (!isActiveInitialStoryboardImageRequest(nextStoryboard, requestId)) {
+        return;
+      }
+
+      applyStoryboardFrameImage(0, 1, result.image);
+
+      if (result.image.status === "placeholder" && result.image.reason === "waiting_for_asset_images") {
+        if (!scheduleInitialStoryboardImageRetry(nextStoryboard, requestId)) {
+          applyStoryboardFrameImage(0, 1, {
+            placeholder: true,
+            reason: "provider_failed",
+            status: "placeholder"
+          });
+          setStoryboardMessage("资产图暂时没有准备好，第 01 帧主分镜图可稍后手动重试。");
+          return;
+        }
+
+        setStoryboardMessage("分镜脚本已准备好，等待角色/场景资产图完成后生成第 01 帧主分镜图。");
+        return;
+      }
+
+      delete initialStoryboardImageRetryAttemptsRef.current[requestId];
+      setStoryboardMessage(
+        result.image.status === "ready"
+          ? "分镜脚本和第 01 帧主分镜图已准备好。"
+          : "分镜脚本已准备好，正在生成第 01 帧主分镜图。"
+      );
+    } catch {
+      if (!isActiveInitialStoryboardImageRequest(nextStoryboard, requestId)) {
+        return;
+      }
+
+      delete initialStoryboardImageRetryAttemptsRef.current[requestId];
+      applyStoryboardFrameImage(0, 1, {
+        placeholder: true,
+        reason: "provider_failed",
+        status: "placeholder"
+      });
+      setStoryboardMessage("分镜脚本已准备好，第 01 帧主分镜图生成失败，可稍后重试。");
+    }
+  }
+
+  function scheduleInitialStoryboardImageRetry(nextStoryboard: CreateStoryboardResponse, requestId: number) {
+    const retryCount = initialStoryboardImageRetryAttemptsRef.current[requestId] ?? 0;
+
+    if (retryCount >= maxInitialStoryboardImageRetryCount) {
+      delete initialStoryboardImageRetryAttemptsRef.current[requestId];
+      return false;
+    }
+
+    initialStoryboardImageRetryAttemptsRef.current[requestId] = retryCount + 1;
+    window.setTimeout(() => {
+      if (!isActiveInitialStoryboardImageRequest(nextStoryboard, requestId)) {
+        return;
+      }
+
+      void submitInitialStoryboardImage(storyboardRef.current ?? nextStoryboard, requestId);
+    }, initialStoryboardImageRetryDelayMs);
+
+    return true;
+  }
+
+  function isActiveInitialStoryboardImageRequest(nextStoryboard: CreateStoryboardResponse, requestId: number) {
+    const currentStoryboard = storyboardRef.current;
+    const currentArtifact = currentStoryboard?.artifacts.coreStoryboardGroups[0];
+    const nextArtifact = nextStoryboard.artifacts.coreStoryboardGroups[0];
+
+    return (
+      isActiveStoryboardRequest(requestId) &&
+      Boolean(currentStoryboard) &&
+      currentStoryboard?.sessionId === nextStoryboard.sessionId &&
+      currentArtifact?.id === nextArtifact?.id
+    );
+  }
+
+  async function cancelLateClipJob(jobId: string) {
+    try {
+      await cancelGenerationJob(jobId);
+    } catch {
+      // Best-effort cleanup after the user leaves the pending clip request.
     }
   }
 
@@ -709,6 +1100,11 @@ export function StoryCamWorkspace() {
     const coreArtifact = storyboard.artifacts.coreStoryboardGroups[index];
 
     if (!coreArtifact) {
+      return;
+    }
+
+    if (!canAttemptCoreGroupExpansion(storyboard, index)) {
+      setStoryboardMessage("第 01 帧主分镜图还在生成中，完成后再展开 8 张扩展分镜。");
       return;
     }
 
@@ -798,8 +1194,9 @@ export function StoryCamWorkspace() {
 
   function prepareClipGeneration(index = selectedCoreGroupIndex ?? 0) {
     const group = storyboard?.storyboard.coreStoryboardGroups[index];
+    const coreArtifact = storyboard?.artifacts.coreStoryboardGroups[index];
 
-    if (!group) {
+    if (!storyboard || !group || !coreArtifact) {
       return;
     }
 
@@ -811,25 +1208,35 @@ export function StoryCamWorkspace() {
     const readyCount = readyExpandedFrameCount(group);
 
     if (readyCount < requiredExpandedFrameCount) {
+      setClipGeneration({ kind: "idle" });
       setClipConfirmationSummary(null);
       setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
       return;
     }
 
-    setClipConfirmationSummary(
-      `用「${group.title}」生成一个约 ${group.estimatedClipDurationSeconds.toFixed(1).replace(".0", "")} 秒的私人片段。`
-    );
-    setStoryboardMessage("请确认是否发送这一组生成片段。");
+    const request = {
+      coreArtifactId: coreArtifact.id,
+      coreGroupIndex: index,
+      durationSeconds: group.estimatedClipDurationSeconds,
+      requestId: clipRequestIdRef.current + 1,
+      sessionId: storyboard.sessionId
+    };
+    clipRequestIdRef.current = request.requestId;
+
+    setClipConfirmationSummary(null);
+    setClipGeneration({ kind: "pending", request });
+    setStoryboardMessage("正在创建片段生成任务。");
     syncStepPath(3);
+    void runClipGeneration(request);
   }
 
-  async function confirmClipGeneration() {
-    if (!storyboard || selectedCoreGroupIndex === null) {
+  async function runClipGeneration(request: ClipGenerationRequest) {
+    if (!storyboard) {
       return;
     }
 
-    const coreArtifact = storyboard.artifacts.coreStoryboardGroups[selectedCoreGroupIndex];
-    const selectedGroup = storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex];
+    const coreArtifact = storyboard.artifacts.coreStoryboardGroups[request.coreGroupIndex];
+    const selectedGroup = storyboard.storyboard.coreStoryboardGroups[request.coreGroupIndex];
 
     if (!coreArtifact || !selectedGroup) {
       return;
@@ -846,13 +1253,18 @@ export function StoryCamWorkspace() {
     try {
       setIsClipSubmitting(true);
       const response = await generateClipJob({
-        confirmedArtifactVersions: confirmedArtifactVersionsForClip(storyboard, selectedCoreGroupIndex, expansion),
-        coreStoryboardGroupId: coreArtifact.id,
+        confirmedArtifactVersions: confirmedArtifactVersionsForClip(storyboard, request.coreGroupIndex, expansion),
+        coreStoryboardGroupId: request.coreArtifactId,
         idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${coreArtifact.id}-${Date.now()}`,
-        sessionId: storyboard.sessionId
+        sessionId: request.sessionId
       });
 
-      setClipConfirmationSummary(response.confirmationSummary);
+      if (!isActiveClipRequest(request.requestId)) {
+        void cancelLateClipJob(response.jobId);
+        return;
+      }
+
+      setClipConfirmationSummary(null);
       setClipJob({
         attempts: 0,
         id: response.jobId,
@@ -866,13 +1278,25 @@ export function StoryCamWorkspace() {
         status: response.status,
         type: "video_clip"
       });
+      setClipGeneration({ kind: "idle" });
       setSelectedStepIndex(null);
       setStoryboardMessage("片段生成任务已创建。");
       syncStepPath(3);
     } catch {
-      setStoryboardMessage("片段生成任务创建失败，请重试。");
+      if (!isActiveClipRequest(request.requestId)) {
+        return;
+      }
+
+      setStoryboardMessage("片段生成任务创建失败，可以重试或返回核心分镜。");
+      setClipGeneration({
+        kind: "error",
+        message: "片段生成任务创建失败，可以重试或返回核心分镜。",
+        request
+      });
     } finally {
-      setIsClipSubmitting(false);
+      if (isActiveClipRequest(request.requestId)) {
+        setIsClipSubmitting(false);
+      }
     }
   }
 
@@ -891,9 +1315,48 @@ export function StoryCamWorkspace() {
   }
 
   function retryClipGeneration() {
+    if (clipGeneration.kind === "error") {
+      const request = {
+        ...clipGeneration.request,
+        requestId: clipRequestIdRef.current + 1
+      };
+      clipRequestIdRef.current = request.requestId;
+
+      setClipJob(null);
+      setFinalWork(null);
+      setClipGeneration({ kind: "pending", request });
+      setStoryboardMessage("正在创建片段生成任务。");
+      setSelectedStepIndex(null);
+      syncStepPath(3);
+      void runClipGeneration(request);
+      return;
+    }
+
     setClipJob(null);
     setFinalWork(null);
-    void confirmClipGeneration();
+    prepareClipGeneration(selectedCoreGroupIndex ?? 0);
+  }
+
+  function returnToCoreStoryboardFromClipGeneration() {
+    abandonClipGeneration();
+    setClipJob(null);
+    setFinalWork(null);
+    setSelectedStepIndex(2);
+    syncStepPath(2);
+  }
+
+  function abandonClipGeneration() {
+    if (clipGeneration.kind === "idle") {
+      return;
+    }
+
+    clipRequestIdRef.current += 1;
+    setClipGeneration({ kind: "idle" });
+    setIsClipSubmitting(false);
+  }
+
+  function isActiveClipRequest(requestId: number) {
+    return clipRequestIdRef.current === requestId;
   }
 
   async function createFinalWorkFromAcceptedClip() {
@@ -929,9 +1392,11 @@ export function StoryCamWorkspace() {
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
   const reachedStepIndex = currentStepIndex({
+    clipGeneration,
     clipConfirmationSummary,
     clipJob,
     finalWork,
+    storyboardGeneration,
     storyboard,
     storyWorld,
     storyWorldGeneration
@@ -947,27 +1412,43 @@ export function StoryCamWorkspace() {
         setStoryWorldGeneration({ kind: "idle" });
       }
 
+      if ((stepIndex === null || stepIndex <= 1) && storyboardGeneration.kind !== "idle") {
+        storyboardRequestIdRef.current += 1;
+        setStoryboardGeneration({ kind: "idle" });
+        setStoryboardStatus("idle");
+        setStoryboardMessage("确认故事世界后才能生成核心分镜。");
+      }
+
+      if ((stepIndex === null || stepIndex <= 2) && clipGeneration.kind !== "idle") {
+        clipRequestIdRef.current += 1;
+        setClipGeneration({ kind: "idle" });
+        setIsClipSubmitting(false);
+      }
+
       setSelectedStepIndex(stepIndex !== null && stepIndex <= reachedStepIndex ? stepIndex : null);
     }
 
     window.addEventListener("popstate", handlePopState);
 
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [reachedStepIndex, storyWorld, storyWorldGeneration.kind]);
+  }, [clipGeneration.kind, reachedStepIndex, storyWorld, storyboardGeneration.kind, storyWorldGeneration.kind]);
   const clipGenerationPanel =
-    activeStepIndex >= 3 && (clipConfirmationSummary || clipJob || finalWork) ? (
+    activeStepIndex >= 3 && (clipGeneration.kind !== "idle" || clipJob || finalWork) ? (
       <ClipGenerationWorkspace
-        clipConfirmationSummary={clipConfirmationSummary}
+        clipGenerationState={clipGeneration}
         clipJob={clipJob}
-        durationSeconds={clipJob?.outputPreview?.durationSeconds ?? finalWork?.preview?.durationSeconds ?? selectedGroup?.estimatedClipDurationSeconds ?? 15}
+        durationSeconds={
+          clipJob?.outputPreview?.durationSeconds ??
+          finalWork?.preview?.durationSeconds ??
+          (clipGeneration.kind !== "idle" ? clipGeneration.request.durationSeconds : undefined) ??
+          selectedGroup?.estimatedClipDurationSeconds ??
+          15
+        }
         finalWork={finalWork}
-        isClipSubmitting={isClipSubmitting}
         isDeletingStory={isDeletingStory}
         isFinalWorkSubmitting={isFinalWorkSubmitting}
-        onBackToCoreStoryboard={() => navigateToStep(2)}
+        onBackToCoreStoryboard={clipGeneration.kind !== "idle" ? returnToCoreStoryboardFromClipGeneration : () => navigateToStep(2)}
         onCancelClip={cancelClipJob}
-        onCancelProviderSend={() => setClipConfirmationSummary(null)}
-        onConfirmProviderSend={confirmClipGeneration}
         onCreateFinalWork={createFinalWorkFromAcceptedClip}
         onDeleteStory={deleteCurrentStory}
         onRetake={retryClipGeneration}
@@ -984,6 +1465,14 @@ export function StoryCamWorkspace() {
       abandonStoryWorldGeneration();
     }
 
+    if (index <= 1) {
+      abandonStoryboardGeneration();
+    }
+
+    if (index <= 2) {
+      abandonClipGeneration();
+    }
+
     setSelectedStepIndex(index);
     syncStepPath(index);
 
@@ -997,6 +1486,8 @@ export function StoryCamWorkspace() {
       abandonStoryWorldGeneration();
     }
 
+    abandonStoryboardGeneration();
+    abandonClipGeneration();
     setSelectedStepIndex(0);
     setIsStoryWorldEditorOpen(false);
     syncStepPath(0);
@@ -1025,6 +1516,12 @@ export function StoryCamWorkspace() {
     <div>
       {clipGenerationPanel ? (
         clipGenerationPanel
+      ) : storyboardGeneration.kind !== "idle" && activeStepIndex >= 2 ? (
+        <CoreStoryboardPendingShell
+          generationState={storyboardGeneration}
+          onBackToStoryWorld={returnToStoryWorldFromStoryboardGeneration}
+          onRetry={retryStoryboardGeneration}
+        />
       ) : activeStepIndex >= 2 && storyboard && !isStoryWorldEditorOpen ? (
         <CoreFramesStage
           expansion={expansion}
@@ -1034,7 +1531,7 @@ export function StoryCamWorkspace() {
           onBackToStoryWorld={() => navigateToStep(1)}
           onConfirmExpansion={(index) => expandCoreGroup(index, 8)}
           onGenerateClip={prepareClipGeneration}
-          onMediaLoadError={refreshSessionMediaUrls}
+          onMediaLoadError={refreshCurrentSessionMediaUrls}
           onRegenerateFrame={regenerateFrameImage}
           onSelectGroup={selectCoreGroup}
           selectedIndex={selectedCoreGroupIndex ?? 0}
@@ -1050,7 +1547,7 @@ export function StoryCamWorkspace() {
           onAssetImageReady={rememberStoryWorldAssetImage}
           onConfirm={confirmStoryWorld}
           onEditSaved={handleStoryWorldEdit}
-          onMediaLoadError={refreshSessionMediaUrls}
+          onMediaLoadError={refreshCurrentSessionMediaUrls}
           storyWorld={storyWorld}
         />
       )}
@@ -1326,28 +1823,128 @@ function StoryWorldPendingDock({
   );
 }
 
+type CoreStoryboardPendingShellProps = {
+  generationState: Exclude<StoryboardGenerationState, { kind: "idle" }>;
+  onBackToStoryWorld: () => void;
+  onRetry: () => void;
+};
+
+function CoreStoryboardPendingShell({
+  generationState,
+  onBackToStoryWorld,
+  onRetry
+}: CoreStoryboardPendingShellProps) {
+  const isPending = generationState.kind === "pending";
+  const story = generationState.request.storyWorld.storyWorld;
+
+  return (
+    <section className="storycam-core-stage relative" data-testid="core-storyboard-card">
+      <header className="storycam-core-hero">
+        <div className="storycam-section-kicker">
+          <span />
+          <p>第三部：核心分镜</p>
+          <span />
+        </div>
+        <h1 className="storycam-heading-xl">核心分镜</h1>
+        <p>把已确认的故事世界整理成一组可生成片段的核心分镜。</p>
+        <span className="storycam-core-status-pill">{isPending ? "生成中" : "需要重试"}</span>
+      </header>
+
+      <div className="storycam-core-workbench">
+        <div className="storycam-core-board-panel" data-testid="core-storyboard-pending-board">
+          <div className="storycam-core-board-header">
+            <h2>01 · 自动延展画布</h2>
+            <div className="storycam-core-board-status">
+              <span>中心主图</span>
+              <strong>{isPending ? "生成中" : "未生成"}</strong>
+              <span>扩展中</span>
+              <strong>0 / 8</strong>
+            </div>
+          </div>
+
+          <div className="storycam-expansion-board storycam-core-inline-board" data-expanded="false">
+            <article className="storycam-expansion-slot storycam-expansion-slot--center storycam-expansion-slot--pending" data-testid="storyboard-frame-01">
+              <span className="storycam-frame-number">01</span>
+              <div className="storycam-skeleton-block" />
+            </article>
+          </div>
+        </div>
+
+        <aside className="storycam-core-script-panel" data-testid="core-storyboard-pending-script">
+          <div className="storycam-core-script-header">
+            <div>
+              <p className="storycam-eyebrow">分镜脚本</p>
+              <h2>{story.script.title}</h2>
+            </div>
+            <span>{isPending ? "生成中" : "未生成"}</span>
+          </div>
+          <p className="storycam-core-script-rhythm">{story.script.logline}</p>
+          {isPending ? (
+            <div className="space-y-4">
+              <span className="storycam-skeleton-line storycam-skeleton-line--wide" />
+              <span className="storycam-skeleton-line storycam-skeleton-line--medium" />
+              <span className="storycam-skeleton-line storycam-skeleton-line--wide" />
+              <span className="storycam-skeleton-line storycam-skeleton-line--short" />
+            </div>
+          ) : (
+            <p className="rounded-[1rem] border border-[#ff4b89]/30 bg-[#ff4b89]/10 px-4 py-3 text-sm font-bold text-[#ffd9e0]">
+              {generationState.message}
+            </p>
+          )}
+        </aside>
+      </div>
+
+      <div className="storycam-bottom-dock storycam-core-dock">
+        <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
+          1 组 · 约 15 秒内
+        </div>
+        <button className="storycam-secondary-button" onClick={onBackToStoryWorld} type="button">
+          返回故事世界
+        </button>
+        {isPending ? (
+          <button className="storycam-primary-button" disabled type="button">
+            核心分镜生成中
+          </button>
+        ) : (
+          <button className="storycam-primary-button" onClick={onRetry} type="button">
+            重试生成
+          </button>
+        )}
+        <div className="storycam-core-dock-progress">
+          <span />
+          0 / 8 已完成
+        </div>
+      </div>
+    </section>
+  );
+}
+
 type CurrentStepInput = {
+  clipGeneration: ClipGenerationState;
   clipConfirmationSummary: string | null;
   clipJob: GenerationJobSummary | null;
   finalWork: FinalWorkResponse | null;
   storyboard: CreateStoryboardResponse | null;
+  storyboardGeneration: StoryboardGenerationState;
   storyWorld: CreateStoryWorldResponse | null;
   storyWorldGeneration: StoryWorldGenerationState;
 };
 
 function currentStepIndex({
+  clipGeneration,
   clipConfirmationSummary,
   clipJob,
   finalWork,
   storyboard,
+  storyboardGeneration,
   storyWorld,
   storyWorldGeneration
 }: CurrentStepInput) {
-  if (finalWork || clipJob || clipConfirmationSummary) {
+  if (finalWork || clipJob || clipConfirmationSummary || clipGeneration.kind !== "idle") {
     return 3;
   }
 
-  if (storyboard) {
+  if (storyboard || storyboardGeneration.kind !== "idle") {
     return 2;
   }
 
@@ -1356,6 +1953,45 @@ function currentStepIndex({
   }
 
   return 0;
+}
+
+function shouldSubmitInitialStoryboardImage(storyboard: CreateStoryboardResponse) {
+  const image = storyboard.storyboard.coreStoryboardGroups[0]?.representativeImage;
+
+  return image?.status === "placeholder" && (!image.reason || image.reason === "waiting_for_asset_images");
+}
+
+function storyWorldAssetIds(storyWorld: CreateStoryWorldResponse) {
+  return [
+    ...storyWorld.artifacts.characterAssets.map((artifact) => artifact.id),
+    ...storyWorld.artifacts.sceneAssets.slice(0, 1).map((artifact) => artifact.id)
+  ];
+}
+
+function mediaFromReadyStoryboardImage(image: Extract<StoryboardImageState, { status: "ready" }>): StoryWorldAssetImage {
+  return {
+    id: image.mediaId,
+    mimeType: image.mimeType,
+    signedUrl: image.signedUrl,
+    signedUrlExpiresIn: image.signedUrlExpiresIn
+  };
+}
+
+function removeJob(current: Record<string, string>, artifactId: string) {
+  const next = { ...current };
+  delete next[artifactId];
+
+  return next;
+}
+
+function canAttemptCoreGroupExpansion(storyboard: CreateStoryboardResponse, index: number) {
+  const image = storyboard.storyboard.coreStoryboardGroups[index]?.representativeImage;
+
+  if (image?.status === "ready") {
+    return true;
+  }
+
+  return image?.status === "placeholder" && Boolean(image.reason) && image.reason !== "waiting_for_asset_images";
 }
 
 function refreshExpansionMediaFromStoryboard(
@@ -1379,6 +2015,45 @@ function refreshExpansionMediaFromStoryboard(
       return restoredImage ? { ...card, image: restoredImage } : card;
     })
   };
+}
+
+function refreshStoryboardMediaFromRestored(
+  current: CreateStoryboardResponse,
+  restored: CreateStoryboardResponse
+): CreateStoryboardResponse {
+  return {
+    ...current,
+    storyboard: {
+      ...current.storyboard,
+      coreStoryboardGroups: current.storyboard.coreStoryboardGroups.map((group, index) => {
+        const restoredGroup = restored.storyboard.coreStoryboardGroups[index];
+
+        if (!restoredGroup) {
+          return group;
+        }
+
+        return {
+          ...group,
+          expandedStoryboardImages: group.expandedStoryboardImages.map((image, imageIndex) =>
+            refreshStoryboardImage(image, restoredGroup.expandedStoryboardImages[imageIndex])
+          ),
+          representativeImage: refreshStoryboardImage(group.representativeImage, restoredGroup.representativeImage)
+        };
+      })
+    }
+  };
+}
+
+function refreshStoryboardImage(current: StoryboardImageState, restored?: StoryboardImageState) {
+  if (!restored || current.status === "generating") {
+    return current;
+  }
+
+  if (current.status === "ready") {
+    return restored.status === "ready" ? restored : current;
+  }
+
+  return restored;
 }
 
 function syncStepPath(index: number) {

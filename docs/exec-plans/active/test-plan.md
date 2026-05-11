@@ -8,7 +8,7 @@
 - `/auth/callback`：Supabase Google OAuth 回调。
 - `/api/uploads`：上传照片并返回 Supabase Storage media refs。
 - `/api/story-world`：把用户输入、照片和轻导演选择转为紧凑故事、人物、地点 artifacts。
-- `/api/storyboard`：把已确认故事世界转为分镜脚本和按计划视频长度自动判断的 1-3 个核心分镜组。
+- `/api/storyboard`：把已确认故事世界转为分镜脚本和按计划视频长度自动判断的核心分镜组；前端可延后第 1 帧代表图提交，让分镜脚本先展示。
 - `/api/storyboard-groups/:id/expand`：生成选中核心分镜组的 3-8 张扩展分镜卡。
 - `/api/storyboard-groups/:id/generate-clip`：创建视频生成 job，并返回 job id。
 - `/api/generation-jobs/:id`：job 轮询和恢复状态。
@@ -37,7 +37,8 @@ CI 默认使用 mock mode。真实 provider smoke test 必须 opt-in、secret-ga
 - 私人时刻输入，以及情绪 chips。
 - 照片上传、账号内预览、文件类型/大小错误。
 - 故事世界确认：inline edit、regenerate、lock。
-- provider-send confirmation：一句话确认，不展示完整 prompt packet。
+- 核心分镜确认：脚本先返回时必须先展示脚本，中心主图继续局部等待/生成。
+- 视频 provider 边界：直接进入片段生成，不展示完整 prompt packet。
 - 视频 job：enqueue、polling、timeout、retry、cancel、success reveal。
 - 视频 job queued/running 时删除故事。
 - clip reveal 后的账号内保存/预览、继续、重拍。
@@ -62,7 +63,7 @@ CI 默认使用 mock mode。真实 provider smoke test 必须 opt-in、secret-ga
 
 ## 关键路径
 
-- 单模板 happy path：Google login -> input/photo -> story world -> 1-3 core groups -> optional expansion -> provider-send confirmation -> clip -> final work -> account save/preview。
+- 单模板 happy path：Google login -> input/photo -> story world -> 1 core group -> optional expansion -> clip generation -> final work -> account save/preview。
 - Retry path：video timeout -> 展示 retry -> 复用 prompt packet/idempotency guard -> success。
 - Deletion path：running job -> delete -> tombstone -> discard late provider result。
 - Stale artifact path：clip packet 创建后编辑 story world -> old packet 被阻止，直到重新确认。

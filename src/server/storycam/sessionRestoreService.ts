@@ -16,7 +16,7 @@ import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamSignedUrlTtlSeconds, type StoryCamPrivateBucket } from "./mediaStore";
 import { StoryCamSessionRepository } from "./sessionRepository";
-import { placeholderStoryboardImage, type GeneratedStoryboardImageState } from "./storyboardImageService";
+import { generatingStoryboardImage, placeholderStoryboardImage, type GeneratedStoryboardImageState } from "./storyboardImageService";
 
 type ArtifactRef = {
   id: string;
@@ -237,7 +237,7 @@ async function restoreSession(
 
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
   const storyWorld = await restoreStoryWorld(client, session.id, storyWorldBundle, mediaRows);
-  const storyboard = await restoreStoryboard(client, session, storyWorldBundle, artifactRows, mediaRows);
+  const storyboard = await restoreStoryboard(client, userId, session, storyWorldBundle, artifactRows, mediaRows);
   const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
   const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
   const coreGroupTargetCount = toCoreGroupTargetCount(session.core_group_target_count) ?? storyboard?.durationPlan.coreGroupTargetCount ?? 1;
@@ -271,7 +271,7 @@ async function summarizeSession(
   }
 
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
-  const storyboard = await restoreStoryboard(client, session, storyWorldBundle, artifactRows, mediaRows);
+  const storyboard = await restoreStoryboard(client, userId, session, storyWorldBundle, artifactRows, mediaRows);
   const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
   const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
   const script = storyScriptSchema.parse(storyWorldBundle.scriptRow.data_json);
@@ -370,6 +370,7 @@ async function restoreStoryWorld(
 
 async function restoreStoryboard(
   client: SupabaseClient<Database>,
+  userId: string,
   session: StoryCamSessionRow,
   bundle: StoryWorldBundle,
   rows: StoryCamArtifactRow[],
@@ -410,12 +411,13 @@ async function restoreStoryboard(
   const storyboardScripts = scriptRows.map((row) => storyboardScriptSchema.parse(row.data_json));
   const storyboardScriptRefs = scriptRows.map(toArtifactRef);
   const storyboardScriptRef = storyboardScriptRefs[0];
+  const imageJobs = await restoreStoryboardImageJobs(client, userId, session.id);
   const expandedStoryboardCardRefs = matchingCoreRows.flatMap((coreRow) => restoreExpandedStoryboardCardRefs(coreRow, rows));
   const coreGroupViews = await Promise.all(
     matchingCoreRows.map(async (row, index) => ({
       ...coreStoryboardGroupSchema.parse(row.data_json),
-      expandedStoryboardImages: await restoreExpandedStoryboardImages(client, row, rows, mediaRows),
-      representativeImage: await restoreStoryboardImage(client, row.id, mediaRows),
+      expandedStoryboardImages: await restoreExpandedStoryboardImages(client, row, rows, mediaRows, imageJobs),
+      representativeImage: await restoreStoryboardImage(client, row.id, mediaRows, imageJobs, "storyboard_image"),
       scriptArtifact: storyboardScriptRefs[index] ?? storyboardScriptRef
     }))
   );
@@ -451,12 +453,14 @@ async function restoreAssetImages(client: SupabaseClient<Database>, assetRows: S
 async function restoreStoryboardImage(
   client: SupabaseClient<Database>,
   linkedArtifactId: string,
-  mediaRows: MediaAssetRow[]
+  mediaRows: MediaAssetRow[],
+  imageJobs: GenerationJobRow[] = [],
+  imageJobType?: GenerationJobRow["type"]
 ): Promise<GeneratedStoryboardImageState> {
   const media = await restoreMedia(client, linkedArtifactId, mediaRows);
 
   if (!media) {
-    return placeholderStoryboardImage();
+    return restoreStoryboardImageJobState(linkedArtifactId, imageJobs, imageJobType) ?? placeholderStoryboardImage();
   }
 
   return {
@@ -473,7 +477,8 @@ async function restoreExpandedStoryboardImages(
   client: SupabaseClient<Database>,
   coreRow: StoryCamArtifactRow,
   rows: StoryCamArtifactRow[],
-  mediaRows: MediaAssetRow[]
+  mediaRows: MediaAssetRow[],
+  imageJobs: GenerationJobRow[]
 ) {
   const cards = rows
     .filter((row) => row.type === "expanded_storyboard_card" && row.state === "ready" && row.parent_artifact_id === coreRow.id)
@@ -484,7 +489,39 @@ async function restoreExpandedStoryboardImages(
     })
     .slice(0, 8);
 
-  return Promise.all(cards.map((card) => restoreStoryboardImage(client, card.id, mediaRows)));
+  return Promise.all(cards.map((card) => restoreStoryboardImage(client, card.id, mediaRows, imageJobs, "expanded_storyboard_image")));
+}
+
+async function restoreStoryboardImageJobs(client: SupabaseClient<Database>, userId: string, sessionId: string) {
+  const jobs = (await new StoryCamGenerationJobRepository(client).listBySession(userId, sessionId)) ?? [];
+
+  return jobs.filter((job) => job.type === "storyboard_image" || job.type === "expanded_storyboard_image");
+}
+
+function restoreStoryboardImageJobState(
+  linkedArtifactId: string,
+  imageJobs: GenerationJobRow[],
+  imageJobType?: GenerationJobRow["type"]
+): GeneratedStoryboardImageState | null {
+  const job = imageJobs
+    .filter((candidate) => {
+      if (candidate.output_artifact_id !== linkedArtifactId) {
+        return false;
+      }
+
+      return imageJobType ? candidate.type === imageJobType : true;
+    })
+    .sort((a, b) => timestamp(b.updated_at) - timestamp(a.updated_at))[0];
+
+  if (!job) {
+    return null;
+  }
+
+  if (job.status === "queued" || job.status === "running" || job.status === "cancel_requested") {
+    return generatingStoryboardImage(job.id);
+  }
+
+  return placeholderStoryboardImage("provider_failed");
 }
 
 async function restoreLatestClipJob(

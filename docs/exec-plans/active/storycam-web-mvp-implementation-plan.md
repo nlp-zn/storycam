@@ -65,7 +65,7 @@ Phase 1 的核心不是做完整工作台，而是证明用户能从私人想法
 | 分镜脚本 + 核心分镜组 | mock | Vercel AI SDK + OpenRouter text model | MVP 固定 1 组、15 秒内，输出 1 份 9 帧脚本和用户可理解的核心方案。 |
 | 核心分镜代表图 | mock/placeholder | ImageGenerationProvider (`inference_sh` preferred, OpenRouter legacy) | Phase 1 优先真实生成核心分镜代表图。 |
 | 扩展分镜卡 | mock | OpenRouter text + image provider boundary | 默认 3 张，最多 8 张；不触发视频 job。 |
-| Clip prompt packet | deterministic code | 不需要 AI | 组装和校验 artifact versions，生成一句话 provider-send confirmation。 |
+| Clip prompt packet | deterministic code | 不需要 AI | 组装和校验 artifact versions，生成普通语言 provider boundary summary。 |
 | 视频片段生成 | mock | `VideoGenerationProvider=seedance_2_0` | Phase 1 真实魔法路径。 |
 | Stitch suggestion | mock/text | `TextGenerationProvider` 或 deterministic rules | Phase 1 可先用规则生成建议。 |
 | Final work 合成 | deterministic code | `FinalWorkComposer=ffmpeg` 或部署可运行 composer | 必须生成真实 final video，并写入 Supabase Storage。 |
@@ -916,7 +916,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 ### Task 20：Clip prompt packet service
 
-**Description:** 实现 packet 组装和版本校验；只生成一句话 provider-send confirmation 给前台。
+**Description:** 实现 packet 组装和版本校验；只生成普通语言 provider boundary summary，不向前台暴露完整 packet。
 
 **Acceptance criteria:**
 
@@ -1109,6 +1109,9 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 - [x] UI 清楚表达“一个核心分镜组生成一个片段”。
 - [x] 分组数量由计划视频长度自动决定。
 - [x] 不暗示扩展卡会单独生成视频。
+- [x] 故事世界确认后立即进入核心分镜板块，分镜生成中/失败状态停留在核心分镜原布局内。
+- [x] 分镜脚本先于主分镜图可见；第 1 帧代表图由核心分镜页进入后单独提交生成。
+- [x] 初次进入核心分镜画布只显示中心主图，02-09 扩展槽位在点击中心主图后才出现。
 
 **Verification:**
 
@@ -1151,14 +1154,15 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 **Estimated scope:** M
 
-### Task 29：Provider-send confirmation + generation UI
+### Task 29：Clip task creation + generation UI
 
-**Description:** 实现一句话确认、job 创建、polling、cancel、timeout、failed、policy refusal 状态。
+**Description:** 实现片段页内 job 创建、polling、cancel、timeout、failed、policy refusal 状态。
 
 **Acceptance criteria:**
 
-- [x] 未确认前不创建真实视频 job。
-- [x] 只展示一句话 confirmation，不展示完整 packet。
+- [x] 点击 `用这一组生成片段` 立即进入片段生成板块并创建视频 job。
+- [x] 片段任务创建中/失败状态停留在片段生成原布局内。
+- [x] 不展示完整 packet。
 - [x] 支持 cancel 和 retry。
 
 **Verification:**
@@ -1169,7 +1173,6 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 **Files likely touched:**
 
-- `src/components/storycam/ProviderSendConfirm.tsx`
 - `src/components/storycam/ClipGenerationStatus.tsx`
 - `src/features/storycam/client/jobPolling.ts`
 - `e2e/storycam-generate-clip.spec.ts`

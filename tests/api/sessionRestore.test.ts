@@ -194,6 +194,62 @@ describe("GET /api/storycam-sessions/current", () => {
     expect(serialized).not.toContain("storage_bucket");
   });
 
+  it("restores running storyboard image jobs without falling back to a resubmittable placeholder", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/current/route");
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "storyboard-session": [
+          ...storyWorldArtifacts("storyboard-session"),
+          storyboardScriptArtifact("storyboard-script-artifact-1", "core-artifact-1", "storyboard-session"),
+          coreGroupArtifact("core-artifact-1", "storyboard-session")
+        ]
+      },
+      generationJobsBySession: {
+        "storyboard-session": [
+          generationJobRow({
+            id: "storyboard-image-job-1",
+            output_artifact_id: "core-artifact-1",
+            provider_kind: "image",
+            session_id: "storyboard-session",
+            status: "running",
+            type: "storyboard_image"
+          })
+        ]
+      },
+      sessions: [
+        sessionRow({
+          core_group_target_count: 1,
+          id: "storyboard-session",
+          planned_duration_seconds: 15,
+          updated_at: "2026-04-28T10:00:00.000Z"
+        })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      storyboard: {
+        storyboard: {
+          coreStoryboardGroups: [
+            expect.objectContaining({
+              representativeImage: {
+                jobId: "storyboard-image-job-1",
+                placeholder: true,
+                status: "generating"
+              }
+            })
+          ]
+        }
+      }
+    });
+  });
+
   it("restores generated clip and final work progress so later steps stay reachable", async () => {
     const { GET } = await import("@/app/api/storycam-sessions/current/route");
     const client = new FakeSupabaseClient({

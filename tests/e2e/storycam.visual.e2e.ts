@@ -44,7 +44,6 @@ test.describe("StoryCam visual smoke", () => {
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "用这一组生成片段" }).click();
-    await page.getByRole("button", { name: "确认发送生成片段" }).click();
     await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByText("任务 job-1")).toBeVisible();
     await page.getByRole("button", { name: "取消生成" }).click();

@@ -1,21 +1,22 @@
 import { useState } from "react";
-import { ProviderSendConfirm } from "@/components/storycam/ProviderSendConfirm";
 import type { FinalWorkResponse, GenerationJobStatus, GenerationJobSummary } from "@/features/storycam/client/storycamApi";
 import { isTerminalGenerationJobStatus } from "@/features/storycam/client/jobPolling";
 import { storyCamSeedanceOutputResolutionLabel } from "@/features/storycam/domain/videoSettings";
 
+type ClipGenerationState =
+  | { kind: "idle" }
+  | { kind: "pending"; request: { durationSeconds: number } }
+  | { kind: "error"; message: string; request: { durationSeconds: number } };
+
 type ClipGenerationWorkspaceProps = {
-  clipConfirmationSummary: string | null;
+  clipGenerationState?: ClipGenerationState;
   clipJob: GenerationJobSummary | null;
   durationSeconds?: number;
   finalWork: FinalWorkResponse | null;
-  isClipSubmitting: boolean;
   isDeletingStory?: boolean;
   isFinalWorkSubmitting: boolean;
   onBackToCoreStoryboard: () => void;
   onCancelClip: () => void;
-  onCancelProviderSend: () => void;
-  onConfirmProviderSend: () => void;
   onCreateFinalWork: () => Promise<FinalWorkResponse | null>;
   onDeleteStory?: () => void;
   onRetake: () => void;
@@ -26,17 +27,14 @@ type ClipGenerationWorkspaceProps = {
 const audioWaveHeights = Array.from({ length: 36 }, (_, index) => 8 + ((index * 7) % 24));
 
 export function ClipGenerationWorkspace({
-  clipConfirmationSummary,
+  clipGenerationState = { kind: "idle" },
   clipJob,
   durationSeconds = 15,
   finalWork,
-  isClipSubmitting,
   isDeletingStory = false,
   isFinalWorkSubmitting,
   onBackToCoreStoryboard,
   onCancelClip,
-  onCancelProviderSend,
-  onConfirmProviderSend,
   onCreateFinalWork,
   onDeleteStory,
   onRetake,
@@ -46,13 +44,15 @@ export function ClipGenerationWorkspace({
   const [isExporting, setIsExporting] = useState(false);
   const activePreview = finalWork?.preview ?? clipJob?.outputPreview;
   const finalWorkSignedUrl = finalWork?.preview?.signedUrl;
+  const isCreatingClip = clipGenerationState.kind === "pending";
+  const isClipCreationError = clipGenerationState.kind === "error";
   const canCancel = clipJob?.status === "queued" || clipJob?.status === "running";
   const canRetry = clipJob?.status === "failed" || clipJob?.status === "canceled" || clipJob?.status === "expired";
   const isClipReady = clipJob?.status === "succeeded";
-  const canExport = Boolean(finalWorkSignedUrl || (isClipReady && clipJob?.outputArtifactId));
+  const canExport = !isCreatingClip && !isClipCreationError && Boolean(finalWorkSignedUrl || (isClipReady && clipJob?.outputArtifactId));
   const durationLabel = formatDuration(durationSeconds);
   const progress = progressNumberForStatus(clipJob?.status);
-  const statusLabel = clipStatusLabel(clipJob?.status, Boolean(finalWork));
+  const statusLabel = clipGenerationStatusLabel(clipGenerationState, clipJob?.status, Boolean(finalWork));
   const statusHeading = clipStatusHeading({
     durationLabel,
     isClipReady,
@@ -108,7 +108,20 @@ export function ClipGenerationWorkspace({
         </div>
 
         <div className="storycam-clip-video-frame">
-          {activePreview ? (
+          {isCreatingClip ? (
+            <div className="storycam-cinematic-frame storycam-clip-placeholder storycam-clip-placeholder--pending" data-testid="clip-generation-pending-frame">
+              <p className="storycam-clip-boundary-copy">
+                正在把这组分镜发送给视频生成服务，完成后会在这里继续显示进度。
+              </p>
+              <span className="storycam-skeleton-line storycam-skeleton-line--wide" />
+              <span className="storycam-skeleton-line storycam-skeleton-line--medium" />
+              <span className="storycam-skeleton-line storycam-skeleton-line--short" />
+            </div>
+          ) : isClipCreationError ? (
+            <div className="storycam-cinematic-frame storycam-clip-placeholder" role="alert">
+              <span>{clipGenerationState.message}</span>
+            </div>
+          ) : activePreview ? (
             <video className="storycam-clip-video" controls playsInline preload="metadata" src={activePreview.signedUrl} />
           ) : posterImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -119,9 +132,9 @@ export function ClipGenerationWorkspace({
             </div>
           )}
 
-          {!activePreview ? (
+          {!activePreview && !isClipCreationError ? (
             <div className="storycam-clip-progress-orb" aria-hidden="true">
-              <span>{progress}%</span>
+              <span>{isCreatingClip ? "..." : `${progress}%`}</span>
             </div>
           ) : null}
         </div>
@@ -141,17 +154,6 @@ export function ClipGenerationWorkspace({
       {clipJob?.redactedError ? <p className="storycam-clip-error">{clipJob.redactedError}</p> : null}
       {clipJob?.providerErrorCategory ? <p className="storycam-clip-error">失败类型：{clipJob.providerErrorCategory}</p> : null}
 
-      {clipConfirmationSummary ? (
-        <div className="storycam-clip-confirm-panel">
-          <ProviderSendConfirm
-            confirmationSummary={clipConfirmationSummary}
-            isSubmitting={isClipSubmitting}
-            onCancel={onCancelProviderSend}
-            onConfirm={onConfirmProviderSend}
-          />
-        </div>
-      ) : null}
-
       <div className="storycam-clip-footer-actions">
         {clipJob && !isTerminalGenerationJobStatus(clipJob.status) ? (
           <button className="storycam-secondary-button storycam-danger-button" disabled={!canCancel} onClick={onCancelClip} type="button">
@@ -168,7 +170,7 @@ export function ClipGenerationWorkspace({
             {isDeletingStory ? "正在删除" : "删除这个故事"}
           </button>
         ) : null}
-        {(canRetry || isClipReady) ? (
+        {!isCreatingClip && !isClipCreationError && (canRetry || isClipReady) ? (
           <button className="storycam-secondary-button" disabled={!canRetry && !isClipReady} onClick={onRetake} type="button">
             {canRetry ? "重试" : "重拍这个片段"}
           </button>
@@ -198,12 +200,34 @@ export function ClipGenerationWorkspace({
         <button className="storycam-secondary-button" onClick={onBackToCoreStoryboard} type="button">
           返回核心分镜
         </button>
-        <button className="storycam-primary-button" disabled={!canExport || isExporting || isFinalWorkSubmitting} onClick={exportMp4} type="button">
-          导出 MP4
-        </button>
+        {isCreatingClip ? (
+          <button className="storycam-primary-button" disabled type="button">
+            片段生成中
+          </button>
+        ) : isClipCreationError ? (
+          <button className="storycam-primary-button" onClick={onRetake} type="button">
+            重试生成
+          </button>
+        ) : (
+          <button className="storycam-primary-button" disabled={!canExport || isExporting || isFinalWorkSubmitting} onClick={exportMp4} type="button">
+            导出 MP4
+          </button>
+        )}
       </div>
     </section>
   );
+}
+
+function clipGenerationStatusLabel(clipGenerationState: ClipGenerationState, status: GenerationJobStatus | undefined, isSaved: boolean): string {
+  if (clipGenerationState.kind === "pending") {
+    return "创建任务中";
+  }
+
+  if (clipGenerationState.kind === "error") {
+    return "创建失败";
+  }
+
+  return clipStatusLabel(status, isSaved);
 }
 
 function clipStatusLabel(status: GenerationJobStatus | undefined, isSaved: boolean): string {

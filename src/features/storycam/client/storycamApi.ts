@@ -452,12 +452,14 @@ export async function createStoryWorld(input: {
 export async function createStoryboard(input: {
   confirmedArtifactVersions: Record<string, number>;
   coreGroupTargetCount?: 1 | 2 | 3;
+  deferRepresentativeImages?: boolean;
   sessionId: string;
 }) {
   const response = await fetch("/api/storyboard", {
     body: JSON.stringify({
       confirmedArtifactVersions: input.confirmedArtifactVersions,
       ...(input.coreGroupTargetCount ? { coreGroupTargetCount: input.coreGroupTargetCount } : {}),
+      ...(input.deferRepresentativeImages ? { deferRepresentativeImages: true } : {}),
       sessionId: input.sessionId
     }),
     headers: {
