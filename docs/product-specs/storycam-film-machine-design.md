@@ -47,7 +47,7 @@ v1 默认视觉路线是“私人漫画电影 / 动画分镜”，不是写实�
 - 每个生成阶段的输入、输出、用户确认点和失败救援路径。
 - 哪些阶段需要文本理解、多模态理解、图像生成、视频生成或视频合成能力。
 - Seedance 2.0 作为第一版真实视频片段生成的主假设。
-- 用户可见语言、隐私边界、provider-send confirmation、MVP 单核心分镜组规则。
+- 用户可见语言、隐私边界、视频 provider 边界提示、MVP 单核心分镜组规则。
 
 留到 PLAN / 工程文档里：
 
@@ -188,6 +188,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 - 1 份 `storyboard_script`
 - 1 个 `core_storyboard_groups[]`
 - 每份 `storyboard_script` 包含固定 9 帧结构化分镜：第 1 帧是核心分镜主图，后 8 帧用于扩展画布。
+- `storyboard_script` 和 `core_storyboard_groups[]` 可以先于核心分镜代表图返回；UI 必须先展示分镜脚本，再在原画布内等待第 1 帧主图生成。
 - 分镜脚本是已确认 `script` 的内部改编，必须继承 `character_assets[]` 和 `scene_assets[]`，不得另造人物、地点、服装、道具或空间逻辑。
 
 核心分镜组数量规则：
@@ -251,7 +252,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 
 - 结构化组装和校验，不一定需要 AI。
 - 必须记录上游 artifact versions。
-- 必须生成用户可见的一句话 provider-send confirmation，而不是展示完整 packet。
+- 可以生成一句话 provider boundary summary 供任务状态或审计使用，但客户端不展示完整 packet。
 
 ### 5. 视频片段生成
 
@@ -304,7 +305,7 @@ Phase 1 要做的是最小但真实的产品魔法路径：
 4. 生成并确认一个紧凑故事世界：默认更像短剧本，同时包含人物和地点资产。
 5. 固定生成 1 个 15 秒内核心分镜组。
 6. 在核心分镜页的内联 9 帧工作台点击中心主图，展开 8 张指导卡/图。
-7. 在真实视频生成前展示一句话 provider-send 确认。
+7. 点击 `用这一组生成片段` 后立即进入片段生成页，并在目标页内用普通语言表达视频服务边界。
 8. 通过异步 job 生成真实 Seedance 2.0 clip。
 9. 如果 Seedance 2.0 输出质量不稳定，第一救援路径是重拍这一段。
 10. 真实合成 final video。
@@ -329,7 +330,7 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 1. 在视频生成前，让用户看见故事正在成形。
 2. UI 使用普通用户语言，专业电影术语保留在内部。
 3. 让视频生成单位足够清楚：一个核心分镜组生成一个片段。
-4. 任何私人故事数据发送给外部视频 provider 前，必须让用户明确确认。
+4. 任何私人故事数据发送给外部视频 provider 前，必须完成故事世界确认与 8 张扩展分镜要求，并在片段生成页给出普通语言的边界提示。
 5. 优先做一条窄而有魔法感的路径，而不是宽而未完成的工作台。
 6. 失败、重试、取消和救援路径是一等产品状态，不是工程附属品。
 7. 不伪造真实视频成功。mock mode 用来跑通本地流程，不代表产品验证成功。
@@ -489,6 +490,9 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 - 用户理解每个核心分镜组都可以生成一个 clip。
 - UI 不暗示每张 storyboard card 都会单独生成视频。
 - 系统不为了凑数生成多组；MVP 新建流程始终只生成 1 组。
+- 用户确认故事世界后立即进入核心分镜板块；分镜脚本和主分镜图尚未返回时，在核心分镜原布局内显示局部生成中骨架。
+- 如果分镜脚本已返回但第 1 帧主图还在提交或生成中，右侧脚本先展示真实内容，中心主图保留等待/生成状态。
+- 核心分镜生成失败时仍停留在核心分镜板块，提供 `重试生成` 和 `返回故事世界`。
 
 ### 4. 扩展画布
 
@@ -497,7 +501,7 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 画布行为：
 
 - 被选中的核心分镜组固定在中心。
-- 初次进入画布时中心第 1 帧可见，周围 8 个 slot 保持 waiting 状态。
+- 初次进入画布时只显示中心第 1 帧；周围 8 个扩展 slot 在用户点击中心主图后才出现。
 - 用户点击中心主图后，周围 8 个 slot 开始生成扩展分镜图。
 - 默认扩展 8 张卡/图。
 - 中心主图 + 周围 8 张扩展图，共 9 个固定槽位。
@@ -545,17 +549,19 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 - 扩展卡默认仍是父核心分镜组的子对象。
 - 用户可以跳过扩展，直接生成片段。
 
-### 5. 视频服务发送确认
+### 5. 视频服务边界
 
-用户目标：在真实视频生成前，知道会发送什么。
+用户目标：点击生成片段后立即进入目标页，并知道片段生成已经进入外部视频服务边界。
 
-必须出现的文案：
+可使用的边界文案：
 
 > 下一步会把这段故事设定发送给视频生成服务生成片段。发送内容包括故事摘要、人物/地点描述和这一段的分镜说明，不包含隐藏日志。
 
-确认粒度：
+边界表达：
 
-- Phase 1 使用一句话确认即可。
+- Phase 1 不再使用二次发送确认；点击 `用这一组生成片段` 后立即进入 `/storycam/clip-generation` 并创建视频任务。
+- 片段任务尚未创建完成时，在片段生成页原布局内显示局部生成中骨架。
+- 创建任务 pending 时，同一局部框内展示普通语言边界提示，例如“正在把这组分镜发送给视频生成服务，完成后会在这里继续显示进度。”
 - 不需要展示完整字段摘要。
 - 不展示完整 prompt packet。
 - 不展示 Shanyin-style 内部 shot data。
@@ -563,17 +569,18 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 
 主 CTA：
 
-- `发送并生成片段`
+- `片段生成中`
+- `导出 MP4`
 
 次要动作：
 
-- `再改一下`
-- `取消`
+- `返回核心分镜`
+- `重试生成`
 - `删除这个故事`
 
 验收标准：
 
-- 未经明确确认，不启动真实视频 provider 调用。
+- 未补齐 8 张扩展分镜图前，不启动真实视频 provider 调用。
 - 用户能看到普通语言描述的 provider boundary。
 - Provider API key 和原始 provider payload 永远不出现在客户端。
 
@@ -887,7 +894,8 @@ POST /story-world
 
 POST /storyboard
   confirmed script/assets
-  -> one 9-frame storyboard script + one core storyboard group + first-frame image job
+  -> one 9-frame storyboard script + one core storyboard group
+  -> frontend submits first-frame image job after script is visible
 
 POST /storyboard-groups/:id/expand
   selected core group
@@ -931,7 +939,7 @@ Provider 概念：
 产品规则：
 
 - Mock mode 可以完整跑通流程，不调用外部 AI 生成服务。
-- Real video mode 必须先经过一句话 provider-send confirmation。
+- Real video mode 必须先完成故事世界确认和 8 张扩展分镜图检查。
 - MVP 中 Seedance 2.0 调用数等于确认的核心分镜组数量，新建流程固定为 1。
 - 扩展分镜卡不会自动创建额外视频调用。
 - Provider error 展示给用户或写入日志前必须脱敏。
@@ -944,7 +952,7 @@ Always：
 
 - 首次提交前展示默认私密文案。
 - 第一版使用账号登录，首选 Google 登录。
-- 真实视频生成前展示一句话 provider-send confirmation。
+- 真实视频生成前后用普通语言展示视频 provider 边界，不展示完整 packet。
 - 允许用户删除故事/session。
 - 日志、analytics、error payload、debug snapshot、support bundle 中不得出现原始私人输入。
 - Provider API key 只存在服务端。
@@ -954,7 +962,7 @@ Never：
 
 - 把原始私人故事文本写入 server logs。
 - 在客户端错误中展示完整 prompt packet。
-- 未经明确确认就向视频 provider 发送数据。
+- 未完成故事世界确认和扩展分镜要求就向视频 provider 发送数据。
 - 把 mock 生成结果当作用户需求验证。
 
 删除语义：
@@ -1137,7 +1145,7 @@ function canGenerateClip(group: CoreStoryboardGroup): boolean {
 - 一个核心分镜组同一时间最多对应一个 active video generation job。
 - 扩展卡不会创建视频 job，除非未来显式引入该高级功能。
 - 编辑上游 artifact 会让下游 prompt packet 和 job 变为 stale。
-- 一句话 provider-send confirmation gate 住所有真实视频调用。
+- 故事世界确认和扩展分镜完整性 gate 住所有真实视频调用。
 - 删除/取消后，晚到 provider 结果不会重新出现在用户 session 中。
 - Mock mode 可以在没有外部 provider credentials 的情况下跑完整流程。
 - Real provider smoke tests 必须 opt-in 且 secret-gated。
@@ -1180,7 +1188,7 @@ Never：
 - 把 StoryCam 做成工业化短剧生产后台。
 - 提交 secrets 或真实 provider credentials。
 - 记录原始私人想法、完整剧本、完整 prompts、signed media URLs 或 provider secrets。
-- 未经明确确认启动真实视频生成调用。
+- 未完成故事世界确认和扩展分镜要求就启动真实视频生成调用。
 - 伪造真实视频结果，并称为 MVP 验证。
 - 向用户导出 Shanyin-style shot data 或九列分镜表。
 

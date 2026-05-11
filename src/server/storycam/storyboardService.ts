@@ -21,6 +21,7 @@ import {
 export type StoryboardRequestBody = {
   confirmedArtifactVersions?: unknown;
   coreGroupTargetCount?: unknown;
+  deferRepresentativeImages?: unknown;
   expansionCardTargetCount?: unknown;
   plannedDurationSeconds?: unknown;
   sessionId?: unknown;
@@ -91,7 +92,7 @@ export async function createStoryboard(
   const storyWorld = await loadConfirmedStoryWorld(artifacts, userId, session.id, input.confirmedArtifactVersions);
   const storyWorldArtifactVersions = artifactVersions(storyWorld.artifactRows);
 
-  if (imageProvider?.supportsReferenceImages) {
+  if (imageProvider?.supportsReferenceImages && !input.deferRepresentativeImages) {
     await assertStoryWorldAssetImagesReady(client, userId, session.id, storyWorld.assetRows);
   }
 
@@ -150,17 +151,19 @@ export async function createStoryboard(
   );
   const storyboardScriptRefs = storyboardScriptRows.map((artifact) => toArtifactRef(requireArtifactRow(artifact)));
   const storyboardScriptRef = storyboardScriptRefs[0];
-  const representativeImages = await generateRepresentativeImages({
-    client,
-    coreGroupArtifacts: coreStoryboardGroupRows,
-    coreGroups: providerResult.value.coreStoryboardGroups,
-    imageProvider,
-    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
-    storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
-    scripts: storyboardScripts,
-    sessionId: session.id,
-    userId
-  });
+  const representativeImages = input.deferRepresentativeImages
+    ? providerResult.value.coreStoryboardGroups.map(() => placeholderStoryboardImage())
+    : await generateRepresentativeImages({
+        client,
+        coreGroupArtifacts: coreStoryboardGroupRows,
+        coreGroups: providerResult.value.coreStoryboardGroups,
+        imageProvider,
+        providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
+        storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
+        scripts: storyboardScripts,
+        sessionId: session.id,
+        userId
+      });
   const storyboardCoreGroups = providerResult.value.coreStoryboardGroups.map((group, index) => ({
     ...group,
     expandedStoryboardImages: [],
@@ -199,6 +202,7 @@ export function parseStoryboardRequest(body: StoryboardRequestBody) {
   return {
     confirmedArtifactVersions: parseConfirmedArtifactVersions(body.confirmedArtifactVersions),
     coreGroupTargetCount: parseOptionalCoreGroupTargetCount(body.coreGroupTargetCount),
+    deferRepresentativeImages: body.deferRepresentativeImages === true,
     expansionCardTargetCount: parseOptionalInteger(body.expansionCardTargetCount),
     plannedDurationSeconds: parseOptionalDuration(body.plannedDurationSeconds),
     sessionId

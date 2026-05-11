@@ -79,12 +79,14 @@ test.describe("StoryCam expansion", () => {
     });
     await page.route("**/api/storyboard-groups/*/frames/*/regenerate-image", async (route) => {
       regenerateRequestedFor = route.request().url();
+      const isInitialFrame = regenerateRequestedFor.includes("/frames/1/");
+
       await route.fulfill({
         contentType: "application/json",
-        status: 202,
+        status: isInitialFrame ? 200 : 202,
         body: JSON.stringify({
-          frameNumber: 6,
-          image: { jobId: "job-frame-6", placeholder: true, status: "generating" },
+          frameNumber: isInitialFrame ? 1 : 6,
+          image: isInitialFrame ? readyImage("media-frame-1") : { jobId: "job-frame-6", placeholder: true, status: "generating" },
           ok: true,
           sessionId: "session-1"
         })
@@ -117,9 +119,10 @@ test.describe("StoryCam expansion", () => {
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
 
     await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
-    await expect(page.getByRole("heading", { name: "未发送短信" }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page.getByTestId("storyboard-frame-01")).toBeVisible();
-    await expect(page.getByTestId("storyboard-frame-02")).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-02")).toHaveCount(0);
+    await expect(page.getByTestId("storyboard-frame-09")).toHaveCount(0);
     const scriptList = page.locator(".storycam-core-script-list");
     await expect(scriptList.getByText("01")).toBeVisible();
     await scriptList.evaluate((element) => {
@@ -132,6 +135,9 @@ test.describe("StoryCam expansion", () => {
     await expect(page.getByTestId("storyboard-frame-03").getByRole("heading", { name: "听见门铃" })).toBeVisible();
     await expect(page.getByTestId("storyboard-frame-04").getByRole("heading", { name: "删掉那句" })).toBeVisible();
     await expect(page.getByTestId("storyboard-frame-04").locator(".storycam-frame-spinner")).toHaveText("生成中");
+    await expect(page.getByTestId("storyboard-frame-04").getByText("生成中")).toHaveCount(1);
+    await expect(page.getByText(/音频：雨声 \/ 伞面水声 \/ 手机震动 \/ 门铃/)).toBeVisible();
+    await expect(page.getByText("低声对白")).toHaveCount(0);
     await expect(page.getByTestId("storyboard-frame-01").getByText("01")).toBeVisible();
     await expect(page.getByTestId("storyboard-frame-09").getByText("09")).toBeVisible();
     await page.getByRole("button", { name: "查看第 02 帧大图" }).click();
@@ -224,12 +230,46 @@ function storyboardFixture() {
       }
     ],
     storyboardScript: {
+      frames: storyboardFramesFixture(),
       planSummary: "用几个克制的雨夜时刻讲完一次没有说出口的暗恋。",
       plannedDurationSeconds: 45,
       rhythm: "慢进入，短暂停顿，安静离开",
       tone: "韩剧雨夜，私人回忆",
       version: 1
     }
+  };
+}
+
+function storyboardFramesFixture() {
+  return [
+    storyboardFrame(1, "中心主图", "雨声 / 伞面水声"),
+    storyboardFrame(2, "门外停住", "雨声 / 手机震动"),
+    storyboardFrame(3, "听见门铃", "门铃 / 雨声"),
+    storyboardFrame(4, "删掉那句", "手机震动 / 呼吸声"),
+    storyboardFrame(5, "雨声压低", "雨声 / 环境低频"),
+    storyboardFrame(6, "手机扣住", "指尖摩擦声"),
+    storyboardFrame(7, "车灯切开", "远处车声"),
+    storyboardFrame(8, "不敢抬头", "脚步声 / 雨声"),
+    storyboardFrame(9, "屏幕暗下", "雨声 / 脚步声")
+  ];
+}
+
+function storyboardFrame(frameNumber: number, title: string, sound: string) {
+  return {
+    beatType: "emotion",
+    cameraAngle: "eye-level",
+    canvasPosition: frameNumber === 1 ? "center" : "around",
+    durationSeconds: 1.5,
+    frameNumber,
+    imagePrompt: `Storyboard frame ${frameNumber}`,
+    narrativePurpose: title,
+    scene: "雨夜便利店门口",
+    shotSize: "medium",
+    sound,
+    technicalNotes: "保持克制的韩剧雨夜调性。",
+    timeRange: "00:00-00:02",
+    title,
+    visualContent: `${title}的画面动作。`
   };
 }
 

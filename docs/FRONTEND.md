@@ -21,6 +21,6 @@
 - Idea input + lightweight director choices + photo upload.
 - Recent projects entry above the creation-entry list; homepage stays on input and lets users choose a project instead of auto-jumping.
 - Story world confirmation, including local generating and failed states after the input CTA immediately navigates to `/storycam/story-world`.
-- One 15-second core storyboard group with a generated first-frame main storyboard image.
-- Inline 9-frame core storyboard workbench: frame 01 stays in the center, frames 02-09 wait around it, and clicking the center image generates the eight expansion frames without navigating away from `/storycam/core-storyboard`.
-- Clip generation workbench on `/storycam/clip-generation`, including provider-send confirmation, async job status, 720p output spec, preview, retry/retake, final work creation, account-scoped preview, and MP4 export.
+- Core storyboard confirmation, including local generating and failed states after story-world confirmation immediately navigates to `/storycam/core-storyboard`; when the 9-frame script returns before the first representative image job, show the script immediately and keep only the image area in a waiting state.
+- Inline 9-frame core storyboard workbench: frame 01 stays in the center on first entry; frames 02-09 are introduced only after the user clicks the center image, then generate around it without navigating away from `/storycam/core-storyboard`.
+- Clip generation workbench on `/storycam/clip-generation`, including local task-creation loading/failure after the core storyboard CTA immediately navigates there, async job status, 720p output spec, preview, retry/retake, final work creation, account-scoped preview, and MP4 export.

@@ -1635,6 +1635,24 @@ button:disabled {
   font-weight: 950;
 }
 
+.storycam-clip-boundary-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 32rem;
+  margin: 0;
+  color: rgba(229, 246, 247, 0.74);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.storycam-clip-placeholder--pending {
+  flex-direction: column;
+  gap: 16px;
+  padding: 12%;
+}
+
 .storycam-clip-progress-orb {
   position: absolute;
   inset: 0;
@@ -2085,6 +2103,29 @@ button:disabled {
   box-shadow: 0 24px 52px rgba(0, 0, 0, 0.42), 0 0 34px rgba(0, 240, 255, 0.22);
   opacity: 1;
   animation: none;
+}
+
+.storycam-expansion-slot--pending {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+
+.storycam-expansion-slot--pending .storycam-skeleton-block {
+  width: 100%;
+}
+
+.storycam-frame-number {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  z-index: 2;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.48);
+  padding: 4px 8px;
+  color: #dbfcff;
+  font-size: 11px;
+  font-weight: 950;
 }
 
 .storycam-expansion-board[data-expanded="false"] .storycam-expansion-slot--center {

@@ -196,6 +196,84 @@ describe("POST /api/storyboard", () => {
     );
   });
 
+  it("can defer representative storyboard image submission so the script returns first", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+    const client = new FakeSupabaseClient({ artifactRows: storyWorldRows(), mediaRows: assetImageRows() });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        confirmedArtifactVersions: {
+          "character-artifact-1": 1,
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        },
+        deferRepresentativeImages: true,
+        sessionId: "session-1"
+      })
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      artifacts: {
+        coreStoryboardGroups: [{ state: "ready", type: "core_storyboard_group", version: 1 }],
+        storyboardScript: { state: "ready", type: "storyboard_script", version: 1 }
+      },
+      storyboard: {
+        coreStoryboardGroups: [
+          {
+            representativeImage: { placeholder: true, status: "placeholder" }
+          }
+        ],
+        storyboardScript: expect.objectContaining({
+          planSummary: expect.stringContaining("雨夜")
+        })
+      }
+    });
+    expect(generationJobInserts(client)).toHaveLength(0);
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
+  });
+
+  it("returns the storyboard script first when deferring images even if story-world asset images are still pending", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+    const client = new FakeSupabaseClient({ artifactRows: storyWorldRows() });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        confirmedArtifactVersions: {
+          "character-artifact-1": 1,
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        },
+        deferRepresentativeImages: true,
+        sessionId: "session-1"
+      })
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      storyboard: {
+        coreStoryboardGroups: [
+          {
+            representativeImage: { placeholder: true, status: "placeholder" }
+          }
+        ],
+        storyboardScript: expect.objectContaining({
+          planSummary: expect.stringContaining("雨夜")
+        })
+      }
+    });
+    expect(generationJobInserts(client)).toHaveLength(0);
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
+  });
+
   it("does not generate storyboard artifacts when reference-image provider is ready but asset images are missing", async () => {
     const { POST } = await import("@/app/api/storyboard/route");
     const client = new FakeSupabaseClient({ artifactRows: storyWorldRows() });
