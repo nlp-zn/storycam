@@ -98,4 +98,55 @@ describe("StoryCam PR gate Codex hook", () => {
 
     expect(output).toBe("");
   });
+
+  it("ignores post-tool responses that do not match the pending git push", () => {
+    runHook({
+      hook_event_name: "PreToolUse",
+      cwd: repoRoot,
+      tool_use_id: "pending-push",
+      tool_input: { cmd: "git push origin docs/pr-gate-three-reviewers" }
+    });
+
+    const output = runHook({
+      hook_event_name: "PostToolUse",
+      cwd: repoRoot,
+      tool_use_id: "different-tool",
+      tool_response: { exit_code: 0, output: "Everything up-to-date" }
+    });
+
+    expect(output).toBe("");
+  });
+
+  it("suppresses duplicate reminders for the same HEAD", () => {
+    runHook({
+      hook_event_name: "PreToolUse",
+      cwd: repoRoot,
+      tool_use_id: "first-push",
+      tool_input: { cmd: "git push origin docs/pr-gate-three-reviewers" }
+    });
+    expect(
+      runHook({
+        hook_event_name: "PostToolUse",
+        cwd: repoRoot,
+        tool_use_id: "first-push",
+        tool_response: { exit_code: 0, output: "Everything up-to-date" }
+      })
+    ).toContain("StoryCam PR gate reminder");
+
+    runHook({
+      hook_event_name: "PreToolUse",
+      cwd: repoRoot,
+      tool_use_id: "second-push",
+      tool_input: { cmd: "git push origin docs/pr-gate-three-reviewers" }
+    });
+
+    const duplicateOutput = runHook({
+      hook_event_name: "PostToolUse",
+      cwd: repoRoot,
+      tool_use_id: "second-push",
+      tool_response: { exit_code: 0, output: "Everything up-to-date" }
+    });
+
+    expect(duplicateOutput).toBe("");
+  });
 });
