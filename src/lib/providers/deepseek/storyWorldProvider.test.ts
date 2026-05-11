@@ -130,6 +130,21 @@ describe("deepseek story world provider", () => {
     expect(JSON.stringify(fetchDeepSeek.mock.calls)).not.toContain("private.jpg");
   });
 
+  it("requires visible key characters such as pet owners to have character assets", () => {
+    const request = buildDeepSeekStoryWorldRequest({
+      input: {
+        idea: "小狗在门口等主人回家",
+        sessionId: "session-1"
+      },
+      model: "deepseek-v4-pro"
+    });
+    const body = JSON.stringify(request);
+
+    expect(body).toContain("会正面出镜、持续互动或承担情感关系的角色");
+    expect(body).toContain("宠物故事里，如果主人会出现在门口、抚摸、团聚");
+    expect(body).toContain("必须同时生成人物资产");
+  });
+
   it("returns a redacted provider failure when DeepSeek omits the required tool call", async () => {
     const provider = createDeepSeekStoryWorldProvider({
       apiKey: "deepseek-secret",

@@ -47,6 +47,7 @@ export type ExpansionServiceOutput = {
     imagePrompt?: string;
     sortOrder: number;
     title: string;
+    visibleCharacterAssetIds?: string[];
     version: number;
   }>;
   expandedStoryboardImages: GeneratedStoryboardImageState[];
@@ -164,6 +165,7 @@ export async function createExpandedStoryboardCards(
         imagePrompt: card.imagePrompt,
         sortOrder: card.sortOrder,
         title: card.title,
+        visibleCharacterAssetIds: card.visibleCharacterAssetIds,
         version: card.version
       })),
       expandedStoryboardImages: images,
@@ -426,6 +428,7 @@ function frameToExpandedCard(coreGroup: CoreStoryboardGroup, frame: StoryboardFr
     sortOrder,
     state: "ready",
     title: frame.title,
+    visibleCharacterAssetIds: frame.visibleCharacterAssetIds,
     version: 1
   });
 }

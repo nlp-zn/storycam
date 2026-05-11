@@ -181,6 +181,8 @@ describe("openrouter story world provider", () => {
     expect(prompt.prompt).toContain("不是镜头列表");
     expect(prompt.prompt).toContain("场景资产必须且只能生成 1 个");
     expect(prompt.prompt).toContain("script.visualStyle");
+    expect(prompt.prompt).toContain("会正面出镜、持续互动或承担情感关系的角色");
+    expect(prompt.prompt).toContain("宠物故事里，如果主人会出现在门口、抚摸、团聚");
     expect(prompt.prompt).toContain("scenePanels 生成 4-6 个小切图描述");
     expect(prompt.prompt).toContain("不要写可见人物");
     expect(prompt.system).toContain("beats 是剧情节点，不是分镜");

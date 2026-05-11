@@ -180,6 +180,7 @@ export type StoryboardFrame = {
   technicalNotes: string;
   timeRange: string;
   title: string;
+  visibleCharacterAssetIds?: string[];
   visualContent: string;
 };
 
@@ -195,6 +196,7 @@ export type ExpandStoryboardGroupResponse = {
     imagePrompt?: string;
     sortOrder: number;
     title: string;
+    visibleCharacterAssetIds?: string[];
     version: number;
   }>;
   expandedStoryboardImages: StoryboardImageState[];

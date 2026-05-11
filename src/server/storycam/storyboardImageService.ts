@@ -51,6 +51,7 @@ export type StoryboardImageFrameInput = {
   frameNumber: number;
   imagePrompt: string;
   title: string;
+  visibleCharacterAssetIds?: string[];
   visualContent: string;
 };
 
@@ -253,6 +254,7 @@ function toProviderInput(
           frameNumber: storyboardScript.frames[0].frameNumber,
           imagePrompt: storyboardScript.frames[0].imagePrompt,
           title: storyboardScript.frames[0].title,
+          visibleCharacterAssetIds: storyboardScript.frames[0].visibleCharacterAssetIds,
           visualContent: storyboardScript.frames[0].visualContent
         }
       : undefined,
@@ -289,6 +291,7 @@ export function toExpandedStoryboardProviderInput(input: {
             frameNumber: input.card.frameNumber,
             imagePrompt: input.card.imagePrompt,
             title: input.card.title,
+            visibleCharacterAssetIds: input.card.visibleCharacterAssetIds,
             visualContent: input.card.description
           }
         : undefined,
