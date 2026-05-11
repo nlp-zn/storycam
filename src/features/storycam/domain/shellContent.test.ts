@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coreStoryboardGroups, directorChoices, storyAssets, storyModeEntries } from "./shellContent";
+import { coreStoryboardGroups, directorChoices, discoveryEntries, storyAssets, storyModeEntries } from "./shellContent";
 
 describe("StoryCam shell content", () => {
   it("keeps the phase 1 core storyboard group limit", () => {
@@ -36,5 +36,11 @@ describe("StoryCam shell content", () => {
     expect(storyModeEntries.map((entry) => `${entry.label} ${entry.text} ${entry.sampleIdea}`).join(" ")).not.toMatch(
       /prompt|packet|model|shot/i
     );
+  });
+
+  it("prepares discovery presets for horizontal and vertical video slots", () => {
+    expect(discoveryEntries.some((entry) => entry.format === "landscape")).toBe(true);
+    expect(discoveryEntries.some((entry) => entry.format === "portrait")).toBe(true);
+    expect(discoveryEntries.every((entry) => entry.videoSrc === null || entry.videoSrc.startsWith("/storycam/"))).toBe(true);
   });
 });

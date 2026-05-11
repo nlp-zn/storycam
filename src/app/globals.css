@@ -630,50 +630,81 @@ button:disabled {
   padding: 7px 10px;
 }
 
+.storycam-discovery-section {
+  padding-top: 12px;
+}
+
+.storycam-discovery-format-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #b9cacb;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0 12px;
+}
+
 .storycam-discovery-grid {
-  display: grid;
-  grid-auto-flow: dense;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 16px;
+  column-count: 4;
+  column-gap: 14px;
 }
 
 .storycam-discovery-card {
   position: relative;
-  min-height: 220px;
+  display: inline-block;
+  width: 100%;
+  margin: 0 0 14px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 20px;
-  background: var(--storycam-surface-low);
-  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
+  border-radius: 8px;
+  background: #0f1111;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.3);
+  break-inside: avoid;
+  isolation: isolate;
 }
 
-.storycam-discovery-card img {
+.storycam-discovery-card img,
+.storycam-discovery-card video {
   transition: transform 360ms ease, filter 360ms ease;
 }
 
-.storycam-discovery-card:hover img {
+.storycam-discovery-card:hover img,
+.storycam-discovery-card:hover video {
   filter: saturate(1.08) brightness(1.04);
   transform: scale(1.035);
 }
 
-.storycam-discovery-card--large {
-  grid-column: span 5;
-  min-height: 420px;
+.storycam-discovery-card--landscape {
+  aspect-ratio: 16 / 9;
 }
 
-.storycam-discovery-card--wide {
-  grid-column: span 4;
-  min-height: 200px;
+.storycam-discovery-card--portrait {
+  aspect-ratio: 9 / 16;
 }
 
-.storycam-discovery-card--small {
-  grid-column: span 2;
-  min-height: 204px;
+.storycam-discovery-card-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid rgba(0, 240, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.46);
+  color: #dbfcff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0 9px;
+  backdrop-filter: blur(12px);
 }
 
-.storycam-discovery-card--banner {
-  grid-column: span 12;
-  min-height: 320px;
+.storycam-discovery-card-badge--muted {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #d7dddd;
 }
 
 .storycam-story-world {
@@ -2339,6 +2370,12 @@ button:disabled {
   white-space: nowrap;
 }
 
+@media (max-width: 1100px) {
+  .storycam-discovery-grid {
+    column-count: 3;
+  }
+}
+
 @media (max-width: 720px) {
   .storycam-page {
     padding: 96px 16px 128px;
@@ -2411,16 +2448,12 @@ button:disabled {
   }
 
   .storycam-discovery-grid {
-    grid-template-columns: minmax(0, 1fr);
+    column-count: 2;
+    column-gap: 10px;
   }
 
-  .storycam-discovery-card,
-  .storycam-discovery-card--large,
-  .storycam-discovery-card--wide,
-  .storycam-discovery-card--small,
-  .storycam-discovery-card--banner {
-    grid-column: auto;
-    min-height: 260px;
+  .storycam-discovery-card {
+    margin-bottom: 10px;
   }
 
   .storycam-idea-textarea {

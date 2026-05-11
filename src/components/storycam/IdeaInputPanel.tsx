@@ -429,40 +429,70 @@ function RecentProjectsInline({
 
 function DiscoveryWall() {
   return (
-    <section className="mx-auto mt-11 w-full max-w-[1320px]" aria-label="发现更多">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-3xl font-black text-[#00f0ff]">✦</span>
-          <div>
-            <h2 className="text-[24px] font-black leading-tight text-[#f4ffff]">发现更多</h2>
-            <p className="mt-1 text-[14px] font-bold leading-5 text-[#849495]">灵感样片，仅用于启发你的私人创作</p>
-          </div>
+    <section className="storycam-discovery-section mx-auto mt-14 w-full max-w-[1360px]" aria-label="发现更多">
+      <div className="mx-auto mb-8 max-w-2xl text-center">
+        <span className="storycam-eyebrow text-[11px] tracking-[0.2em] text-[#00f0ff]">STORYCAM PRESETS</span>
+        <h2 className="mt-3 text-[34px] font-black leading-tight text-[#f4ffff] md:text-[48px]">发现更多</h2>
+        <p className="mx-auto mt-3 max-w-xl text-[14px] font-bold leading-6 text-[#849495]">
+          预置横版 16:9 与竖版 9:16 样片槽位，后续可直接替换为自有生成视频。
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <span className="storycam-discovery-format-pill">16:9 横版</span>
+          <span className="storycam-discovery-format-pill">9:16 竖版</span>
         </div>
-        <button className="self-start rounded-full px-4 py-2 text-[14px] font-black leading-none text-[#b9cacb] transition hover:text-[#00f0ff] md:self-auto" type="button">
-          换一批 ↻
-        </button>
       </div>
 
       <div className="storycam-discovery-grid">
-        {discoveryEntries.map((entry) => (
-          <article className={`group storycam-discovery-card storycam-discovery-card--${entry.size}`} key={entry.title}>
-            <img alt={`${entry.title} 样片画面`} className="size-full object-cover" src={entry.imageSrc} />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/[0.82] via-black/[0.12] to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4 md:p-5">
-              <h3 className="min-w-0 truncate text-[18px] font-black leading-tight text-white">{entry.title}</h3>
-              <span className="shrink-0 text-[14px] font-bold leading-none text-[#e2e2e2]">{entry.duration}</span>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-              <span className="flex size-14 items-center justify-center rounded-full bg-black/50 text-lg font-black text-white backdrop-blur-md">
-                ▶
-              </span>
-            </div>
-          </article>
-        ))}
+        {discoveryEntries.map((entry) => {
+          const formatLabel = entry.format === "portrait" ? "9:16" : "16:9";
+          const formatDescription = entry.format === "portrait" ? "竖版 9:16" : "横版 16:9";
+          const mediaStateLabel = entry.videoSrc ? "可播放样片" : "视频槽位待替换";
+
+          return (
+            <article
+              aria-label={`${entry.title}，${formatDescription} 样片`}
+              className={`group storycam-discovery-card storycam-discovery-card--${entry.format}`}
+              key={entry.title}
+            >
+              {entry.videoSrc ? (
+                <video
+                  aria-label={`${entry.title} 预设视频`}
+                  autoPlay
+                  className="size-full object-cover"
+                  loop
+                  muted
+                  playsInline
+                  poster={entry.imageSrc}
+                  preload="metadata"
+                  src={entry.videoSrc}
+                />
+              ) : (
+                <img alt={`${entry.title} 样片画面`} className="size-full object-cover" src={entry.imageSrc} />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/[0.82] via-black/[0.12] to-transparent" />
+              <div className="absolute left-3 top-3 flex items-center gap-2">
+                <span className="storycam-discovery-card-badge">{formatLabel}</span>
+                <span className="storycam-discovery-card-badge storycam-discovery-card-badge--muted">{entry.category}</span>
+              </div>
+              <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 md:p-4">
+                <div className="min-w-0">
+                  <h3 className="truncate text-[15px] font-black leading-tight text-white md:text-[17px]">{entry.title}</h3>
+                  <p className="mt-1 truncate text-[11px] font-bold leading-none text-[#b9cacb]">{mediaStateLabel}</p>
+                </div>
+                <span className="shrink-0 text-[12px] font-bold leading-none text-[#e2e2e2]">{entry.duration}</span>
+              </div>
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+                <span className="flex size-12 items-center justify-center rounded-full bg-black/50 text-base font-black text-white backdrop-blur-md">
+                  ▶
+                </span>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
       <p className="mt-8 text-center text-sm leading-6 text-[#6f7d7e]">
-        所有内容由 AI 生成，仅供个人创作参考，请勿用于任何公开传播或商业用途。
+        当前展示为 StoryCam 自有占位海报；竞品素材仅作布局参考，不下载或复用到产品中。
       </p>
     </section>
   );
