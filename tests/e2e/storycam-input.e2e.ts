@@ -110,7 +110,170 @@ test.describe("StoryCam story input", () => {
     expect(uploadCalled).toBe(true);
     expect(storyWorldCalled).toBe(true);
   });
+
+  test("moves to story-world immediately while the story is still generating", async ({ page }) => {
+    const storyWorldGate = deferred<void>();
+
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await storyWorldGate.promise;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
+    await expect(page.getByTestId("story-world-generating")).toBeVisible();
+    await expect(page.getByTestId("story-world-layout-grid")).toBeVisible();
+    await expect(page.getByTestId("story-world-script-card")).toBeVisible();
+    await expect(page.getByTestId("story-world-script-skeleton")).toBeVisible();
+    await expect(page.getByTestId("story-world-beats-skeleton")).toBeVisible();
+    await expect(page.getByText("正在生成你的剧本、人物和地点。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "剧本生成中" })).toBeDisabled();
+
+    storyWorldGate.resolve();
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page.getByText("雨夜未发送", { exact: false })).toBeVisible();
+  });
+
+  test("keeps story-world failures local and retries without reuploading a saved photo", async ({ page }) => {
+    let uploadCalls = 0;
+    const storyWorldBodies: Array<{ sessionId?: string; uploadedPhotoIds?: string[] }> = [];
+
+    await mockAuthenticated(page);
+    await page.route("**/api/uploads", async (route) => {
+      uploadCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          media: {
+            byteSize: 4,
+            id: "media-photo-1",
+            kind: "uploaded_photo",
+            mimeType: "image/png"
+          },
+          ok: true,
+          sessionId: "session-1",
+          uploadedPhotoIds: ["media-photo-1"],
+          uploadedPhotoRefs: [{ mediaAssetId: "media-photo-1" }]
+        })
+      });
+    });
+    await page.route("**/api/story-world", async (route) => {
+      storyWorldBodies.push(route.request().postDataJSON() as { sessionId?: string; uploadedPhotoIds?: string[] });
+
+      if (storyWorldBodies.length === 1) {
+        await route.fulfill({
+          contentType: "application/json",
+          status: 500,
+          body: JSON.stringify({ error: "story_world_failed" })
+        });
+        return;
+      }
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByTestId("story-photo-input").setInputFiles({
+      buffer: Buffer.from([137, 80, 78, 71]),
+      mimeType: "image/png",
+      name: "rain.png"
+    });
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
+    await expect(page.getByTestId("story-world-layout-grid")).toBeVisible();
+    await expect(page.getByTestId("story-world-script-card")).toBeVisible();
+    await expect(page.getByText("正在保存参考照片并生成剧本。")).toBeVisible();
+    await expect(page.getByText("故事雏形生成失败，可以重试或返回修改。")).toBeVisible();
+    await page.getByRole("button", { name: "重试生成" }).click();
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    expect(uploadCalls).toBe(1);
+    expect(storyWorldBodies).toHaveLength(2);
+    expect(storyWorldBodies[0]).toMatchObject({ sessionId: "session-1", uploadedPhotoIds: ["media-photo-1"] });
+    expect(storyWorldBodies[1]).toMatchObject({ sessionId: "session-1", uploadedPhotoIds: ["media-photo-1"] });
+  });
+
+  test("returns to input and ignores a late story-world response", async ({ page }) => {
+    const storyWorldGate = deferred<void>();
+
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await storyWorldGate.promise;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("这是我自己写的一段，不要丢");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await expect(page.getByTestId("story-world-generating")).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/storycam\/input$/);
+    await expect(page.getByLabel("你的这一幕")).toHaveValue("这是我自己写的一段，不要丢");
+
+    storyWorldGate.resolve();
+
+    await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/storycam\/input$/);
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
+}
 
 function storyWorldFixture() {
   return {

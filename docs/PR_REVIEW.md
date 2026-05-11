@@ -52,11 +52,15 @@ The pre-push hook runs `scripts/pr-ready.sh`. Keep the hook deterministic; do no
 
 ## Codex Project Hook
 
-StoryCam also includes a repo-local Codex hook in `.codex/hooks.json`.
+StoryCam includes a repo-local Codex hook in `.codex/hooks.json`. Codex hooks are enabled for this project in `.codex/config.toml`.
 
-When Codex itself runs a StoryCam `git push`, the hook injects a reminder to ask whether to run the Codex PR gate. This is project-scoped Codex context, not a replacement for CI and not an automatic AI review. It does not run when you push from a normal terminal outside Codex.
+When Codex itself runs a StoryCam `git push` and the push appears to succeed, the hook injects a reminder into Codex context: ask whether to run the StoryCam PR gate now. The hook does not run the AI review automatically.
 
-The hook requires Codex hooks to be enabled, which is declared in `.codex/config.toml`.
+The hook uses a two-stage handshake: `PreToolUse` records the specific `git push` tool call, and `PostToolUse` only evaluates the result for that same call.
+
+The hook suppresses duplicate reminders for the same `HEAD` by writing a marker under the local `.git/` directory.
+
+This is project-scoped Codex context, not a replacement for CI and not an automatic AI review. It does not run when you push from a normal terminal outside Codex; terminal-only pushes rely on the Git pre-push hook reminder.
 
 ## Codex PR Gate
 

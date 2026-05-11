@@ -1056,7 +1056,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 - [x] 用户可输入文本。
 - [x] 用户可上传照片并看到账号内预览。
-- [x] 点击 `生成故事雏形` 调用 story-world route。
+- [x] 点击 `生成故事雏形` 立即进入故事世界板块，并在局部 loading 中调用 story-world route。
 
 **Verification:**
 
@@ -1081,6 +1081,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 **Acceptance criteria:**
 
 - [x] 故事世界默认像短剧本。
+- [x] 故事世界生成中/失败状态停留在故事世界板块，可重试或返回修改。
 - [x] 用户必须确认后才能生成 storyboard。
 - [x] 编辑 story world 会 stale 下游 artifact。
 
