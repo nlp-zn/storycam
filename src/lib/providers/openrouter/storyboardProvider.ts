@@ -35,6 +35,7 @@ const draftFrameSchema = z.object({
   technicalNotes: draftTextSchema,
   timeRange: draftTextSchema,
   title: draftTextSchema,
+  visibleCharacterAssetIds: z.array(draftTextSchema).max(3).optional().catch(undefined),
   visualContent: draftTextSchema
 });
 const draftGroupSchema = z.object({
@@ -98,7 +99,7 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
   const durationPlan = createDurationPlan(input);
   const script = input.storyWorld.script;
   const characters = input.storyWorld.characterAssets
-    .map((asset, index) => `${index + 1}. ${asset.name}：${asset.role}；${asset.stableVisualDescription}`)
+    .map((asset, index) => `${index + 1}. id=${asset.id}；${asset.name}：${asset.role}；${asset.stableVisualDescription}`)
     .join("\n");
   const scenes = input.storyWorld.sceneAssets
     .map((asset, index) => `${index + 1}. ${asset.name}：${asset.location}；${asset.light}；${asset.spatialLogic}`)
@@ -127,7 +128,9 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
       "2a. 分镜脚本必须是已确认 story-world 剧本的改编；不得脱离上方角色资产和场景资产另造人物、地点、服装、道具或空间关系。",
       "3. 该组必须包含 title、storyPurpose、emotionalTurn、planSummary、rhythm、tone、mainImagePrompt、frames。",
       "4. frames 必须正好 9 帧，frameNumber 为 1-9；第 1 帧 canvasPosition=center，是核心分镜主图；第 2-9 帧依次为 top-left/top/top-right/left/right/bottom-left/bottom/bottom-right。",
-      "5. frames 每帧必须包含山隐九列分镜所需字段：timeRange、cameraAngle、shotSize、visualContent、scene、sound、technicalNotes、narrativePurpose，并补充 title、beatType、imagePrompt。",
+      "5. frames 每帧必须包含山隐九列分镜所需字段：timeRange、cameraAngle、shotSize、visualContent、scene、sound、technicalNotes、narrativePurpose，并补充 title、beatType、imagePrompt、visibleCharacterAssetIds。",
+      "5a. visibleCharacterAssetIds 是本帧可见角色资产 id 数组；每帧只能引用上方人物资产的 id，不得写角色姓名、未知 id、主人/路人/人影等未建资产角色。",
+      "5b. 如果剧情需要未列入人物资产的人物，请改写为离屏效果、物件变化、门/灯/声音/视线反应，不要让其身体、脸、背影、剪影、手或局部出现在 imagePrompt 或 visualContent 里。",
       "6. imagePrompt 用英文写，适合文生图生成 16:9 分镜图；必须强调 stylized comic animation storyboard frame、fictional illustrated characters、consistent character and scene assets、not photorealistic。",
       "7. mainImagePrompt 必须等于第 1 帧 imagePrompt 的核心含义。",
       "8. 不要输出内部 id、sessionId、state、version、provider 或 Markdown。"
@@ -222,6 +225,11 @@ function normalizeStoryboardFrames(
   return Array.from({ length: 9 }, (_, index) => {
     const fallback = fallbackFrames[index];
     const draft = draftFrames[index];
+    const visibleCharacterAssetIds = normalizeVisibleCharacterAssetIds(
+      draft?.visibleCharacterAssetIds,
+      fallback.visibleCharacterAssetIds,
+      coreGroup.characterAssetIds
+    );
 
     return storyboardFrameSchema.parse({
       beatType: normalizeBeatType(draft?.beatType, fallback.beatType),
@@ -237,6 +245,7 @@ function normalizeStoryboardFrames(
       technicalNotes: nonEmptyText(draft?.technicalNotes, fallback.technicalNotes),
       timeRange: nonEmptyText(draft?.timeRange, fallback.timeRange),
       title: nonEmptyText(draft?.title, fallback.title),
+      visibleCharacterAssetIds,
       visualContent: nonEmptyText(draft?.visualContent, fallback.visualContent)
     });
   });
@@ -264,9 +273,25 @@ function fallbackFramesForGroup(coreGroup: CoreStoryboardGroup, sessionId: strin
       technicalNotes: "保持角色、服装、道具、场景与光线连续。",
       timeRange: `00:${String(index).padStart(2, "0")}-00:${String(index + 1).padStart(2, "0")}`,
       title: index === 0 ? coreGroup.title : `扩展分镜 ${index}`,
+      visibleCharacterAssetIds: coreGroup.characterAssetIds,
       visualContent: index === 0 ? coreGroup.storyPurpose : "围绕中心分镜展开一个可见的补充动作。"
     })
   );
+}
+
+function normalizeVisibleCharacterAssetIds(
+  values: string[] | undefined,
+  fallbackIds: string[] | undefined,
+  allowedIds: string[]
+) {
+  const allowed = new Set(allowedIds);
+
+  if (values !== undefined) {
+    const requestedIds = values.map((value) => value.trim()).filter((value) => allowed.has(value));
+    return Array.from(new Set(requestedIds)).slice(0, 3);
+  }
+
+  return (fallbackIds ?? allowedIds).filter((id) => allowed.has(id)).slice(0, 3);
 }
 
 function normalizeCanvasPosition(value: string | undefined, fallback: StoryboardFrame["canvasPosition"]) {

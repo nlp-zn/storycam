@@ -35,6 +35,19 @@ export const rainyKDramaStoryWorldFixture = {
       stableVisualDescription: "虚构漫画角色，湿发贴在脸侧，浅色风衣，手指反复点亮手机屏幕",
       wardrobe: "浅色风衣、低饱和围巾",
       consistencyNotes: ["表演始终收住，不做大哭或奔跑"]
+    },
+    {
+      ...baseArtifact,
+      emotionalBaseline: "安静、迟疑，像是不确定是否该开口",
+      id: "character-rainy-crush-counterpart",
+      name: "他",
+      props: ["深色折叠伞"],
+      referenceMediaIds: [],
+      relationshipToUserStory: "作为暗恋对象，让靠近和错过成为可见关系",
+      role: "关键对手戏人物",
+      stableVisualDescription: "虚构漫画角色，二十多岁，深色短发，深蓝外套，进出便利店时动作克制",
+      wardrobe: "深蓝外套、黑色长裤",
+      consistencyNotes: ["始终保持深色外套和安静站姿", "只作为关系人物出现，不喧宾夺主"]
     }
   ],
   sceneAssets: [
@@ -56,9 +69,9 @@ export const rainyKDramaStoryWorldFixture = {
           title: "便利店外景"
         },
         {
-          description: "玻璃门上两个人的倒影短暂重叠。",
-          keyObjects: ["玻璃门", "倒影"],
-          purpose: "呈现两人靠近但没有真正相认。",
+          description: "玻璃门上留出两道可供角色后续入画的冷白反光区域。",
+          keyObjects: ["玻璃门", "冷白反光"],
+          purpose: "预留两人靠近但没有真正相认的空间关系。",
           shotType: "medium",
           title: "玻璃倒影"
         },

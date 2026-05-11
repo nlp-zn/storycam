@@ -50,6 +50,7 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
       `Guidance: ${input.guidance}.`,
       input.imagePrompt ? `Specific image prompt: ${input.imagePrompt}.` : "",
       referenceImagePrompt(input.referenceImages),
+      visibleCharacterAssetPrompt(input),
       baseStoryboardImagePrompt()
     ]
       .filter(Boolean)
@@ -63,10 +64,39 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
     `Emotional turn: ${input.emotionalTurn}.`,
     `Approximate clip duration: ${input.estimatedClipDurationSeconds} seconds.`,
     referenceImagePrompt(input.referenceImages),
+    visibleCharacterAssetPrompt(input),
     baseStoryboardImagePrompt()
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function visibleCharacterAssetPrompt(input: StoryboardImageInput) {
+  const visibleCharacterAssetIds = frameVisibleCharacterAssetIds(input);
+
+  if (!visibleCharacterAssetIds.length) {
+    return [
+      "Visible character assets for this frame: none.",
+      "Only render environment, objects, lighting, and off-screen effects; no visible characters."
+    ].join("\n");
+  }
+
+  return [
+    `Visible character assets for this frame: ${visibleCharacterAssetIds.join(", ")}.`,
+    "Only render the visible character assets listed for this frame as characters.",
+    "Do not add unlisted people, humans, pets, faces, silhouettes, backs, hands, or body parts.",
+    "If the narrative mentions an unlisted person, keep them off-screen and show only effects such as a moving door, light change, object motion, sound cue, or a listed character's eyeline reaction."
+  ].join("\n");
+}
+
+function frameVisibleCharacterAssetIds(input: StoryboardImageInput) {
+  const allowedCharacterAssetIds = "coreGroup" in input ? input.coreGroup.characterAssetIds : input.characterAssetIds;
+  const frameIds = input.frame?.visibleCharacterAssetIds;
+  const requestedIds = frameIds?.length ? frameIds : allowedCharacterAssetIds;
+  const allowedIds = new Set(allowedCharacterAssetIds);
+  const visibleIds = requestedIds.filter((id) => allowedIds.has(id));
+
+  return Array.from(new Set(visibleIds)).slice(0, 3);
 }
 
 function referenceImagePrompt(referenceImages: StoryboardImageInput["referenceImages"]) {

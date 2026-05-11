@@ -94,7 +94,8 @@ export const storyboardFrameSchema = z.object({
   narrativePurpose: z.string().min(1),
   title: z.string().min(1),
   beatType: z.enum(storyboardFrameBeatTypes),
-  imagePrompt: z.string().min(1)
+  imagePrompt: z.string().min(1),
+  visibleCharacterAssetIds: z.array(idSchema).max(3).optional()
 });
 
 export const storyboardScriptSchema = artifactIdentitySchema.extend({
@@ -130,6 +131,7 @@ export const expandedStoryboardCardSchema = artifactIdentitySchema.extend({
   description: z.string().min(1),
   guidance: z.string().min(1),
   imagePrompt: z.string().min(1).optional(),
+  visibleCharacterAssetIds: z.array(idSchema).max(3).optional(),
   mediaAssetId: idSchema.optional()
 });
 

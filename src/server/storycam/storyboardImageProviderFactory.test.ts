@@ -48,6 +48,20 @@ describe("storyboard image provider factory", () => {
       width: 1536
     });
   });
+
+  it("locks storyboard image prompts to the frame's visible character assets", () => {
+    createConfiguredStoryboardImageProvider(inferenceShConfig());
+    const options = createInferenceShImageProviderMock.mock.calls[0]?.[0] as
+      | {
+          buildPrompt(input: ReturnType<typeof storyboardInput>): { prompt: string };
+        }
+      | undefined;
+    const prompt = options?.buildPrompt(storyboardInput()).prompt ?? "";
+
+    expect(prompt).toContain("Visible character assets for this frame: character-1");
+    expect(prompt).toContain("Only render the visible character assets listed for this frame");
+    expect(prompt).toContain("Do not add unlisted people, humans, pets, faces, silhouettes, backs, hands, or body parts");
+  });
 });
 
 function inferenceShConfig(): StoryCamConfig {
@@ -81,6 +95,13 @@ function storyboardInput() {
     coreGroupId: "core-1",
     emotionalTurn: "想说出口",
     estimatedClipDurationSeconds: 15,
+    frame: {
+      frameNumber: 1,
+      imagePrompt: "Stylized comic storyboard frame, dog waits near the door.",
+      title: "安静等待",
+      visibleCharacterAssetIds: ["character-1"],
+      visualContent: "小狗看向门口。"
+    },
     mainImagePrompt: "雨夜便利店门口的主分镜",
     referenceImages: [
       {

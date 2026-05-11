@@ -76,7 +76,10 @@ describe("POST /api/story-world", () => {
     expect(response.headers.get("x-storycam-text-provider")).toBe("mock");
     await expect(response.json()).resolves.toMatchObject({
       artifacts: {
-        characterAssets: [{ type: "character_asset", version: 1 }],
+        characterAssets: expect.arrayContaining([
+          expect.objectContaining({ id: "character-rainy-crush-lead-artifact", type: "character_asset", version: 1 }),
+          expect.objectContaining({ id: "character-rainy-crush-counterpart-artifact", type: "character_asset", version: 1 })
+        ]),
         sceneAssets: [{ type: "scene_asset", version: 1 }],
         script: { type: "script", version: 1 }
       },
@@ -86,7 +89,10 @@ describe("POST /api/story-world", () => {
       ok: true,
       sessionId: "session-1",
       storyWorld: {
-        characterAssets: [expect.objectContaining({ name: "她" })],
+        characterAssets: expect.arrayContaining([
+          expect.objectContaining({ name: "她" }),
+          expect.objectContaining({ name: "他" })
+        ]),
         sceneAssets: [
           expect.objectContaining({
             name: "便利店外的玻璃反光",
@@ -446,7 +452,7 @@ class FakeQuery {
       return {
         created_at: "2026-04-26T00:00:00.000Z",
         deleted_at: null,
-        id: `${this.inserted?.type}-artifact-1`,
+        id: artifactRowId(this.inserted),
         stale_at: null,
         updated_at: "2026-04-26T00:00:00.000Z",
         ...this.inserted
@@ -455,4 +461,14 @@ class FakeQuery {
 
     return this.inserted;
   }
+}
+
+function artifactRowId(inserted: Record<string, unknown> | null) {
+  const dataJson = inserted?.data_json;
+
+  if (dataJson && typeof dataJson === "object" && "id" in dataJson) {
+    return `${String(dataJson.id)}-artifact`;
+  }
+
+  return `${String(inserted?.type)}-artifact`;
 }

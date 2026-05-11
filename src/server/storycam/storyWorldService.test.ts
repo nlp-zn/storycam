@@ -17,20 +17,26 @@ describe("story world service", () => {
       ok: true,
       value: {
         artifacts: {
-          characterAssets: [{ type: "character_asset", version: 1 }],
+          characterAssets: expect.arrayContaining([
+            expect.objectContaining({ id: "character-rainy-crush-lead-artifact", type: "character_asset", version: 1 }),
+            expect.objectContaining({ id: "character-rainy-crush-counterpart-artifact", type: "character_asset", version: 1 })
+          ]),
           sceneAssets: [{ type: "scene_asset", version: 1 }],
           script: { type: "script", version: 1 }
         },
         sessionId: "session-1",
         storyWorld: {
-          characterAssets: [expect.objectContaining({ name: "她" })],
+          characterAssets: expect.arrayContaining([
+            expect.objectContaining({ name: "她" }),
+            expect.objectContaining({ name: "他" })
+          ]),
           sceneAssets: [expect.objectContaining({ name: "便利店外的玻璃反光" })],
           script: expect.objectContaining({ title: "雨夜未发送" })
         }
       }
     });
     expect(client.queries[0]?.table).toBe("storycam_sessions");
-    expect(client.queries.filter((query) => query.table === "storycam_artifacts")).toHaveLength(3);
+    expect(client.queries.filter((query) => query.table === "storycam_artifacts")).toHaveLength(4);
   });
 
   it("keeps uploaded photo refs as media ids and does not pass storage paths to the provider output", async () => {
@@ -366,7 +372,7 @@ class FakeQuery {
       return {
         created_at: "2026-04-26T00:00:00.000Z",
         deleted_at: null,
-        id: `${this.inserted?.type}-artifact-1`,
+        id: artifactRowId(this.inserted),
         stale_at: null,
         updated_at: "2026-04-26T00:00:00.000Z",
         ...this.inserted
@@ -375,4 +381,14 @@ class FakeQuery {
 
     return this.inserted;
   }
+}
+
+function artifactRowId(inserted: Record<string, unknown> | null) {
+  const dataJson = inserted?.data_json;
+
+  if (dataJson && typeof dataJson === "object" && "id" in dataJson) {
+    return `${String(dataJson.id)}-artifact`;
+  }
+
+  return `${String(inserted?.type)}-artifact`;
 }

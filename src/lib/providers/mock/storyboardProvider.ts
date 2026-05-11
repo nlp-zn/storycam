@@ -58,6 +58,7 @@ function generateMockStoryboard(input: MockStoryboardInput): Promise<ProviderRes
 
     const storyboardScript = storyboardScriptSchema.parse({
       frames: buildMockStoryboardFrames(input.sessionId, {
+        characterAssetIds,
         emotionalTurn: "想说出口",
         storyPurpose: "建立她和未发送短信之间的私人情绪。",
         title: "未发送的短信"
@@ -132,7 +133,7 @@ function generateMockStoryboard(input: MockStoryboardInput): Promise<ProviderRes
 
 function buildMockStoryboardFrames(
   sessionId: string,
-  group: Pick<CoreStoryboardGroup, "emotionalTurn" | "storyPurpose" | "title">
+  group: Pick<CoreStoryboardGroup, "characterAssetIds" | "emotionalTurn" | "storyPurpose" | "title">
 ): StoryboardFrame[] {
   const frames = [
     {
@@ -222,7 +223,8 @@ function buildMockStoryboardFrames(
       shotSize: index === 0 ? "中景" : index % 3 === 0 ? "近景" : "全景",
       sound: "雨声、便利店门铃和轻微脚步声",
       technicalNotes: "保持同一角色造型、便利店空间、雨夜冷暖混合光。",
-      timeRange: `00:${String(index).padStart(2, "0")}-00:${String(index + 1).padStart(2, "0")}`
+      timeRange: `00:${String(index).padStart(2, "0")}-00:${String(index + 1).padStart(2, "0")}`,
+      visibleCharacterAssetIds: group.characterAssetIds
     })
   );
 }

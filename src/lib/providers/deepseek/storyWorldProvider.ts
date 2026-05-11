@@ -136,6 +136,8 @@ export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWo
           "不要写镜头编号、景别、机位、运镜、构图、剪辑、转场指令，也不要出现“镜头”“画面”“特写”“推近”“切到”“第 X 镜”等分镜术语。",
           "script.visualStyle 必须定义为漫画电影/动画分镜风格；可以吸收用户的情绪、时代、类型片倾向，但必须转译为非写实真人的虚构漫画角色和动画场景。",
           "人物资产只输出主角级或关键对手戏人物，最多 3 个；不要为背景人群、路人、短暂提及人物建资产。",
+          "凡是会正面出镜、持续互动或承担情感关系的角色，都必须同时生成人物资产；剧本后续不能依赖没有资产的可见人物来完成情绪。",
+          "宠物故事里，如果主人会出现在门口、抚摸、团聚或与宠物同框，宠物和主人都必须同时生成人物资产；如果不建主人资产，就只能用离屏声音、门、灯光、物件变化表达主人。",
           "场景资产必须且只能输出 1 个。这个唯一场景要用 scenePanels 覆盖剧本需要的 4-6 个小切图：主场景、关键物件、光线、动作空间或转场角度。",
           "scenePanels 只能描述无人环境、关键物件、光线、空间动线和可供角色后续入画的位置；不要写可见人物、人物倒影、人物剪影、手、身体局部或人群。",
           "不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。",
@@ -398,7 +400,8 @@ const deepSeekStoryWorldJsonSchema = {
         ],
         type: "object" as const
       },
-      description: "1 to 3 character assets.",
+      description:
+        "1 to 3 character assets. Include every key character that will be visibly on screen, repeatedly interact, or carry the emotional relationship; for pet stories, include both pet and owner when the owner appears on screen.",
       type: "array" as const
     },
     sceneAssets: {

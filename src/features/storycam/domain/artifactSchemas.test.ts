@@ -4,6 +4,7 @@ import {
   clipPromptPacketSchema,
   coreStoryboardGroupSchema,
   directorPacketSchema,
+  expandedStoryboardCardSchema,
   finalWorkSchema,
   generatedClipSchema,
   sceneAssetSchema,
@@ -125,6 +126,7 @@ function storyboardFrames() {
     technicalNotes: "保持雨夜冷暖混合光。",
     timeRange: `00:${String(index).padStart(2, "0")}-00:${String(index + 1).padStart(2, "0")}`,
     title: index === 0 ? "中心主图" : `扩展分镜 ${index}`,
+    visibleCharacterAssetIds: ["character-1"],
     visualContent: index === 0 ? "雨夜便利店门口，人物低头看未发送短信。" : "围绕中心动作补充一个连续分镜画面。"
   }));
 }
@@ -162,12 +164,30 @@ describe("artifact schemas", () => {
     expect(parsed.frames[0]).toMatchObject({
       beatType: "core",
       canvasPosition: "center",
-      frameNumber: 1
+      frameNumber: 1,
+      visibleCharacterAssetIds: ["character-1"]
     });
     expect(parsed.frames[8]).toMatchObject({
       canvasPosition: "bottom-right",
       frameNumber: 9
     });
+  });
+
+  it("keeps visible character asset ids on expanded storyboard cards", () => {
+    expect(
+      expandedStoryboardCardSchema.parse({
+        ...baseArtifact,
+        beatType: "reaction",
+        coreGroupId: "core-group-1",
+        description: "她看见玻璃门动了一下。",
+        guidance: "只让已确认的人物资产出镜。",
+        id: "expanded-1",
+        imagePrompt: "Stylized comic storyboard frame, only confirmed character assets visible.",
+        sortOrder: 0,
+        title: "门口反应",
+        visibleCharacterAssetIds: ["character-1"]
+      }).visibleCharacterAssetIds
+    ).toEqual(["character-1"]);
   });
 
   it("keeps old storyboard scripts restorable when they do not have frames yet", () => {
