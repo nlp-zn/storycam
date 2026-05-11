@@ -35,44 +35,97 @@ export const storyModeEntries = [
   }
 ] as const;
 
-export const discoveryEntries = [
+type DiscoveryEntry = {
+  category: string;
+  duration: string;
+  format: "landscape" | "portrait";
+  imageSrc: string;
+  title: string;
+  videoSrc: string | null;
+};
+
+export const discoveryEntries: readonly DiscoveryEntry[] = [
   {
     title: "雨夜未发送",
+    category: "私人记忆",
     duration: "00:32",
+    format: "landscape",
     imageSrc: "/storycam/discovery/rainy-night-unsent.png",
-    size: "large"
+    videoSrc: "/storycam/discovery/videos/rainy-night-unsent.mp4"
   },
   {
     title: "宠物回家之前",
+    category: "宠物小剧场",
     duration: "00:41",
+    format: "landscape",
     imageSrc: "/storycam/discovery/pet-before-home.png",
-    size: "large"
+    videoSrc: "/storycam/discovery/videos/pet-before-home.mp4"
   },
   {
     title: "小说角色初登场",
+    category: "小说角色",
     duration: "00:28",
+    format: "landscape",
     imageSrc: "/storycam/discovery/novel-character-arrival.png",
-    size: "wide"
-  },
-  {
-    title: "只差一句话",
-    duration: "00:25",
-    imageSrc: "/storycam/discovery/one-line-away.png",
-    size: "small"
-  },
-  {
-    title: "把难过留在风里",
-    duration: "00:34",
-    imageSrc: "/storycam/discovery/sadness-in-wind.png",
-    size: "small"
+    videoSrc: "/storycam/discovery/videos/novel-character-arrival.mp4"
   },
   {
     title: "旧房间里的光",
+    category: "情绪短片",
     duration: "00:36",
+    format: "portrait",
     imageSrc: "/storycam/discovery/old-room-light.png",
-    size: "banner"
+    videoSrc: "/storycam/discovery/videos/old-room-light-portrait.mp4"
+  },
+  {
+    title: "竹林里的背影",
+    category: "小说角色",
+    duration: "00:35",
+    format: "portrait",
+    imageSrc: "/storycam/discovery/sadness-in-wind.png",
+    videoSrc: "/storycam/discovery/videos/bamboo-shadow-portrait.mp4"
+  },
+  {
+    title: "只差一句话",
+    category: "私人记忆",
+    duration: "00:25",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/one-line-away.png",
+    videoSrc: "/storycam/discovery/videos/one-line-away.mp4"
+  },
+  {
+    title: "把难过留在风里",
+    category: "情绪短片",
+    duration: "00:34",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/sadness-in-wind.png",
+    videoSrc: "/storycam/discovery/videos/sadness-in-wind.mp4"
+  },
+  {
+    title: "玩具城市漫游",
+    category: "幻想日常",
+    duration: "00:30",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/pet-before-home.png",
+    videoSrc: "/storycam/discovery/videos/toy-city.mp4"
+  },
+  {
+    title: "清晨的秘密基地",
+    category: "私人记忆",
+    duration: "00:29",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/old-room-light.png",
+    videoSrc: "/storycam/discovery/videos/morning-hideout.mp4"
+  },
+  {
+    title: "她在镜前停顿",
+    category: "情绪短片",
+    duration: "00:27",
+    format: "portrait",
+    imageSrc: "/storycam/discovery/one-line-away.png",
+    videoSrc: "/storycam/discovery/videos/mirror-pause-portrait.mp4"
   }
-] as const;
+];
 
 export const storyAssets = [
   {
