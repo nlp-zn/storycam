@@ -5,7 +5,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createStoryWorld, getAuthStatus, listRecentStoryCamProjects, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
 import type { CreateStoryWorldResponse, RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
-import { directorChoices, discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
+import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
 type SubmitState =
   | { kind: "idle" }
@@ -15,6 +15,10 @@ type SubmitState =
 
 type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 type RecentProjectsStatus = "idle" | "loading" | "ready" | "error";
+type StoryModeEntry = (typeof storyModeEntries)[number];
+type StoryModeId = StoryModeEntry["id"];
+
+const storyModeSampleIdeas = new Set<string>(storyModeEntries.map((entry) => entry.sampleIdea));
 
 type IdeaInputPanelProps = {
   initialChoices?: string[];
@@ -58,7 +62,10 @@ export function IdeaInputPanel({
   const [recentProjectsStatus, setRecentProjectsStatus] = useState<RecentProjectsStatus>("idle");
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
+  const [selectedStoryModeId, setSelectedStoryModeId] = useState<StoryModeId>(storyModeEntries[0].id);
+  const [storyModeNotice, setStoryModeNotice] = useState<string | null>(null);
   const canSubmit = idea.trim().length > 0 && submitState.kind !== "submitting" && authStatus === "authenticated";
+  const selectedStoryMode = storyModeEntries.find((entry) => entry.id === selectedStoryModeId) ?? storyModeEntries[0];
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
   const recentPreviewProjects = recentProjects.slice(0, 2);
   const ideaLength = idea.trim().length;
@@ -156,6 +163,22 @@ export function IdeaInputPanel({
     setSelectedChoices((current) => (current.includes(choice) ? current.filter((item) => item !== choice) : [...current, choice]));
   }
 
+  function selectStoryMode(entry: StoryModeEntry) {
+    const currentIdea = idea.trim();
+    const canReplaceIdea = currentIdea.length === 0 || storyModeSampleIdeas.has(currentIdea);
+
+    setSelectedStoryModeId(entry.id);
+    setSelectedChoices([...entry.defaultChoices]);
+
+    if (canReplaceIdea) {
+      setIdea(entry.sampleIdea);
+      setStoryModeNotice(null);
+      return;
+    }
+
+    setStoryModeNotice("已切换方向，不会覆盖你的文字。");
+  }
+
   function selectPhoto(file: File | null) {
     clearPhotoPreview();
     setPhoto(file);
@@ -220,7 +243,10 @@ export function IdeaInputPanel({
             <textarea
               className="storycam-idea-textarea relative min-h-[92px] w-full resize-none border-none bg-transparent p-0 text-[#e2e2e2] outline-none placeholder:text-[#849495]/45 focus:ring-0 md:min-h-[108px]"
               id="story-idea"
-              onChange={(event) => setIdea(event.target.value)}
+              onChange={(event) => {
+                setIdea(event.target.value);
+                setStoryModeNotice(null);
+              }}
               placeholder="描述电影般的瞬间..."
               value={idea}
             />
@@ -238,7 +264,7 @@ export function IdeaInputPanel({
                   />
                 </label>
                 <span className="storycam-input-tool-label px-1.5 text-[#aebcbd]">拍法倾向</span>
-                {directorChoices.map((choice) => {
+                {selectedStoryMode.directorChoices.map((choice) => {
                   const isSelected = selectedChoiceSet.has(choice);
 
                   return (
@@ -277,15 +303,22 @@ export function IdeaInputPanel({
             {storyModeEntries.map((entry) => (
               <button
                 aria-label={`${entry.label}：${entry.text}`}
-                className={storyModeButtonClassName(entry.status === "当前主线")}
+                aria-pressed={selectedStoryModeId === entry.id}
+                className={storyModeButtonClassName(selectedStoryModeId === entry.id)}
                 key={entry.label}
+                onClick={() => selectStoryMode(entry)}
                 type="button"
               >
-                <span aria-hidden="true" className="mr-2 text-[#dbfcff]">♡</span>
+                <span aria-hidden="true" className="mr-2 text-[#dbfcff]">✧</span>
                 {entry.label}
               </button>
             ))}
           </div>
+          {storyModeNotice ? (
+            <p className="mt-3 text-center text-xs font-bold leading-5 text-[#9eadae]" role="status">
+              {storyModeNotice}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -446,13 +479,14 @@ function inputToolChipClassName(isSelected: boolean): string {
 }
 
 function storyModeButtonClassName(isActive: boolean): string {
-  const baseClassName = "rounded-full border px-5 py-3 text-left text-[15px] font-black leading-none transition";
+  const baseClassName =
+    "rounded-full border px-5 py-3 text-left text-[15px] font-black leading-none transition duration-200";
 
   if (isActive) {
-    return `${baseClassName} border-[#ff4b89]/70 bg-[#ff4b89]/[0.22] text-[#ffe4ee] shadow-[0_0_22px_rgba(255,75,137,0.24)]`;
+    return `${baseClassName} scale-[1.03] border-[#ff4b89] bg-[#ff4b89]/[0.24] text-[#ffe4ee] shadow-[0_0_24px_rgba(255,75,137,0.34),inset_0_0_18px_rgba(255,75,137,0.1)]`;
   }
 
-  return `${baseClassName} border-white/[0.12] bg-white/[0.06] text-[#e2e2e2] hover:border-[#00f0ff]/60 hover:bg-white/10`;
+  return `${baseClassName} border-white/[0.12] bg-white/[0.055] text-[#d5e0e1] hover:border-[#00f0ff]/65 hover:bg-white/10 hover:text-white hover:shadow-[0_0_18px_rgba(0,240,255,0.16)]`;
 }
 
 function recentProjectsSummary(status: RecentProjectsStatus, totalCount: number): string {

@@ -16,6 +16,7 @@ type ClaimsClient = {
 };
 
 const localBypassUserEmail = "storycam-local-dev@example.test";
+export const localAuthBypassDisabledCookieName = "storycam_local_auth_bypass_disabled";
 let localBypassUserPromise: Promise<AuthenticatedUser> | undefined;
 
 export class UnauthorizedError extends Error {
@@ -26,7 +27,7 @@ export class UnauthorizedError extends Error {
 }
 
 export async function requireUser(client?: ClaimsClient): Promise<AuthenticatedUser> {
-  if (!client && isLocalAuthBypassEnabled()) {
+  if (!client && isLocalAuthBypassEnabled() && !(await isLocalAuthBypassDisabledForRequest())) {
     return getOrCreateLocalBypassUser();
   }
 
@@ -43,6 +44,16 @@ export async function requireUser(client?: ClaimsClient): Promise<AuthenticatedU
     id: userId,
     ...(typeof claims?.email === "string" ? { email: claims.email } : {})
   };
+}
+
+async function isLocalAuthBypassDisabledForRequest() {
+  try {
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    return cookieStore.get(localAuthBypassDisabledCookieName)?.value === "1";
+  } catch {
+    return false;
+  }
 }
 
 export function isLocalAuthBypassEnabled(env: Record<string, string | undefined> = process.env) {

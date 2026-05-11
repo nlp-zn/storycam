@@ -11,7 +11,7 @@ export async function GET() {
     });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
-      return NextResponse.json({ authenticated: false, user: null }, { status: 401 });
+      return NextResponse.json({ authenticated: false, user: null });
     }
 
     throw error;

@@ -13,11 +13,28 @@ describe("StoryCam shell content", () => {
 
   it("offers lightweight director choices instead of professional controls", () => {
     expect(directorChoices).toContain("像私人回忆");
-    expect(directorChoices.join(" ")).not.toMatch(/prompt|packet|model|shot/i);
+    expect(storyModeEntries[0].directorChoices).toEqual(directorChoices);
+    expect(
+      storyModeEntries.every((entry) => {
+        const choiceSet = new Set<string>(entry.directorChoices);
+
+        return entry.defaultChoices.every((choice) => choiceSet.has(choice));
+      })
+    ).toBe(true);
+    expect(
+      storyModeEntries
+        .flatMap((entry) => [...entry.directorChoices, ...entry.defaultChoices])
+        .join(" ")
+    ).not.toMatch(/prompt|packet|model|shot/i);
   });
 
-  it("keeps adjacent story modes visible but marked incomplete", () => {
+  it("keeps playable story mode templates visible in a stable order", () => {
     expect(storyModeEntries.map((entry) => entry.label)).toEqual(["私人记忆", "宠物小剧场", "小说角色", "情绪短片"]);
-    expect(storyModeEntries.slice(1).every((entry) => entry.status === "暂不完整支持")).toBe(true);
+    expect(storyModeEntries.map((entry) => entry.id)).toEqual(["personal-memory", "pet-theater", "novel-character", "emotion-short"]);
+    expect(storyModeEntries.every((entry) => entry.sampleIdea.length > 0)).toBe(true);
+    expect(storyModeEntries.every((entry) => entry.directorChoices.length === 4)).toBe(true);
+    expect(storyModeEntries.map((entry) => `${entry.label} ${entry.text} ${entry.sampleIdea}`).join(" ")).not.toMatch(
+      /prompt|packet|model|shot/i
+    );
   });
 });

@@ -6,6 +6,7 @@ import { ClipGenerationWorkspace } from "@/components/storycam/ClipGenerationWor
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
+import { createClient } from "@/lib/supabase/client";
 import {
   confirmedArtifactVersionsForClip,
   confirmedArtifactVersionsFromStoryWorld,
@@ -24,6 +25,7 @@ import {
   regenerateStoryboardFrameImage,
   restoreCurrentStoryCamSession,
   restoreStoryCamSession,
+  getAuthStatus,
   type CreateStoryboardResponse,
   type CreateStoryWorldResponse,
   type GenerateStoryWorldAssetImageResponse,
@@ -49,6 +51,7 @@ const stepPaths = [
 ] as const;
 
 type StoryWorldAssetImage = NonNullable<GenerateStoryWorldAssetImageResponse["media"]>;
+type TopBarAuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 const requiredExpandedFrameCount = 8;
 
 export function StoryCamWorkspace() {
@@ -1077,17 +1080,188 @@ function StoryCamTopBar({
         </div>
       )}
       <div className="storycam-topbar-actions">
-        <span className="storycam-topbar-status">
-          <span aria-hidden="true">●</span>
-          <span>在线</span>
-        </span>
-        <span className="storycam-topbar-status">
-          <span aria-hidden="true">N</span>
-          <span>账号</span>
-        </span>
+        <StoryCamAccountButton />
       </div>
     </header>
   );
+}
+
+function StoryCamAccountButton() {
+  const [authStatus, setAuthStatus] = useState<TopBarAuthStatus>("checking");
+  const [email, setEmail] = useState<string | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void getAuthStatus()
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setAuthStatus(response.authenticated ? "authenticated" : "anonymous");
+        setEmail(response.authenticated ? response.user.email : undefined);
+        setIsMenuOpen(false);
+      })
+      .catch(() => {
+        if (!isMounted) {
+          return;
+        }
+
+        setAuthStatus("error");
+        setEmail(undefined);
+        setIsMenuOpen(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    function closeWhenOutside(event: PointerEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isMenuOpen]);
+
+  async function signInWithGoogle() {
+    if (authStatus === "authenticated" || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+
+    if (error) {
+      setErrorMessage("登录暂时不可用，请稍后再试。");
+      setIsSubmitting(false);
+    }
+  }
+
+  async function signOut() {
+    if (authStatus !== "authenticated" || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    const response = await fetch("/api/auth/sign-out", { method: "POST" });
+
+    if (!response.ok) {
+      setErrorMessage("退出暂时不可用，请稍后再试。");
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsMenuOpen(false);
+    setAuthStatus("anonymous");
+    setEmail(undefined);
+    setIsSubmitting(false);
+    window.location.reload();
+  }
+
+  async function handleAccountAction() {
+    if (authStatus === "authenticated") {
+      setErrorMessage(null);
+      setIsMenuOpen((current) => !current);
+      return;
+    }
+
+    await signInWithGoogle();
+  }
+
+  const isAuthenticated = authStatus === "authenticated";
+  const label = accountLabel(authStatus, isSubmitting);
+  const initials = accountInitials(authStatus, email);
+
+  return (
+    <div className="storycam-account-entry" ref={accountMenuRef}>
+      <button
+        aria-expanded={isAuthenticated ? isMenuOpen : undefined}
+        aria-haspopup={isAuthenticated ? "menu" : undefined}
+        aria-label={isAuthenticated ? `账号 ${email ?? "已登录"}` : "账号，使用 Google 登录"}
+        className={`storycam-account-button${isAuthenticated ? " storycam-account-button--icon-only" : ""}`}
+        disabled={authStatus === "checking" || isSubmitting}
+        onClick={handleAccountAction}
+        type="button"
+      >
+        <span aria-hidden="true" className="storycam-account-avatar">
+          {initials}
+        </span>
+        <span className="storycam-account-label">{label}</span>
+      </button>
+      {isAuthenticated && isMenuOpen ? (
+        <div className="storycam-account-menu" role="menu">
+          <p className="storycam-account-menu-email">{email ?? "已登录"}</p>
+          <button className="storycam-account-menu-item" disabled={isSubmitting} onClick={signOut} role="menuitem" type="button">
+            {isSubmitting ? "正在退出" : "退出"}
+          </button>
+        </div>
+      ) : null}
+      {errorMessage ? <span className="storycam-account-error">{errorMessage}</span> : null}
+    </div>
+  );
+}
+
+function accountLabel(authStatus: TopBarAuthStatus, isSubmitting: boolean) {
+  if (isSubmitting) {
+    return authStatus === "authenticated" ? "正在退出" : "打开 Google";
+  }
+
+  if (authStatus === "checking") {
+    return "检查账号";
+  }
+
+  if (authStatus === "authenticated") {
+    return "";
+  }
+
+  return "账号登录";
+}
+
+function accountInitials(authStatus: TopBarAuthStatus, email: string | undefined) {
+  if (authStatus === "checking") {
+    return "...";
+  }
+
+  if (authStatus === "authenticated") {
+    return (email?.trim().charAt(0) || "A").toUpperCase();
+  }
+
+  return "G";
 }
 
 function StoryCamProgress({
