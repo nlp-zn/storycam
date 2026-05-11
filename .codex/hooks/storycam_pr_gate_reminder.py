@@ -190,9 +190,10 @@ def handle_post_tool_use(payload: dict) -> int:
     message = (
         "StoryCam git push appears to have succeeded. Before ending the turn, ask the user: "
         "\"Run the StoryCam PR gate now?\" If they say yes, run the StoryCam PR gate from "
-        "docs/PR_REVIEW.md with code-reviewer + security-auditor + test-engineer perspectives, "
-        "then merge the findings into GO/NO-GO with blockers, verification evidence, coverage gaps, "
-        "and rollback notes. Do not run the AI review without confirmation."
+        "docs/PR_REVIEW.md and produce three independent reports from code-reviewer, "
+        "security-auditor, and test-engineer, then merge the findings into GO/NO-GO with "
+        "deterministic evidence, blockers, verification evidence, coverage gaps, and rollback notes. "
+        "Do not run the AI review without confirmation."
     )
 
     print(

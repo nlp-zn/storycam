@@ -29,6 +29,7 @@ A change is not ready if it:
 Before opening or merging a meaningful PR, follow `docs/PR_REVIEW.md`:
 
 - run the deterministic local or CI gate,
-- run the Codex PR gate with `code-reviewer`, `security-auditor`, and `test-engineer`,
+- produce three independent reviewer reports from `code-reviewer`, `security-auditor`, and `test-engineer`,
+- merge the three reports into a final `GO` or `NO-GO`,
 - resolve Critical and High findings unless the project owner explicitly accepts the risk,
-- include verification evidence and rollback notes in the PR.
+- include deterministic evidence, reviewer summaries, accepted risks, and rollback notes in the PR.

@@ -33,9 +33,14 @@ cat <<'MSG'
 Deterministic checks passed.
 
 Before opening or merging a PR, run the Codex PR gate:
-  code-reviewer + security-auditor + test-engineer
+  produce three independent reviewer reports from:
+  1. code-reviewer: docs/pr-reviewers/code-reviewer.md
+  2. security-auditor: docs/pr-reviewers/security-auditor.md
+  3. test-engineer: docs/pr-reviewers/test-engineer.md
 
 Ask Codex:
-  Run the StoryCam PR gate on the current diff and return GO/NO-GO with blockers,
-  recommended fixes, verification evidence, coverage gaps, and rollback plan.
+  Run the StoryCam PR gate on the current diff. Merge the three reviewer reports
+  into GO/NO-GO with deterministic evidence, reviewer verdicts, blockers,
+  recommended fixes, accepted risks, coverage gaps, verification evidence,
+  and rollback notes.
 MSG

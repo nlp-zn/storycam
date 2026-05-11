@@ -61,14 +61,16 @@ Prefer small, indexed, cross-linked docs over long instruction blobs. If you add
 
 ## PR Gate
 
-When the user asks for "PR gate", "ship review", "pre-PR check", "review before PR", or similar, run the StoryCam PR gate from `docs/PR_REVIEW.md`.
+When the user asks for "PR gate", "ship review", "pre-PR check", "review before PR", "push 前检查", or similar, run the StoryCam PR Gate from `docs/PR_REVIEW.md`. PR Gate is review-only: do not commit, push, or open a PR.
+
+When the user asks for "ship", "gstack-ship", "可以 push 并提 PR", "开 PR 到 dev", or similar publishing language, run the StoryCam Ship Gate from `docs/PR_REVIEW.md`. Ship Gate may commit, push, and create a PR only after the final gate decision is GO.
 
 When the StoryCam Codex hook injects a PR gate reminder after a successful Codex-run `git push`, ask the user whether to run the StoryCam PR gate before ending the turn. Do not run the AI review without confirmation.
 
-Use three independent perspectives:
+PR Gate and Ship Gate must produce three independent reviewer reports:
 
-- `code-reviewer` for correctness, readability, architecture, security, and performance.
-- `security-auditor` for auth, RLS, storage, provider secrets, logs, signed URLs, and external inputs.
-- `test-engineer` for coverage gaps, edge cases, error paths, concurrency, and E2E needs.
+- `code-reviewer` from `docs/pr-reviewers/code-reviewer.md`.
+- `security-auditor` from `docs/pr-reviewers/security-auditor.md`.
+- `test-engineer` from `docs/pr-reviewers/test-engineer.md`.
 
-Merge the results into a GO/NO-GO decision with blockers, recommended fixes, accepted risks, verification evidence, and rollback notes. Keep deterministic checks in CI or `scripts/pr-ready.sh`; do not hide AI review inside a git hook.
+Run the three reviewers in parallel when the client supports subagents and the user has explicitly requested PR Gate or Ship Gate; otherwise run the three reviewer prompts sequentially while keeping the reports separate. Merge the results into a GO/NO-GO decision with deterministic evidence, reviewer verdicts, blockers, recommended fixes, accepted risks, coverage gaps, verification evidence, and rollback notes. Keep deterministic checks in CI or `scripts/pr-ready.sh`; do not hide AI review inside a git hook.

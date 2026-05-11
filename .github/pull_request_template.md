@@ -12,9 +12,11 @@
 
 ## Codex PR Gate
 
-- [ ] Ran Codex PR gate with `code-reviewer`, `security-auditor`, and `test-engineer`
+- [ ] Produced three independent reviewer reports: `code-reviewer`, `security-auditor`, and `test-engineer`
+- [ ] Merged reviewer verdicts into final `GO` / `NO-GO`
 - [ ] No Critical/High blockers remain, or accepted risks are listed below
 - [ ] Test coverage gaps are addressed or explicitly tracked
+- [ ] Deterministic evidence is listed in this PR
 - [ ] Rollback plan is clear for production-bound changes
 
 ## StoryCam Risk Areas

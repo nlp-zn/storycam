@@ -11,7 +11,32 @@ Every StoryCam PR should have two kinds of evidence before merge:
 
 Deterministic checks block mechanically. Codex review catches product, architecture, security, reliability, and test gaps that raw commands miss.
 
-## Local Pre-PR Check
+The final goal of this gate is stable review evidence: every PR gate or ship gate must produce three independent reviewer reports, then the main agent merges them into one `GO` or `NO-GO` decision.
+
+## Gate Modes
+
+Use PR Gate when the user asks for:
+
+- `PR gate`,
+- `ship review`,
+- `pre-PR check`,
+- `review before PR`,
+- `push 前检查`,
+- or similar review-only wording.
+
+PR Gate is read-only for git and publishing actions. It must not commit, push, or open a PR. It runs deterministic checks, runs the three reviewer perspectives, and returns the merged `GO` or `NO-GO` report.
+
+Use Ship Gate when the user asks for:
+
+- `ship`,
+- `gstack-ship`,
+- `可以 push 并提 PR`,
+- `开 PR 到 dev`,
+- or similar wording that explicitly asks Codex to publish the change.
+
+Ship Gate runs the same deterministic checks and three reviewer perspectives. Only a final `GO` authorizes commit, push, and PR creation. Any blocker stops the workflow before publish actions.
+
+## Deterministic Gate
 
 Run the fast deterministic gate before opening a PR:
 
@@ -40,6 +65,57 @@ With `PR_READY_E2E=1`, it also runs:
 pnpm test:e2e
 ```
 
+If deterministic checks fail, stop the PR Gate or Ship Gate. Fix the hard failure first; do not spend AI review on a known broken diff.
+
+## Three Reviewer Gate
+
+After deterministic checks pass, run three independent reviewer perspectives:
+
+- `code-reviewer`: use `docs/pr-reviewers/code-reviewer.md`.
+- `security-auditor`: use `docs/pr-reviewers/security-auditor.md`.
+- `test-engineer`: use `docs/pr-reviewers/test-engineer.md`.
+
+Each reviewer is read-only. It must inspect the current diff and relevant context, produce its own report, and avoid calling the other reviewer perspectives. If the current client supports subagents and the user explicitly requested PR Gate or Ship Gate, run the three reviewers in parallel. If not, run the three reviewer prompts sequentially, but keep the reports separate.
+
+Every reviewer report must include:
+
+- `Verdict: PASS | WARN | BLOCK`,
+- `Findings`,
+- `Required fixes`,
+- `Recommended fixes`,
+- `Test gaps`,
+- `Accepted risks`.
+
+Critical or High security findings are blockers unless the project owner explicitly accepts the risk.
+
+## Merge Decision
+
+The main agent owns the final decision. Merge the three reports into one summary with:
+
+- deterministic checks and results,
+- the three reviewer verdicts,
+- blockers that must be fixed before merge,
+- recommended fixes,
+- accepted risks,
+- verification evidence,
+- coverage gaps,
+- rollback notes,
+- final `GO` or `NO-GO`.
+
+If any reviewer returns `BLOCK`, the merged decision is `NO-GO` until the blocker is fixed or explicitly accepted by the project owner. After fixes, rerun the relevant deterministic checks and reviewer perspective; before publishing, rerun the full gate when practical.
+
+## Ship Actions
+
+Ship Gate may continue to commit, push, and create a PR only after the merge decision is `GO`.
+
+The PR body must include:
+
+- deterministic check evidence,
+- a summary of all three reviewer reports,
+- the final gate mode and decision,
+- accepted risks,
+- rollback notes.
+
 ## Optional Local Git Hook
 
 Local hooks are optional because they only affect one machine. To opt in:
@@ -61,28 +137,6 @@ The hook uses a two-stage handshake: `PreToolUse` records the specific `git push
 The hook suppresses duplicate reminders for the same `HEAD` by writing a marker under the local `.git/` directory.
 
 This is project-scoped Codex context, not a replacement for CI and not an automatic AI review. It does not run when you push from a normal terminal outside Codex; terminal-only pushes rely on the Git pre-push hook reminder.
-
-## Codex PR Gate
-
-Before opening or merging a meaningful PR, ask Codex:
-
-```text
-Run the StoryCam PR gate on the current diff.
-
-Use three independent review perspectives:
-1. code-reviewer: correctness, readability, architecture, security, performance
-2. security-auditor: auth, RLS, storage, provider secrets, logs, signed URLs, external inputs
-3. test-engineer: test coverage, edge cases, error paths, concurrency, E2E needs
-
-Merge the reports into GO/NO-GO with:
-- blockers that must be fixed before merge,
-- recommended fixes,
-- accepted risks,
-- verification commands and results,
-- rollback plan for production-bound changes.
-```
-
-Critical or High security findings are merge blockers unless the project owner explicitly accepts the risk.
 
 ## GitHub CI Gate
 
