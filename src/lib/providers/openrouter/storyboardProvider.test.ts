@@ -142,7 +142,8 @@ describe("openrouter storyboard provider", () => {
                 technicalNotes: "保持角色资产一致。",
                 timeRange: `00:0${index + 3}-00:0${index + 4}`,
                 title: `扩展 ${index + 2}`,
-                visibleCharacterAssetIds: ["unlisted-owner"],
+                ...(index === 0 ? { visibleCharacterAssetIds: [] } : {}),
+                ...(index === 1 ? { visibleCharacterAssetIds: ["unlisted-owner"] } : {}),
                 visualContent: "门口光线变化。"
               }))
             ],
@@ -169,7 +170,9 @@ describe("openrouter storyboard provider", () => {
     });
 
     expect(result.ok && result.value.storyboardScript.frames[0]?.visibleCharacterAssetIds).toEqual([knownCharacterId]);
-    expect(result.ok && result.value.storyboardScript.frames[1]?.visibleCharacterAssetIds).toEqual(
+    expect(result.ok && result.value.storyboardScript.frames[1]?.visibleCharacterAssetIds).toEqual([]);
+    expect(result.ok && result.value.storyboardScript.frames[2]?.visibleCharacterAssetIds).toEqual([]);
+    expect(result.ok && result.value.storyboardScript.frames[3]?.visibleCharacterAssetIds).toEqual(
       storyWorld.characterAssets.map((asset) => asset.id)
     );
   });

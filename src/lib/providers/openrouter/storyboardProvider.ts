@@ -285,9 +285,9 @@ function normalizeVisibleCharacterAssetIds(
   allowedIds: string[]
 ) {
   const allowed = new Set(allowedIds);
-  const requestedIds = (values ?? []).map((value) => value.trim()).filter((value) => allowed.has(value));
 
-  if (requestedIds.length) {
+  if (values !== undefined) {
+    const requestedIds = values.map((value) => value.trim()).filter((value) => allowed.has(value));
     return Array.from(new Set(requestedIds)).slice(0, 3);
   }
 
