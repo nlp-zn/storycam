@@ -832,6 +832,55 @@ button:disabled {
   background: rgba(0, 240, 255, 0.18);
 }
 
+.storycam-skeleton-line {
+  display: block;
+  width: 100%;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07));
+  background-size: 220% 100%;
+  animation: storycam-skeleton-pulse 1.8s ease-in-out infinite;
+}
+
+.storycam-skeleton-line--wide {
+  width: 92%;
+}
+
+.storycam-skeleton-line--medium {
+  width: 68%;
+}
+
+.storycam-skeleton-line--short {
+  width: 46%;
+}
+
+.storycam-skeleton-block {
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  background-size: 220% 220%;
+  animation: storycam-skeleton-pulse 2s ease-in-out infinite;
+}
+
+.storycam-asset-card--pending {
+  min-height: 240px;
+  opacity: 0.82;
+}
+
+@keyframes storycam-skeleton-pulse {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 .storycam-story-beats {
   display: grid;
   gap: 8px;

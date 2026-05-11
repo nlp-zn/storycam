@@ -3,14 +3,12 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { createStoryWorld, getAuthStatus, listRecentStoryCamProjects, uploadStoryCamPhoto } from "@/features/storycam/client/storycamApi";
-import type { CreateStoryWorldResponse, RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
+import { getAuthStatus, listRecentStoryCamProjects } from "@/features/storycam/client/storycamApi";
+import type { RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
 import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
 type SubmitState =
   | { kind: "idle" }
-  | { kind: "submitting"; message: string }
-  | { kind: "success"; message: string; sessionId: string }
   | { kind: "error"; message: string };
 
 type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
@@ -24,7 +22,13 @@ type IdeaInputPanelProps = {
   initialChoices?: string[];
   initialIdea?: string;
   onProjectSelected?: (sessionId: string) => Promise<void> | void;
-  onStoryWorldCreated?: (storyWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) => void;
+  onSubmitStoryWorldDraft?: (draft: StoryWorldDraft) => void;
+};
+
+export type StoryWorldDraft = {
+  idea: string;
+  photo: File | null;
+  selectedChoices: string[];
 };
 
 type RecentProjectsInlineProps = {
@@ -48,14 +52,13 @@ export function IdeaInputPanel({
   initialChoices = ["像私人回忆"],
   initialIdea = "我想把暗恋拍成韩剧雨夜",
   onProjectSelected,
-  onStoryWorldCreated
+  onSubmitStoryWorldDraft
 }: IdeaInputPanelProps) {
   const [idea, setIdea] = useState(initialIdea);
   const [selectedChoices, setSelectedChoices] = useState<string[]>(initialChoices);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | undefined>();
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
   const [recentProjects, setRecentProjects] = useState<RecentStoryCamProject[]>([]);
@@ -64,7 +67,7 @@ export function IdeaInputPanel({
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const [selectedStoryModeId, setSelectedStoryModeId] = useState<StoryModeId>(storyModeEntries[0].id);
   const [storyModeNotice, setStoryModeNotice] = useState<string | null>(null);
-  const canSubmit = idea.trim().length > 0 && submitState.kind !== "submitting" && authStatus === "authenticated";
+  const canSubmit = idea.trim().length > 0 && authStatus === "authenticated";
   const selectedStoryMode = storyModeEntries.find((entry) => entry.id === selectedStoryModeId) ?? storyModeEntries[0];
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
   const recentPreviewProjects = recentProjects.slice(0, 2);
@@ -123,7 +126,7 @@ export function IdeaInputPanel({
     };
   }, [authStatus]);
 
-  async function submitStoryWorld() {
+  function submitStoryWorld() {
     if (!canSubmit) {
       if (authStatus !== "authenticated") {
         setSubmitState({ kind: "error", message: authGateMessage(authStatus) });
@@ -132,31 +135,12 @@ export function IdeaInputPanel({
       return;
     }
 
-    try {
-      setSubmitState({ kind: "submitting", message: photo ? "正在保存照片并生成故事雏形" : "正在生成故事雏形" });
-
-      const upload = photo ? await uploadStoryCamPhoto({ file: photo, sessionId }) : null;
-      const nextSessionId = upload?.sessionId ?? sessionId;
-      const storyWorld = await createStoryWorld({
-        input: idea.trim(),
-        lightweightChoices: selectedChoices,
-        sessionId: nextSessionId,
-        uploadedPhotoIds: upload?.uploadedPhotoIds
-      });
-
-      setSessionId(storyWorld.sessionId);
-      onStoryWorldCreated?.(storyWorld, { idea: idea.trim(), selectedChoices });
-      setSubmitState({
-        kind: "success",
-        message: `故事雏形已生成，剧本版本 ${storyWorld.artifacts.script.version}。`,
-        sessionId: storyWorld.sessionId
-      });
-    } catch (error) {
-      setSubmitState({
-        kind: "error",
-        message: messageForError(error)
-      });
-    }
+    setSubmitState({ kind: "idle" });
+    onSubmitStoryWorldDraft?.({
+      idea: idea.trim(),
+      photo,
+      selectedChoices
+    });
   }
 
   function toggleChoice(choice: string) {
@@ -285,13 +269,13 @@ export function IdeaInputPanel({
               <div className="flex shrink-0 items-center justify-end gap-4">
                 <span className="storycam-eyebrow text-[12px] text-[#00f0ff]">{ideaLength} / 120</span>
                 <button
-                  aria-label={submitState.kind === "submitting" ? submitState.message : "生成故事雏形"}
+                  aria-label="生成故事雏形"
                   className="flex size-12 items-center justify-center rounded-full border border-[#ff4b89]/70 bg-[#ff4b89] text-2xl font-black text-black shadow-[0_0_28px_rgba(255,75,137,0.48)] transition hover:scale-105 hover:brightness-110 disabled:scale-100 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
                   disabled={!canSubmit}
                   onClick={submitStoryWorld}
                   type="button"
                 >
-                  <span aria-hidden="true">{submitState.kind === "submitting" ? "..." : "↑"}</span>
+                  <span aria-hidden="true">↑</span>
                 </button>
               </div>
             </div>
@@ -340,13 +324,8 @@ export function IdeaInputPanel({
         </p>
       ) : null}
 
-      {submitState.kind === "success" || submitState.kind === "error" ? (
-        <p
-          className={`mx-auto mt-5 max-w-[920px] rounded-2xl border px-4 py-3 text-sm ${
-            submitState.kind === "success" ? "border-[#00f0ff]/50 text-[#dbfcff]" : "border-[#ff4b89]/60 text-[#ffd9e0]"
-          }`}
-          role="status"
-        >
+      {submitState.kind === "error" ? (
+        <p className="mx-auto mt-5 max-w-[920px] rounded-2xl border border-[#ff4b89]/60 px-4 py-3 text-sm text-[#ffd9e0]" role="status">
           {submitState.message}
         </p>
       ) : null}
@@ -675,46 +654,4 @@ function authGateMessage(authStatus: AuthStatus) {
   }
 
   return "登录后才能上传照片和生成真实故事。你可以先编辑想法。";
-}
-
-function messageForError(error: unknown) {
-  if (error instanceof Error) {
-    if (error.message === "authentication_required") {
-      return "请先登录，再保存照片和生成故事。";
-    }
-
-    if (error.message === "invalid_size") {
-      return "照片太大了，请换一张 10MB 以内的图片。";
-    }
-
-    if (error.message === "invalid_mime_type") {
-      return "只支持 JPEG、PNG 或 WebP 图片。";
-    }
-
-    if (
-      error.message === "OPENROUTER_TEXT_INVALID_OUTPUT" ||
-      error.message === "OPENROUTER_STORY_WORLD_INVALID_OUTPUT" ||
-      error.message === "DEEPSEEK_STORY_WORLD_INVALID_OUTPUT"
-    ) {
-      return "结构化故事输出校验失败，请重试或切换文本模型。";
-    }
-
-    if (error.message === "DEEPSEEK_TOOL_CALL_MISSING") {
-      return "DeepSeek 没有返回必要的结构化工具调用，请重试或切换文本模型。";
-    }
-
-    if (error.message === "DEEPSEEK_TOOL_ARGUMENTS_INVALID_JSON") {
-      return "DeepSeek 返回的工具参数不是合法 JSON，请重试或切换文本模型。";
-    }
-
-    if (error.message === "DEEPSEEK_TEXT_PROVIDER_FAILED") {
-      return "DeepSeek 文本服务暂时不可用，请稍后重试。";
-    }
-
-    if (error.message === "STORYCAM_CONFIG_INVALID") {
-      return "文本模型配置暂时不可用，请检查本地 OpenRouter 或 DeepSeek 配置。";
-    }
-  }
-
-  return "故事雏形生成失败，请稍后再试。";
 }

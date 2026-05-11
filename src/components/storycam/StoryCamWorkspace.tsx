@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipGenerationWorkspace } from "@/components/storycam/ClipGenerationWorkspace";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
+import type { StoryWorldDraft } from "@/components/storycam/IdeaInputPanel";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -17,6 +18,7 @@ import {
   cancelGenerationJob,
   createFinalWork,
   createStitchSuggestion,
+  createStoryWorld,
   createStoryboard,
   deleteStoryCamSession,
   expandStoryboardGroup,
@@ -25,6 +27,7 @@ import {
   regenerateStoryboardFrameImage,
   restoreCurrentStoryCamSession,
   restoreStoryCamSession,
+  uploadStoryCamPhoto,
   getAuthStatus,
   type CreateStoryboardResponse,
   type CreateStoryWorldResponse,
@@ -52,6 +55,15 @@ const stepPaths = [
 
 type StoryWorldAssetImage = NonNullable<GenerateStoryWorldAssetImageResponse["media"]>;
 type TopBarAuthStatus = "checking" | "authenticated" | "anonymous" | "error";
+type StoryWorldGenerationRequest = StoryWorldDraft & {
+  requestId: number;
+  sessionId?: string;
+  uploadedPhotoIds?: string[];
+};
+type StoryWorldGenerationState =
+  | { kind: "idle" }
+  | { kind: "pending"; request: StoryWorldGenerationRequest }
+  | { kind: "error"; message: string; request: StoryWorldGenerationRequest };
 const requiredExpandedFrameCount = 8;
 
 export function StoryCamWorkspace() {
@@ -77,10 +89,12 @@ export function StoryCamWorkspace() {
     typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname)
   );
   const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["像私人回忆"] });
+  const [storyWorldGeneration, setStoryWorldGeneration] = useState<StoryWorldGenerationState>({ kind: "idle" });
   const [coreGroupTargetCount, setCoreGroupTargetCount] = useState<1 | 2 | 3>(1);
   const imagePollAttemptsRef = useRef<Record<string, number>>({});
   const videoPollAttemptsRef = useRef<Record<string, number>>({});
   const mediaRefreshInFlightRef = useRef(false);
+  const storyWorldRequestIdRef = useRef(0);
 
   const rememberStoryWorldAssetImage = useCallback((artifactId: string, media: StoryWorldAssetImage) => {
     setStoryWorld((current) => {
@@ -206,6 +220,7 @@ export function StoryCamWorkspace() {
     setClipJob(restored.clipJob ?? null);
     setFinalWork(restored.finalWork ?? null);
     setIsStoryWorldEditorOpen(false);
+    setStoryWorldGeneration({ kind: "idle" });
     setSelectedStepIndex(null);
     setWorkspaceNotice(null);
     setStoryboardStatus(restored.storyboard ? "ready" : "idle");
@@ -451,10 +466,11 @@ export function StoryCamWorkspace() {
     };
   }, [storyboard, expansion]);
 
-  function handleStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) {
+  function applyStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) {
     setInputDraft(draft);
     setWorkspaceNotice(null);
     setStoryWorld(nextStoryWorld);
+    setStoryWorldGeneration({ kind: "idle" });
     setStoryWorldConfirmed(false);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
@@ -467,6 +483,115 @@ export function StoryCamWorkspace() {
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
     syncStepPath(1);
+  }
+
+  function submitStoryWorldDraft(draft: StoryWorldDraft) {
+    const request = {
+      ...draft,
+      requestId: storyWorldRequestIdRef.current + 1
+    };
+    storyWorldRequestIdRef.current = request.requestId;
+
+    setInputDraft({ idea: draft.idea, selectedChoices: draft.selectedChoices });
+    setWorkspaceNotice(null);
+    setStoryWorld(null);
+    setStoryWorldConfirmed(false);
+    setStoryboard(null);
+    setSelectedCoreGroupIndex(null);
+    setExpansion(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
+    setFinalWork(null);
+    setIsStoryWorldEditorOpen(false);
+    setSelectedStepIndex(null);
+    setStoryboardStatus("idle");
+    setStoryboardMessage("正在生成故事雏形。");
+    setStoryWorldGeneration({ kind: "pending", request });
+    syncStepPath(1);
+    void runStoryWorldGeneration(request);
+  }
+
+  async function runStoryWorldGeneration(request: StoryWorldGenerationRequest) {
+    let requestWithUploads = request;
+
+    try {
+      if (request.photo && !request.uploadedPhotoIds?.length) {
+        const upload = await uploadStoryCamPhoto({ file: request.photo, sessionId: request.sessionId });
+
+        if (!isActiveStoryWorldRequest(request.requestId)) {
+          return;
+        }
+
+        requestWithUploads = {
+          ...request,
+          sessionId: upload.sessionId,
+          uploadedPhotoIds: upload.uploadedPhotoIds
+        };
+        setStoryWorldGeneration({ kind: "pending", request: requestWithUploads });
+      }
+
+      const nextStoryWorld = await createStoryWorld({
+        input: requestWithUploads.idea,
+        lightweightChoices: requestWithUploads.selectedChoices,
+        sessionId: requestWithUploads.sessionId,
+        uploadedPhotoIds: requestWithUploads.uploadedPhotoIds
+      });
+
+      if (!isActiveStoryWorldRequest(request.requestId)) {
+        return;
+      }
+
+      applyStoryWorldCreated(nextStoryWorld, {
+        idea: requestWithUploads.idea,
+        selectedChoices: requestWithUploads.selectedChoices
+      });
+    } catch {
+      if (!isActiveStoryWorldRequest(request.requestId)) {
+        return;
+      }
+
+      setStoryWorldGeneration({
+        kind: "error",
+        message: "故事雏形生成失败，可以重试或返回修改。",
+        request: requestWithUploads
+      });
+    }
+  }
+
+  function retryStoryWorldGeneration() {
+    if (storyWorldGeneration.kind !== "error") {
+      return;
+    }
+
+    const request = {
+      ...storyWorldGeneration.request,
+      requestId: storyWorldRequestIdRef.current + 1
+    };
+    storyWorldRequestIdRef.current = request.requestId;
+
+    setStoryWorldGeneration({ kind: "pending", request });
+    setSelectedStepIndex(null);
+    syncStepPath(1);
+    void runStoryWorldGeneration(request);
+  }
+
+  function returnToStoryWorldInput() {
+    abandonStoryWorldGeneration();
+    setSelectedStepIndex(0);
+    syncStepPath(0);
+  }
+
+  function abandonStoryWorldGeneration() {
+    if (storyWorldGeneration.kind === "idle") {
+      return;
+    }
+
+    storyWorldRequestIdRef.current += 1;
+    setStoryWorldGeneration({ kind: "idle" });
+  }
+
+  function isActiveStoryWorldRequest(requestId: number) {
+    return storyWorldRequestIdRef.current === requestId;
   }
 
   async function restoreSelectedProject(sessionId: string) {
@@ -528,6 +653,7 @@ export function StoryCamWorkspace() {
       setClipJob(null);
       setFinalWork(null);
       setIsStoryWorldEditorOpen(false);
+      setStoryWorldGeneration({ kind: "idle" });
       setSelectedStepIndex(null);
       setStoryboardStatus("idle");
       setStoryboardMessage("这个故事已删除，可以重新开始。");
@@ -802,12 +928,24 @@ export function StoryCamWorkspace() {
 
   const selectedGroup =
     storyboard && selectedCoreGroupIndex !== null ? storyboard.storyboard.coreStoryboardGroups[selectedCoreGroupIndex] : undefined;
-  const reachedStepIndex = currentStepIndex({ clipConfirmationSummary, clipJob, finalWork, storyboard, storyWorld });
+  const reachedStepIndex = currentStepIndex({
+    clipConfirmationSummary,
+    clipJob,
+    finalWork,
+    storyboard,
+    storyWorld,
+    storyWorldGeneration
+  });
   const activeStepIndex = selectedStepIndex !== null && selectedStepIndex <= reachedStepIndex ? selectedStepIndex : reachedStepIndex;
 
   useEffect(() => {
     function handlePopState() {
       const stepIndex = stepIndexFromPath(window.location.pathname);
+
+      if (stepIndex === 0 && !storyWorld && storyWorldGeneration.kind !== "idle") {
+        storyWorldRequestIdRef.current += 1;
+        setStoryWorldGeneration({ kind: "idle" });
+      }
 
       setSelectedStepIndex(stepIndex !== null && stepIndex <= reachedStepIndex ? stepIndex : null);
     }
@@ -815,7 +953,7 @@ export function StoryCamWorkspace() {
     window.addEventListener("popstate", handlePopState);
 
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [reachedStepIndex]);
+  }, [reachedStepIndex, storyWorld, storyWorldGeneration.kind]);
   const clipGenerationPanel =
     activeStepIndex >= 3 && (clipConfirmationSummary || clipJob || finalWork) ? (
       <ClipGenerationWorkspace
@@ -842,6 +980,10 @@ export function StoryCamWorkspace() {
       return;
     }
 
+    if (index === 0 && !storyWorld) {
+      abandonStoryWorldGeneration();
+    }
+
     setSelectedStepIndex(index);
     syncStepPath(index);
 
@@ -851,6 +993,10 @@ export function StoryCamWorkspace() {
   }
 
   function goHome() {
+    if (!storyWorld) {
+      abandonStoryWorldGeneration();
+    }
+
     setSelectedStepIndex(0);
     setIsStoryWorldEditorOpen(false);
     syncStepPath(0);
@@ -866,9 +1012,15 @@ export function StoryCamWorkspace() {
         initialChoices={inputDraft.selectedChoices}
         initialIdea={inputDraft.idea}
         onProjectSelected={restoreSelectedProject}
-        onStoryWorldCreated={handleStoryWorldCreated}
+        onSubmitStoryWorldDraft={submitStoryWorldDraft}
       />
     </div>
+  ) : storyWorldGeneration.kind !== "idle" && activeStepIndex >= 1 ? (
+    <StoryWorldPendingReviewShell
+      generationState={storyWorldGeneration}
+      onBackToInput={returnToStoryWorldInput}
+      onRetry={retryStoryWorldGeneration}
+    />
   ) : storyWorld ? (
     <div>
       {clipGenerationPanel ? (
@@ -914,7 +1066,7 @@ export function StoryCamWorkspace() {
         initialChoices={inputDraft.selectedChoices}
         initialIdea={inputDraft.idea}
         onProjectSelected={restoreSelectedProject}
-        onStoryWorldCreated={handleStoryWorldCreated}
+        onSubmitStoryWorldDraft={submitStoryWorldDraft}
       />
     </div>
   );
@@ -935,15 +1087,262 @@ export function StoryCamWorkspace() {
   );
 }
 
+type StoryWorldPendingReviewShellProps = {
+  generationState: Exclude<StoryWorldGenerationState, { kind: "idle" }>;
+  onBackToInput: () => void;
+  onRetry: () => void;
+};
+
+function StoryWorldPendingReviewShell({
+  generationState,
+  onBackToInput,
+  onRetry
+}: StoryWorldPendingReviewShellProps) {
+  const { request } = generationState;
+  const isPending = generationState.kind === "pending";
+
+  return (
+    <section className="storycam-story-world relative" data-testid="story-world-generating">
+      <StoryWorldPendingHero isPending={isPending} />
+
+      <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">
+        <div className="storycam-script-column">
+          <StoryWorldPendingScriptCard generationState={generationState} />
+        </div>
+        <StoryWorldPendingAssetsColumn />
+      </div>
+
+      <StoryWorldPendingDock isPending={isPending} onBackToInput={onBackToInput} onRetry={onRetry} />
+    </section>
+  );
+}
+
+function StoryWorldPendingHero({ isPending }: { isPending: boolean }) {
+  return (
+    <div className="storycam-story-world-hero">
+      <div className="storycam-section-kicker">
+        <span />
+        <p>第二部：故事世界</p>
+        <span />
+      </div>
+      <h1 className="storycam-heading-lg">确认故事世界</h1>
+      <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
+      <span className="rounded-full border border-[#ffcfbe]/80 px-4 py-2 text-sm font-bold text-[#ffcfbe]">
+        {isPending ? "生成中" : "需要重试"}
+      </span>
+    </div>
+  );
+}
+
+function StoryWorldPendingScriptCard({
+  generationState
+}: {
+  generationState: Exclude<StoryWorldGenerationState, { kind: "idle" }>;
+}) {
+  const { request } = generationState;
+  const isPending = generationState.kind === "pending";
+  const statusText = request.photo ? "正在保存参考照片并生成剧本。" : "正在生成你的剧本、人物和地点。";
+  const visibleChoices = request.selectedChoices.length ? request.selectedChoices : ["未选择拍法"];
+
+  return (
+    <div
+      className="storycam-glass storycam-script-card relative overflow-hidden p-6 md:p-8"
+      data-testid="story-world-script-card"
+      role={isPending ? "status" : "alert"}
+    >
+      <div className="storycam-script-card-texture" />
+      <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-3">
+          <span className="storycam-script-icon">
+            文
+          </span>
+          <div>
+            <p className="storycam-eyebrow">我的剧本</p>
+            <p className="mt-1 text-xs font-bold text-[#849495]">
+              {isPending ? "生成中" : "需要重试"}
+            </p>
+          </div>
+        </div>
+        <button className="storycam-secondary-button px-4 py-2 text-xs" disabled type="button">
+          改剧本
+        </button>
+      </div>
+
+      <div className="storycam-logline-box">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#00f0ff]">故事一句话</p>
+        <p className="mt-2 text-lg font-black leading-8 text-[#eefbfc]">{request.idea}</p>
+        <p className="mt-3 text-xs font-bold text-[#849495]">{statusText}</p>
+        {request.photo ? (
+          <p className="mt-3 text-xs font-bold text-[#849495]">参考照片：{request.photo.name}</p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {visibleChoices.map((choice) => (
+            <span className="rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-xs font-black text-[#dbfcff]" key={choice}>
+              {choice}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <StoryWorldPendingScriptBody generationState={generationState} />
+      <StoryWorldPendingBeats isPending={isPending} />
+    </div>
+  );
+}
+
+function StoryWorldPendingScriptBody({
+  generationState
+}: {
+  generationState: Exclude<StoryWorldGenerationState, { kind: "idle" }>;
+}) {
+  const isPending = generationState.kind === "pending";
+
+  return (
+    <article className="storycam-script-body">
+      <p className="mb-4 text-xs font-black uppercase tracking-[0.18em] text-[#849495]">完整剧本</p>
+      {isPending ? (
+        <div className="space-y-4" data-testid="story-world-script-skeleton">
+          <span className="storycam-skeleton-line storycam-skeleton-line--wide" />
+          <span className="storycam-skeleton-line storycam-skeleton-line--medium" />
+          <span className="storycam-skeleton-line storycam-skeleton-line--short" />
+        </div>
+      ) : (
+        <div>
+          <p className="text-[15px] font-semibold leading-8 text-[#ffd9e0]">{generationState.message}</p>
+          <p className="mt-4 text-sm font-bold leading-6 text-[#849495]">可以重试，或回到输入页调整这一幕。</p>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function StoryWorldPendingBeats({ isPending }: { isPending: boolean }) {
+  return (
+    <div className="relative mt-6 border-t border-white/10 pt-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="storycam-eyebrow">关键片段</p>
+        <span className="text-xs font-bold text-[#849495]">{isPending ? "生成中" : "未生成"}</span>
+      </div>
+      {isPending ? (
+        <ol className="storycam-story-beats" data-testid="story-world-beats-skeleton">
+          {[1, 2, 3].map((item) => (
+            <li key={item}>
+              <span>{String(item).padStart(2, "0")}</span>
+              <p><span className="storycam-skeleton-line" /></p>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="rounded-[1rem] border border-[#ff4b89]/30 bg-[#ff4b89]/10 px-4 py-3 text-sm font-bold text-[#ffd9e0]">
+          关键片段还没有生成。
+        </p>
+      )}
+    </div>
+  );
+}
+
+function StoryWorldPendingAssetsColumn() {
+  return (
+    <div className="storycam-assets-column">
+      <div className="storycam-asset-generate-banner">
+        <p>
+          <span aria-hidden="true">i</span>
+          资产图会在剧本生成后出现。
+        </p>
+        <button className="storycam-secondary-button px-4 py-2 text-xs" disabled type="button">
+          等待剧本生成
+        </button>
+      </div>
+      <StoryWorldPendingAssetSection heading="角色资产" title="人物生成后出现" variant="characters" />
+      <StoryWorldPendingAssetSection heading="场景资产" title="地点生成后出现" variant="scenes" />
+    </div>
+  );
+}
+
+function StoryWorldPendingAssetSection({
+  heading,
+  title,
+  variant
+}: {
+  heading: string;
+  title: string;
+  variant: "characters" | "scenes";
+}) {
+  return (
+    <section>
+      <div className="storycam-asset-section-header">
+        <h2 className="text-2xl font-black text-[#e2e2e2]">{heading}</h2>
+        <span className="storycam-eyebrow">WAITING</span>
+      </div>
+      <div className={`storycam-asset-grid storycam-asset-grid--${variant}`}>
+        <StoryWorldPendingAssetPlaceholder title={title} />
+      </div>
+    </section>
+  );
+}
+
+function StoryWorldPendingAssetPlaceholder({ title }: { title: string }) {
+  return (
+    <article className="storycam-glass storycam-asset-card storycam-asset-card--pending p-5">
+      <div className="storycam-skeleton-block" />
+      <p className="mt-4 text-sm font-black text-[#d5e2e3]">{title}</p>
+      <div className="mt-3 space-y-2">
+        <span className="storycam-skeleton-line storycam-skeleton-line--wide" />
+        <span className="storycam-skeleton-line storycam-skeleton-line--medium" />
+      </div>
+    </article>
+  );
+}
+
+function StoryWorldPendingDock({
+  isPending,
+  onBackToInput,
+  onRetry
+}: {
+  isPending: boolean;
+  onBackToInput: () => void;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="storycam-bottom-dock">
+      <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
+        1 组 · 约 15 秒内
+      </div>
+      {isPending ? (
+        <button className="storycam-primary-button" disabled type="button">
+          剧本生成中
+        </button>
+      ) : (
+        <div className="flex flex-wrap justify-end gap-3">
+          <button className="storycam-secondary-button" onClick={onBackToInput} type="button">
+            返回修改
+          </button>
+          <button className="storycam-primary-button" onClick={onRetry} type="button">
+            重试生成
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type CurrentStepInput = {
   clipConfirmationSummary: string | null;
   clipJob: GenerationJobSummary | null;
   finalWork: FinalWorkResponse | null;
   storyboard: CreateStoryboardResponse | null;
   storyWorld: CreateStoryWorldResponse | null;
+  storyWorldGeneration: StoryWorldGenerationState;
 };
 
-function currentStepIndex({ clipConfirmationSummary, clipJob, finalWork, storyboard, storyWorld }: CurrentStepInput) {
+function currentStepIndex({
+  clipConfirmationSummary,
+  clipJob,
+  finalWork,
+  storyboard,
+  storyWorld,
+  storyWorldGeneration
+}: CurrentStepInput) {
   if (finalWork || clipJob || clipConfirmationSummary) {
     return 3;
   }
@@ -952,7 +1351,7 @@ function currentStepIndex({ clipConfirmationSummary, clipJob, finalWork, storybo
     return 2;
   }
 
-  if (storyWorld) {
+  if (storyWorld || storyWorldGeneration.kind !== "idle") {
     return 1;
   }
 
