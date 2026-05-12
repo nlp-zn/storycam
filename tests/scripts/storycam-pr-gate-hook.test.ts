@@ -57,6 +57,26 @@ describe("StoryCam PR gate Codex hook", () => {
   });
 
   it("emits a three-reviewer PR gate reminder after a successful Codex git push", () => {
+    const output = runHook({
+      hook_event_name: "PostToolUse",
+      cwd: repoRoot,
+      tool_use_id: "push-ok",
+      tool_input: { cmd: "git push origin docs/pr-gate-three-reviewers" },
+      tool_response: { exit_code: 0, output: "Everything up-to-date" }
+    });
+
+    const reminder = JSON.parse(output);
+    const context = reminder.hookSpecificOutput.additionalContext;
+
+    expect(reminder.systemMessage).toContain("StoryCam PR gate reminder");
+    expect(context).toContain("three independent reports");
+    expect(context).toContain("code-reviewer");
+    expect(context).toContain("security-auditor");
+    expect(context).toContain("test-engineer");
+    expect(context).toContain("Do not run the AI review without confirmation");
+  });
+
+  it("supports the legacy pre/post pending handshake for Codex clients without post tool input", () => {
     runHook({
       hook_event_name: "PreToolUse",
       cwd: repoRoot,
@@ -83,18 +103,24 @@ describe("StoryCam PR gate Codex hook", () => {
   });
 
   it("does not remind after a failed Codex git push", () => {
-    runHook({
-      hook_event_name: "PreToolUse",
-      cwd: repoRoot,
-      tool_use_id: "push-failed",
-      tool_input: { cmd: "git push origin docs/pr-gate-three-reviewers" }
-    });
-
     const output = runHook({
       hook_event_name: "PostToolUse",
       cwd: repoRoot,
       tool_use_id: "push-failed",
+      tool_input: { cmd: "git push origin docs/pr-gate-three-reviewers" },
       tool_response: { exit_code: 1, output: "failed to push some refs" }
+    });
+
+    expect(output).toBe("");
+  });
+
+  it("does not emit output for non-push commands", () => {
+    const output = runHook({
+      hook_event_name: "PostToolUse",
+      cwd: repoRoot,
+      tool_use_id: "fetch",
+      tool_input: { cmd: "git fetch origin --prune" },
+      tool_response: { exit_code: 0, output: "" }
     });
 
     expect(output).toBe("");

@@ -26,8 +26,9 @@ env:
   STORYCAM_FINAL_WORK_PROVIDER: mock
 
 jobs:
-  quality:
-    name: Lint, Typecheck, Test, Build
+  pr-fast:
+    name: PR Fast Gate
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -46,22 +47,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
+      - name: Run PR fast gate
+        run: scripts/check-pr.sh
 
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Unit tests
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
-
-  e2e:
-    name: Playwright E2E
+  dev-integration:
+    name: Dev Integration Gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
-    needs: quality
 
     steps:
       - name: Checkout
@@ -82,14 +74,14 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run StoryCam E2E
-        run: pnpm test:e2e
+      - name: Run dev integration gate
+        run: scripts/check-dev.sh
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: dev-playwright-report
           path: playwright-report/
           if-no-files-found: ignore
 
@@ -97,6 +89,49 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-test-results
+          name: dev-playwright-test-results
+          path: test-results/
+          if-no-files-found: ignore
+
+  main-release:
+    name: Main Release Gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run main release gate
+        run: scripts/check-release.sh
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-playwright-test-results
           path: test-results/
           if-no-files-found: ignore
