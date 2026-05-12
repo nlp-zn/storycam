@@ -3,11 +3,17 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Clapperboard, Heart, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clapperboard, Heart, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getAuthStatus, listRecentStoryCamProjects, prefetchStoryCamSessionRestore } from "@/features/storycam/client/storycamApi";
 import type { RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
 import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
+import {
+  defaultStoryCamVideoAspectRatio,
+  storyCamVideoAspectRatioLabel,
+  storyCamVideoAspectRatios,
+  type StoryCamVideoAspectRatio
+} from "@/features/storycam/domain/videoSettings";
 
 type SubmitState =
   | { kind: "idle" }
@@ -35,6 +41,7 @@ export type StoryWorldDraft = {
   idea: string;
   photo: File | null;
   selectedChoices: string[];
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 type RecentProjectsInlineProps = {
@@ -74,7 +81,10 @@ export function IdeaInputPanel({
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const [selectedStoryModeId, setSelectedStoryModeId] = useState<StoryModeId>(storyModeEntries[0].id);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<StoryCamVideoAspectRatio>(defaultStoryCamVideoAspectRatio);
+  const [isAspectRatioMenuOpen, setIsAspectRatioMenuOpen] = useState(false);
   const [storyModeNotice, setStoryModeNotice] = useState<string | null>(null);
+  const aspectRatioMenuRef = useRef<HTMLDivElement>(null);
   const recentProjectsAbortRef = useRef<AbortController | null>(null);
   const recentProjectsRequestIdRef = useRef(0);
   const recentProjectThumbnailCacheRef = useRef<Record<string, CachedRecentProjectThumbnail>>({});
@@ -172,6 +182,32 @@ export function IdeaInputPanel({
   }, [authStatus, refreshRecentProjects]);
 
   useEffect(() => {
+    if (!isAspectRatioMenuOpen) {
+      return;
+    }
+
+    function closeWhenOutside(event: PointerEvent) {
+      if (!aspectRatioMenuRef.current?.contains(event.target as Node)) {
+        setIsAspectRatioMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsAspectRatioMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isAspectRatioMenuOpen]);
+
+  useEffect(() => {
     if (authStatus !== "authenticated") {
       return;
     }
@@ -219,7 +255,8 @@ export function IdeaInputPanel({
     onSubmitStoryWorldDraft?.({
       idea: idea.trim(),
       photo,
-      selectedChoices
+      selectedChoices,
+      videoAspectRatio
     });
   }
 
@@ -293,6 +330,11 @@ export function IdeaInputPanel({
     }
   }
 
+  function selectAspectRatio(ratio: StoryCamVideoAspectRatio) {
+    setVideoAspectRatio(ratio);
+    setIsAspectRatioMenuOpen(false);
+  }
+
   return (
     <section className="relative mx-auto w-full">
       <div className="mx-auto flex w-full max-w-[920px] flex-col items-stretch">
@@ -335,6 +377,34 @@ export function IdeaInputPanel({
                     type="file"
                   />
                 </label>
+                <div className="storycam-aspect-menu" ref={aspectRatioMenuRef}>
+                  <button
+                    aria-expanded={isAspectRatioMenuOpen}
+                    aria-haspopup="menu"
+                    className={inputToolChipClassName(videoAspectRatio !== defaultStoryCamVideoAspectRatio)}
+                    onClick={() => setIsAspectRatioMenuOpen((current) => !current)}
+                    type="button"
+                  >
+                    {aspectRatioButtonLabel(videoAspectRatio)}
+                    <ChevronDown aria-hidden="true" className="ml-1 size-3.5" strokeWidth={2.4} />
+                  </button>
+                  {isAspectRatioMenuOpen ? (
+                    <div className="storycam-aspect-menu-panel" role="menu">
+                      {storyCamVideoAspectRatios.map((ratio) => (
+                        <button
+                          aria-checked={videoAspectRatio === ratio}
+                          className="storycam-aspect-menu-item"
+                          key={ratio}
+                          onClick={() => selectAspectRatio(ratio)}
+                          role="menuitemradio"
+                          type="button"
+                        >
+                          {storyCamVideoAspectRatioLabel(ratio)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <span className="storycam-input-tool-label px-1.5 text-[#aebcbd]">拍法倾向</span>
                 {selectedStoryMode.directorChoices.map((choice) => {
                   const isSelected = selectedChoiceSet.has(choice);
@@ -495,7 +565,7 @@ function RecentProjectsInline({
               <div className="min-w-0">
                 <h3 className="truncate text-[14px] font-black leading-tight text-[#e2e2e2]">{project.title}</h3>
                 <p className="mt-1 truncate text-[12px] font-bold leading-tight text-[#849495]">
-                  {restoringProjectId === project.sessionId ? "恢复中" : `最后编辑：${formatProjectDate(project.updatedAt)}`}
+                  {recentProjectMetaLabel(project, restoringProjectId)}
                 </p>
               </div>
             </button>
@@ -583,6 +653,14 @@ function inputToolChipClassName(isSelected: boolean): string {
   return `${baseClassName} border-white/[0.12] bg-white/[0.035] text-[#9eadae] hover:border-[#00f0ff]/45 hover:bg-white/[0.07] hover:text-white`;
 }
 
+function aspectRatioButtonLabel(aspectRatio: StoryCamVideoAspectRatio): string {
+  if (aspectRatio === defaultStoryCamVideoAspectRatio) {
+    return "选择画幅";
+  }
+
+  return storyCamVideoAspectRatioLabel(aspectRatio);
+}
+
 function StoryModeIcon({ id }: { id: StoryModeId }) {
   const strokeWidth = 2.2;
 
@@ -624,6 +702,14 @@ function recentProjectsEmptyMessage(status: RecentProjectsStatus): string {
   }
 
   return "还没有可继续的项目。";
+}
+
+function recentProjectMetaLabel(project: RecentStoryCamProject, restoringProjectId: string | null): string {
+  if (restoringProjectId === project.sessionId) {
+    return "恢复中";
+  }
+
+  return `${storyCamVideoAspectRatioLabel(project.videoAspectRatio)} · 最后编辑：${formatProjectDate(project.updatedAt)}`;
 }
 
 function RecentProjectsDrawer({

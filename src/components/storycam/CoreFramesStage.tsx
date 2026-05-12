@@ -7,6 +7,7 @@ import type {
   ExpandStoryboardGroupResponse,
   StoryboardImageState
 } from "@/features/storycam/client/storycamApi";
+import { storyCamVideoModelLabel, storyCamVideoModels, type StoryCamVideoModel } from "@/features/storycam/domain/videoSettings";
 
 type StoryboardScriptView =
   | CreateStoryboardResponse["storyboard"]["storyboardScript"]
@@ -24,8 +25,10 @@ type CoreFramesStageProps = {
   onMediaLoadError?: () => void;
   onRegenerateFrame: (index: number, frameNumber: number) => void;
   onSelectGroup: (index: number) => void;
+  onVideoModelChange: (model: StoryCamVideoModel) => void;
   selectedIndex: number;
   storyboard: CreateStoryboardResponse;
+  videoModel: StoryCamVideoModel;
 };
 
 type FrameView = {
@@ -71,8 +74,10 @@ export function CoreFramesStage({
   onMediaLoadError,
   onRegenerateFrame,
   onSelectGroup,
+  onVideoModelChange,
   selectedIndex,
-  storyboard
+  storyboard,
+  videoModel
 }: CoreFramesStageProps) {
   const [previewFrameNumber, setPreviewFrameNumber] = useState<number | null>(null);
   const coreGroups = storyboard.storyboard.coreStoryboardGroups.slice(0, 1);
@@ -234,6 +239,29 @@ export function CoreFramesStage({
           <Button onClick={onBackToStoryWorld} type="button" variant="secondaryGlass">
             返回故事世界
           </Button>
+          <div className="flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-2" aria-label="选择视频模型">
+            {storyCamVideoModels.map((model) => {
+              const isSelected = videoModel === model;
+
+              return (
+                <button
+                  aria-pressed={isSelected}
+                  className={[
+                    "rounded-full px-3 py-2 text-xs font-black transition",
+                    isSelected
+                      ? "bg-[#00f0ff] text-black shadow-[0_0_16px_rgba(0,240,255,0.24)]"
+                      : "border border-white/10 bg-white/[0.04] text-[#aebcbd] hover:border-[#00f0ff]/45 hover:text-white"
+                  ].join(" ")}
+                  disabled={isBusy}
+                  key={model}
+                  onClick={() => onVideoModelChange(model)}
+                  type="button"
+                >
+                  {storyCamVideoModelLabel(model)}
+                </button>
+              );
+            })}
+          </div>
           <Button
             disabled={isBusy || !canGenerateClip}
             onClick={() => onGenerateClip(activeIndex)}

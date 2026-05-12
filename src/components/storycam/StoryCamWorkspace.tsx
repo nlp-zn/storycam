@@ -52,6 +52,13 @@ import {
   shouldPollGenerationJob
 } from "@/features/storycam/client/jobPolling";
 import { workflowStages } from "@/features/storycam/domain/shellContent";
+import {
+  defaultStoryCamVideoAspectRatio,
+  defaultStoryCamVideoModel,
+  parseStoryCamVideoModel,
+  type StoryCamVideoAspectRatio,
+  type StoryCamVideoModel
+} from "@/features/storycam/domain/videoSettings";
 
 const stepPaths = [
   "/storycam/input",
@@ -86,6 +93,7 @@ type ClipGenerationRequest = {
   durationSeconds: number;
   requestId: number;
   sessionId: string;
+  videoModel: StoryCamVideoModel;
 };
 type ClipGenerationState =
   | { kind: "idle" }
@@ -128,6 +136,8 @@ export function StoryCamWorkspace() {
     typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname)
   );
   const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["留白多一点"] });
+  const [videoAspectRatio, setVideoAspectRatio] = useState<StoryCamVideoAspectRatio>(defaultStoryCamVideoAspectRatio);
+  const [videoModel, setVideoModel] = useState<StoryCamVideoModel>(defaultStoryCamVideoModel);
   const [storyWorldGeneration, setStoryWorldGeneration] = useState<StoryWorldGenerationState>({ kind: "idle" });
   const [storyboardGeneration, setStoryboardGeneration] = useState<StoryboardGenerationState>({ kind: "idle" });
   const [clipGeneration, setClipGeneration] = useState<ClipGenerationState>({ kind: "idle" });
@@ -295,6 +305,8 @@ export function StoryCamWorkspace() {
     setStoryWorldConfirmed(restored.storyWorldConfirmed);
     setStoryboard(restored.storyboard);
     setCoreGroupTargetCount(restored.coreGroupTargetCount);
+    setVideoAspectRatio(restored.videoAspectRatio ?? restored.storyWorld.videoAspectRatio ?? defaultStoryCamVideoAspectRatio);
+    setVideoModel(parseStoryCamVideoModel(restored.clipJob?.providerName) ?? defaultStoryCamVideoModel);
     setSelectedCoreGroupIndex(restored.storyboard ? 0 : null);
     setExpansion(null);
     setClipConfirmationSummary(null);
@@ -665,6 +677,8 @@ export function StoryCamWorkspace() {
 
   function applyStoryWorldCreated(nextStoryWorld: CreateStoryWorldResponse, draft: { idea: string; selectedChoices: string[] }) {
     setInputDraft(draft);
+    setVideoAspectRatio(nextStoryWorld.videoAspectRatio ?? defaultStoryCamVideoAspectRatio);
+    setVideoModel(defaultStoryCamVideoModel);
     setWorkspaceNotice(null);
     setStoryWorld(nextStoryWorld);
     setStoryWorldAssetImageJobs({});
@@ -693,6 +707,8 @@ export function StoryCamWorkspace() {
     storyWorldRequestIdRef.current = request.requestId;
 
     setInputDraft({ idea: draft.idea, selectedChoices: draft.selectedChoices });
+    setVideoAspectRatio(draft.videoAspectRatio);
+    setVideoModel(defaultStoryCamVideoModel);
     setWorkspaceNotice(null);
     setStoryWorld(null);
     setStoryWorldAssetImageJobs({});
@@ -737,7 +753,8 @@ export function StoryCamWorkspace() {
         input: requestWithUploads.idea,
         lightweightChoices: requestWithUploads.selectedChoices,
         sessionId: requestWithUploads.sessionId,
-        uploadedPhotoIds: requestWithUploads.uploadedPhotoIds
+        uploadedPhotoIds: requestWithUploads.uploadedPhotoIds,
+        videoAspectRatio: requestWithUploads.videoAspectRatio
       });
 
       if (!isActiveStoryWorldRequest(request.requestId)) {
@@ -1234,7 +1251,8 @@ export function StoryCamWorkspace() {
       coreGroupIndex: index,
       durationSeconds: group.estimatedClipDurationSeconds,
       requestId: clipRequestIdRef.current + 1,
-      sessionId: storyboard.sessionId
+      sessionId: storyboard.sessionId,
+      videoModel
     };
     clipRequestIdRef.current = request.requestId;
 
@@ -1271,7 +1289,8 @@ export function StoryCamWorkspace() {
         confirmedArtifactVersions: confirmedArtifactVersionsForClip(storyboard, request.coreGroupIndex, expansion),
         coreStoryboardGroupId: request.coreArtifactId,
         idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${coreArtifact.id}-${Date.now()}`,
-        sessionId: request.sessionId
+        sessionId: request.sessionId,
+        videoModel: request.videoModel
       });
 
       if (!isActiveClipRequest(request.requestId)) {
@@ -1447,6 +1466,12 @@ export function StoryCamWorkspace() {
 
     return () => window.removeEventListener("popstate", handlePopState);
   }, [clipGeneration.kind, reachedStepIndex, storyWorld, storyboardGeneration.kind, storyWorldGeneration.kind]);
+
+  const clipWorkspaceVideoModel =
+    clipGeneration.kind !== "idle"
+      ? clipGeneration.request.videoModel
+      : parseStoryCamVideoModel(clipJob?.providerName) ?? videoModel;
+
   const clipGenerationPanel =
     activeStepIndex >= 3 && (clipGeneration.kind !== "idle" || clipJob || finalWork) ? (
       <ClipGenerationWorkspace
@@ -1469,6 +1494,8 @@ export function StoryCamWorkspace() {
         onRetake={retryClipGeneration}
         posterImageUrl={selectedGroup?.representativeImage.status === "ready" ? selectedGroup.representativeImage.signedUrl : undefined}
         title={selectedGroup?.title}
+        videoAspectRatio={videoAspectRatio}
+        videoModel={clipWorkspaceVideoModel}
       />
     ) : null;
   function navigateToStep(index: number) {
@@ -1549,8 +1576,10 @@ export function StoryCamWorkspace() {
           onMediaLoadError={refreshCurrentSessionMediaUrls}
           onRegenerateFrame={regenerateFrameImage}
           onSelectGroup={selectCoreGroup}
+          onVideoModelChange={setVideoModel}
           selectedIndex={selectedCoreGroupIndex ?? 0}
           storyboard={storyboard}
+          videoModel={videoModel}
         />
       ) : (
         <StoryWorldReview

@@ -151,12 +151,14 @@ export const expandedStoryboardCardSchema = artifactIdentitySchema.extend({
 
 export const clipPromptPacketSchema = artifactIdentitySchema.extend({
   coreGroupId: idSchema,
+  aspectRatio: z.enum(["16:9", "9:16"]).default("16:9"),
   providerSendConfirmed: z.literal(true),
   confirmationSummary: z.string().min(1),
   inputArtifactVersions: z.record(idSchema, positiveVersionSchema),
   plannedDurationSeconds: z.number().positive().optional(),
   providerPrompt: z.string().min(1).optional(),
   redactedPromptSummary: z.string().min(1),
+  resolution: z.enum(["480p", "720p", "1080p"]).default("720p"),
   storyboardScriptId: idSchema.optional(),
   storyboardFrames: z
     .array(

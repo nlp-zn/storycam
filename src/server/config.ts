@@ -1,3 +1,5 @@
+import type { StoryCamVideoModel } from "@/features/storycam/domain/videoSettings";
+
 export type GenerationMode = "mock" | "real";
 export type TextProvider = "deepseek" | "mock" | "openrouter";
 export type MultimodalProvider = "mock" | "openrouter";
@@ -63,7 +65,7 @@ export type StoryCamConfig = {
   };
   seedance?: {
     apiKey: string;
-    model: string;
+    models: Record<StoryCamVideoModel, string>;
   };
 };
 
@@ -183,6 +185,9 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const needsSeedance = videoProvider === "seedance_2_0";
   const seedanceApiKey = needsSeedance ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
   const seedanceModel = needsSeedance ? required(env, "SEEDANCE_MODEL", issues) : undefined;
+  const seedanceFastModel = needsSeedance
+    ? optional(env, "SEEDANCE_FAST_MODEL") ?? "doubao-seedance-2-0-fast-260128"
+    : undefined;
   const providerReferenceSignedUrlTtlSeconds = optionalPositiveInteger(
     env,
     "STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS",
@@ -203,7 +208,15 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
         ...(openrouterImageModel ? { imageModel: openrouterImageModel } : {})
       }
     : undefined;
-  const seedance = seedanceApiKey && seedanceModel ? { apiKey: seedanceApiKey, model: seedanceModel } : undefined;
+  const seedance = seedanceApiKey && seedanceModel && seedanceFastModel
+    ? {
+        apiKey: seedanceApiKey,
+        models: {
+          seedance_2_0: seedanceModel,
+          seedance_2_0_fast: seedanceFastModel
+        }
+      }
+    : undefined;
   const deepseek = needsDeepSeek && deepseekApiKey && deepseekTextModel && deepseekTextBaseUrl
     ? {
         apiKey: deepseekApiKey,

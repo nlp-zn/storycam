@@ -67,7 +67,7 @@ describe("GET /api/storycam-sessions/current", () => {
       },
       sessions: [
         sessionRow({ id: "empty-session", updated_at: "2026-04-28T11:00:00.000Z" }),
-        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
+        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z", video_aspect_ratio: "9:16" })
       ]
     });
 
@@ -86,6 +86,7 @@ describe("GET /api/storycam-sessions/current", () => {
       restored: true,
       sessionId: "story-session",
       storyWorldConfirmed: false,
+      videoAspectRatio: "9:16",
       storyboard: null,
       storyWorld: {
         artifacts: {
@@ -93,6 +94,7 @@ describe("GET /api/storycam-sessions/current", () => {
           sceneAssets: [{ id: "scene-artifact-1", type: "scene_asset", version: 1 }],
           script: { id: "script-artifact-1", type: "script", version: 1 }
         },
+        videoAspectRatio: "9:16",
         sessionId: "story-session",
         storyWorld: {
           characterAssets: [expect.objectContaining({ name: "她" })],
@@ -394,7 +396,7 @@ describe("GET /api/storycam-sessions/recent", () => {
       },
       sessions: [
         sessionRow({ id: "empty-session", updated_at: "2026-04-28T12:00:00.000Z" }),
-        sessionRow({ core_group_target_count: 2, id: "storyboard-session", updated_at: "2026-04-28T11:00:00.000Z" }),
+        sessionRow({ core_group_target_count: 2, id: "storyboard-session", updated_at: "2026-04-28T11:00:00.000Z", video_aspect_ratio: "9:16" }),
         sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
       ]
     });
@@ -420,7 +422,8 @@ describe("GET /api/storycam-sessions/recent", () => {
             signedUrl: "signed://storycam-generated/users%2Fuser-1%2Fsessions%2Fstoryboard-session%2Fgenerated%2Fprivate-core.png"
           }),
           title: "雨夜未发送",
-          updatedAt: "2026-04-28T11:00:00.000Z"
+          updatedAt: "2026-04-28T11:00:00.000Z",
+          videoAspectRatio: "9:16"
         },
         {
           currentStep: "story-world",
@@ -545,6 +548,7 @@ function sessionRow(overrides: Record<string, unknown> = {}) {
     status: "draft",
     updated_at: "2026-04-28T09:00:00.000Z",
     user_id: "user-1",
+    video_aspect_ratio: "16:9",
     ...overrides
   };
 }

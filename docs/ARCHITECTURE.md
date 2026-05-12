@@ -83,14 +83,14 @@ Provider concepts are separate:
 
 - `generation_mode`: `mock` or `real`
 - `provider_kind`: `text`, `multimodal`, `image`, `video`, `stitch`
-- `provider_name`: `mock`, `deepseek`, `openrouter`, `inference_sh`, `seedance_2_0`, etc.
+- `provider_name`: `mock`, `deepseek`, `openrouter`, `inference_sh`, `seedance_2_0`, `seedance_2_0_fast`, etc.
 
 Provider selection is server configuration, not a client parameter.
 
 - Story-world text uses DeepSeek official beta strict function calling. It forces the `submit_story_world` tool, parses only tool-call arguments, and validates the final StoryCam artifacts before returning data to the client.
 - Core storyboard text and fallback structured text use OpenRouter-backed Vercel AI SDK adapters.
 - Story-world, core storyboard, and expanded storyboard images prefer Inference.sh `openai/gpt-image-2`; OpenRouter image remains a legacy adapter behind the same boundary.
-- Video generation uses Seedance 2.0 behind `VideoGenerationProvider`.
+- Video generation uses Seedance 2.0 / Seedance 2.0 Fast behind `VideoGenerationProvider`.
 - Final work uses the final-work provider/composer boundary and remains account-scoped.
 
 Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_TEXT_PROVIDER=deepseek`; other providers may remain mock. Runtime process env takes precedence over `.env.local`.

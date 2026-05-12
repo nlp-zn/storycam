@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  defaultStoryCamVideoAspectRatio,
+  parseStoryCamVideoAspectRatio,
+  type StoryCamVideoAspectRatio
+} from "@/features/storycam/domain/videoSettings";
+import {
   characterAssetSchema,
   coreStoryboardGroupSchema,
   expandedStoryboardCardSchema,
@@ -52,6 +57,7 @@ export type RestoreStoryCamSessionOutput =
       storyboard: RestoredStoryboard | null;
       storyWorld: RestoredStoryWorld;
       storyWorldConfirmed: boolean;
+      videoAspectRatio: StoryCamVideoAspectRatio;
     };
 
 export type RecentStoryCamProject = {
@@ -62,6 +68,7 @@ export type RecentStoryCamProject = {
   thumbnail: RestoredMedia | null;
   title: string;
   updatedAt: string;
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 export type ListRecentStoryCamProjectsOutput = {
@@ -90,6 +97,7 @@ type RestoredStoryWorld = {
     sceneAssets: PublicStoryWorldProviderOutput["sceneAssets"];
     script: PublicStoryWorldProviderOutput["script"];
   };
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 type RestoredStoryboard = {
@@ -238,7 +246,8 @@ async function restoreSession(
   }
 
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
-  const storyWorld = await restoreStoryWorld(client, session.id, storyWorldBundle, mediaRows);
+  const videoAspectRatio = restoreSessionAspectRatio(session);
+  const storyWorld = await restoreStoryWorld(client, session.id, storyWorldBundle, mediaRows, videoAspectRatio);
   const storyboard = await restoreStoryboard(client, userId, session, storyWorldBundle, artifactRows, mediaRows);
   const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
   const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
@@ -254,7 +263,8 @@ async function restoreSession(
     sessionId: session.id,
     storyboard,
     storyWorld,
-    storyWorldConfirmed: Boolean(storyboard)
+    storyWorldConfirmed: Boolean(storyboard),
+    videoAspectRatio
   };
 }
 
@@ -286,8 +296,13 @@ async function summarizeSession(
     summary: script.summary,
     thumbnail: await restoreProjectThumbnail(client, storyboard, storyWorldBundle, mediaRows),
     title: script.title,
-    updatedAt: session.updated_at
+    updatedAt: session.updated_at,
+    videoAspectRatio: restoreSessionAspectRatio(session)
   };
+}
+
+function restoreSessionAspectRatio(session: StoryCamSessionRow) {
+  return parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 }
 
 function findRestorableStoryWorldBundle(rows: StoryCamArtifactRow[]): StoryWorldBundle | null {
@@ -349,7 +364,8 @@ async function restoreStoryWorld(
   client: SupabaseClient<Database>,
   sessionId: string,
   bundle: StoryWorldBundle,
-  mediaRows: MediaAssetRow[]
+  mediaRows: MediaAssetRow[],
+  videoAspectRatio: StoryCamVideoAspectRatio
 ): Promise<RestoredStoryWorld> {
   const assetRows = [...bundle.characterRows, ...bundle.sceneRows];
 
@@ -366,7 +382,8 @@ async function restoreStoryWorld(
       characterAssets: bundle.characterRows.map((row) => characterAssetSchema.parse(row.data_json)),
       sceneAssets: bundle.sceneRows.map((row) => sceneAssetSchema.parse(row.data_json)),
       script: storyScriptSchema.parse(bundle.scriptRow.data_json)
-    })
+    }),
+    videoAspectRatio
   };
 }
 

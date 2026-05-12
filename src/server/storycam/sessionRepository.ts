@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { defaultStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { Database, StoryCamSessionRow } from "@/server/db/types";
 import { StoryCamRepositoryError, unwrapRepositoryResult } from "./repositoryErrors";
 
@@ -9,12 +10,13 @@ export type CreateStoryCamSessionInput = {
   generationMode?: StoryCamSessionRow["generation_mode"];
   plannedDurationSeconds?: number;
   status?: StoryCamSessionRow["status"];
+  videoAspectRatio?: StoryCamVideoAspectRatio;
 };
 
 export type UpdateStoryCamSessionInput = Partial<CreateStoryCamSessionInput>;
 
 const sessionColumns =
-  "id,user_id,status,generation_mode,planned_duration_seconds,core_group_target_count,created_at,updated_at,deleted_at" as const;
+  "id,user_id,status,generation_mode,video_aspect_ratio,planned_duration_seconds,core_group_target_count,created_at,updated_at,deleted_at" as const;
 
 export class StoryCamSessionRepository {
   constructor(private readonly client: StoryCamDbClient) {}
@@ -26,6 +28,7 @@ export class StoryCamSessionRepository {
         user_id: userId,
         status: input.status ?? "draft",
         generation_mode: input.generationMode ?? "mock",
+        video_aspect_ratio: input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio,
         planned_duration_seconds: input.plannedDurationSeconds ?? 12,
         core_group_target_count: input.coreGroupTargetCount ?? 1
       })
@@ -90,7 +93,8 @@ function toSessionUpdate(input: UpdateStoryCamSessionInput) {
     ...(input.coreGroupTargetCount === undefined ? {} : { core_group_target_count: input.coreGroupTargetCount }),
     ...(input.generationMode === undefined ? {} : { generation_mode: input.generationMode }),
     ...(input.plannedDurationSeconds === undefined ? {} : { planned_duration_seconds: input.plannedDurationSeconds }),
-    ...(input.status === undefined ? {} : { status: input.status })
+    ...(input.status === undefined ? {} : { status: input.status }),
+    ...(input.videoAspectRatio === undefined ? {} : { video_aspect_ratio: input.videoAspectRatio })
   };
 }
 

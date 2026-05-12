@@ -3,7 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createGenerateClipJob, GenerationJobRequestError } from "@/server/storycam/generationJobService";
-import { createConfiguredVideoProvider } from "@/server/storycam/videoProviderFactory";
+import { createConfiguredVideoProviders } from "@/server/storycam/videoProviderFactory";
 
 type GenerateClipRouteContext = {
   params: Promise<{ id: string }> | { id: string };
@@ -14,7 +14,7 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
     const user = await requireUser();
     const params = await context.params;
     const config = loadStoryCamConfig();
-    const videoProvider = createConfiguredVideoProvider(config);
+    const videoProviders = createConfiguredVideoProviders(config);
     const body = await request.json();
     const result = await createGenerateClipJob(
       createSupabaseAdminClient(),
@@ -24,7 +24,7 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
         ...body,
         generationMode: config.generation.mode
       },
-      videoProvider,
+      videoProviders,
       {
         providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
       }

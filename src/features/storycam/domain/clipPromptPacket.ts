@@ -1,16 +1,24 @@
 import { clipPromptPacketSchema } from "./artifactSchemas";
 import type { ClipPromptPacket } from "./artifacts";
+import {
+  defaultStoryCamVideoAspectRatio,
+  storyCamSeedanceOutputResolution,
+  type StoryCamVideoAspectRatio,
+  type StoryCamVideoOutputResolution
+} from "./videoSettings";
 import { assertCanGenerateClipFromPacket } from "./stalePropagation";
 
 export type BuildClipPromptPacketPayloadInput = {
   coreGroupId: string;
   coreGroupTitle: string;
   estimatedClipDurationSeconds: number;
+  aspectRatio?: StoryCamVideoAspectRatio;
   expandedCardIds?: string[];
   inputArtifactVersions: Record<string, number>;
   packetId: string;
   providerSendConfirmed: true;
   providerPrompt?: string;
+  resolution?: StoryCamVideoOutputResolution;
   referenceImageMedia?: Array<{
     artifactId: string;
     frameNumber: number;
@@ -33,6 +41,7 @@ export function buildClipPromptPacketPayload(input: BuildClipPromptPacketPayload
 
   return clipPromptPacketSchema.parse({
     confirmationSummary: `Use "${input.coreGroupTitle}" to generate one private ${formatDuration(input.estimatedClipDurationSeconds)} clip.`,
+    aspectRatio: input.aspectRatio ?? defaultStoryCamVideoAspectRatio,
     coreGroupId: input.coreGroupId,
     expandedCardIds: input.expandedCardIds ?? [],
     id: input.packetId,
@@ -42,6 +51,7 @@ export function buildClipPromptPacketPayload(input: BuildClipPromptPacketPayload
     ...(input.providerPrompt ? { providerPrompt: input.providerPrompt } : {}),
     referenceImageMedia: input.referenceImageMedia ?? [],
     redactedPromptSummary: `${input.coreGroupTitle}; ${formatDuration(input.estimatedClipDurationSeconds)}; ${expandedCardCount} guide cards.`,
+    resolution: input.resolution ?? storyCamSeedanceOutputResolution,
     sessionId: input.sessionId,
     state: "ready",
     storyboardFrames: input.storyboardFrames ?? [],
