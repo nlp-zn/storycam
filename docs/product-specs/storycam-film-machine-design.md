@@ -566,7 +566,9 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 - 不需要展示完整字段摘要。
 - 不展示完整 prompt packet。
 - 不展示 Shanyin-style 内部 shot data。
-- 可以展示普通用户可理解的输出规格，例如 `720p`、`16:9`、片段时长。
+- 可以展示普通用户可理解的输出规格，例如 `720p`、`16:9` / `9:16`、片段时长和 `Seedance 2.0` / `Seedance 2.0 Fast`。
+- 输出画幅在输入页选择，进入故事生成后锁定；分镜图、clip prompt 和最终视频请求都必须使用会话锁定画幅。
+- 视频模型在片段生成前选择，影响本次视频任务的 provider variant，不影响已确认的故事世界和分镜文本。
 
 主 CTA：
 
@@ -935,7 +937,7 @@ Provider 概念：
 
 - `generation_mode`：`mock` 或 `real`
 - `provider_kind`：`text`、`image`、`video` 或 `stitch`
-- `provider_name`：`mock`、`seedance_2_0` 或未来 provider name
+- `provider_name`：`mock`、`seedance_2_0`、`seedance_2_0_fast` 或未来 provider name
 
 产品规则：
 

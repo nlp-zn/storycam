@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { clipPromptPacketSchema, generatedClipSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { ClipPromptPacket } from "@/features/storycam/domain/artifacts";
-import { storyCamSeedanceOutputResolution, type StoryCamVideoOutputResolution } from "@/features/storycam/domain/videoSettings";
+import {
+  defaultStoryCamVideoModel,
+  parseStoryCamVideoModel,
+  storyCamSeedanceOutputResolution,
+  type StoryCamVideoOutputResolution,
+  type StoryCamVideoModel
+} from "@/features/storycam/domain/videoSettings";
 import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
 import type { Database, GenerationJobRow } from "@/server/db/types";
@@ -33,6 +39,7 @@ export type GenerateClipRequestBody = {
   idempotencyKey?: unknown;
   providerSendConfirmed?: unknown;
   sessionId?: unknown;
+  videoModel?: unknown;
 };
 
 export type GenerationJobSummary = {
@@ -93,6 +100,7 @@ type ParsedGenerateClipRequest = {
   idempotencyKey: string;
   providerSendConfirmed: true;
   sessionId: string;
+  videoModel: StoryCamVideoModel;
 };
 
 export class GenerationJobRequestError extends Error {
@@ -107,7 +115,7 @@ export async function createGenerateClipJob(
   userId: string,
   coreStoryboardGroupId: string,
   body: GenerateClipRequestBody,
-  videoProvider?: GenerationJobServiceVideoProvider,
+  videoProviders?: Partial<Record<StoryCamVideoModel, GenerationJobServiceVideoProvider>>,
   options: {
     providerReferenceSignedUrlTtlSeconds?: number;
   } = {}
@@ -142,6 +150,7 @@ export async function createGenerateClipJob(
       [packetArtifact.id]: packetArtifact.version,
       ...packetResult.value.clipPromptPacketPayload.inputArtifactVersions
     };
+    const videoProvider = videoProviders?.[input.videoModel];
     const providerName = videoProvider?.providerName ?? "mock";
     let providerRequest: ProviderResult<{ providerRequestId: string }> | undefined;
     let providerRequestId: string | undefined;
@@ -386,7 +395,7 @@ export async function getGenerationJob(
   userId: string,
   jobId: string,
   imageProvider?: GenerationJobServiceImageProvider,
-  videoProvider?: GenerationJobServiceVideoProvider
+  videoProviders?: Partial<Record<StoryCamVideoModel, GenerationJobServiceVideoProvider>>
 ): Promise<{ ok: true; value: { image?: ImageJobState; job: GenerationJobSummary } }> {
   if (!jobId) {
     throw new GenerationJobRequestError("invalid_input");
@@ -404,6 +413,8 @@ export async function getGenerationJob(
         provider: imageProvider
       })
     : undefined;
+  const jobVideoModel = parseStoryCamVideoModel(job.provider_name);
+  const videoProvider = jobVideoModel ? videoProviders?.[jobVideoModel] : undefined;
   const videoResolved = job.type === "video_clip" ? await resolveVideoGenerationJob(client, userId, { job, provider: videoProvider }) : undefined;
 
   const refreshedJob = await new StoryCamGenerationJobRepository(client).findById(userId, jobId);
@@ -582,9 +593,9 @@ async function toVideoProviderInput(
     durationSeconds: Math.min(15, packet.plannedDurationSeconds ?? 15),
     generateAudio: true,
     prompt: packet.providerPrompt ?? packet.redactedPromptSummary,
-    ratio: "16:9",
+    ratio: packet.aspectRatio,
     referenceImageUrls: referenceImageUrls.filter((url): url is string => Boolean(url)),
-    resolution: storyCamSeedanceOutputResolution,
+    resolution: packet.resolution ?? storyCamSeedanceOutputResolution,
     watermark: false
   };
 }
@@ -655,8 +666,23 @@ function parseGenerateClipRequest(coreStoryboardGroupId: string, body: GenerateC
     generationMode,
     idempotencyKey: body.idempotencyKey,
     providerSendConfirmed: body.providerSendConfirmed,
-    sessionId
+    sessionId,
+    videoModel: parseOptionalVideoModel(body.videoModel)
   };
+}
+
+function parseOptionalVideoModel(value: unknown): StoryCamVideoModel {
+  if (value === undefined) {
+    return defaultStoryCamVideoModel;
+  }
+
+  const videoModel = parseStoryCamVideoModel(value);
+
+  if (!videoModel) {
+    throw new GenerationJobRequestError("invalid_input");
+  }
+
+  return videoModel;
 }
 
 function requireGenerationJobRow(job: GenerationJobRow | null) {

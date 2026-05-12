@@ -185,7 +185,10 @@ describe("loadStoryCamConfig", () => {
 
     expect(config.seedance).toEqual({
       apiKey: "seedance-key",
-      model: "doubao-seedance-2-0-260128"
+      models: {
+        seedance_2_0: "doubao-seedance-2-0-260128",
+        seedance_2_0_fast: "doubao-seedance-2-0-fast-260128"
+      }
     });
   });
 

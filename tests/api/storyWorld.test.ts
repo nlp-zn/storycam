@@ -58,6 +58,27 @@ describe("POST /api/story-world", () => {
     });
   });
 
+  it("returns a redacted validation error for an invalid video aspect ratio", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        input: "我想把暗恋拍成韩剧雨夜",
+        videoAspectRatio: "1:1"
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_input",
+      redactedError: "Invalid story world request.",
+      redactionApplied: true
+    });
+  });
+
   it("returns artifact versions from mock mode", async () => {
     const { POST } = await import("@/app/api/story-world/route");
     const client = new FakeSupabaseClient();

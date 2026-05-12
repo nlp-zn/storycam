@@ -667,6 +667,44 @@ button:disabled {
   padding: 0 12px;
 }
 
+.storycam-aspect-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.storycam-aspect-menu-panel {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  min-width: 112px;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 12px;
+  background: rgba(9, 13, 13, 0.94);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34), 0 0 16px rgba(0, 240, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+.storycam-aspect-menu-item {
+  min-height: 26px;
+  border-radius: 9px;
+  padding: 0 9px;
+  color: #aebcbd;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.storycam-aspect-menu-item:hover,
+.storycam-aspect-menu-item[aria-checked="true"] {
+  background: rgba(0, 240, 255, 0.14);
+  color: #f4ffff;
+}
+
 .storycam-discovery-section {
   padding-top: 12px;
 }
@@ -1718,6 +1756,13 @@ button:disabled {
   border: 1px solid rgba(0, 240, 255, 0.12);
   border-radius: 20px;
   background: #030707;
+}
+
+.storycam-clip-video-frame--portrait {
+  aspect-ratio: 9 / 16;
+  max-height: min(72vh, 860px);
+  width: min(100%, 520px);
+  margin-inline: auto;
 }
 
 .storycam-clip-video {

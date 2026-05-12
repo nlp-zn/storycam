@@ -14,6 +14,7 @@ export type StoryCamSessionRow = {
   user_id: string;
   status: "draft" | "generating" | "ready" | "deleted";
   generation_mode: "mock" | "real";
+  video_aspect_ratio: "16:9" | "9:16";
   planned_duration_seconds: number;
   core_group_target_count: number;
   created_at: string;
@@ -26,6 +27,7 @@ export type StoryCamSessionInsert = {
   user_id: string;
   status?: StoryCamSessionRow["status"];
   generation_mode?: StoryCamSessionRow["generation_mode"];
+  video_aspect_ratio?: StoryCamSessionRow["video_aspect_ratio"];
   planned_duration_seconds?: number;
   core_group_target_count?: number;
   created_at?: string;

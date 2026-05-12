@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardFrame, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -86,6 +87,7 @@ export async function createExpandedStoryboardCards(
   if (!session) {
     throw new ExpansionRequestError("session_not_found");
   }
+  const videoAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 
   const coreGroupArtifact = await loadCoreGroupArtifact(artifacts, userId, session.id, input.coreStoryboardGroupId);
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
@@ -134,6 +136,7 @@ export async function createExpandedStoryboardCards(
           card,
           coreGroup,
           sessionId: session.id,
+          videoAspectRatio,
           visualContext
         }),
         inputArtifactVersionsJson: {
@@ -194,6 +197,7 @@ export async function regenerateStoryboardFrameImage(
   if (!session) {
     throw new ExpansionRequestError("session_not_found");
   }
+  const videoAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 
   if (!Number.isInteger(frameNumber) || frameNumber < 1 || frameNumber > 9) {
     throw new ExpansionRequestError("invalid_input");
@@ -240,7 +244,7 @@ export async function regenerateStoryboardFrameImage(
     const result = await submitImageGenerationJob(client, userId, {
       forceNew: true,
       idempotencyKeySuffix: randomUUID(),
-      imageInput: toStoryboardRepresentativeProviderInput(coreGroup, session.id, storyboardScript, visualContext),
+      imageInput: toStoryboardRepresentativeProviderInput(coreGroup, session.id, videoAspectRatio, storyboardScript, visualContext),
       inputArtifactVersionsJson: {
         ...visualContext.inputArtifactVersionsJson,
         [coreGroupArtifact.id]: coreGroupArtifact.version,
@@ -281,6 +285,7 @@ export async function regenerateStoryboardFrameImage(
       card,
       coreGroup,
       sessionId: session.id,
+      videoAspectRatio,
       visualContext
     }),
     inputArtifactVersionsJson: {

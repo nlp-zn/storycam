@@ -6,8 +6,9 @@ import {
   type StoryWorldProviderOutput,
   type UploadedPhotoReference
 } from "@/lib/providers/storyWorld";
+import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import { createMockStoryWorldProvider } from "@/lib/providers/mock/storyWorldProvider";
-import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
+import type { Database, MediaAssetRow, StoryCamArtifactRow, StoryCamSessionRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
@@ -21,6 +22,7 @@ export type StoryWorldRequestBody = {
   plannedDurationSeconds?: unknown;
   sessionId?: unknown;
   uploadedPhotoIds?: unknown;
+  videoAspectRatio?: unknown;
 };
 
 export type StoryWorldArtifactRef = {
@@ -38,6 +40,7 @@ export type StoryWorldServiceOutput = {
   };
   sessionId: string;
   storyWorld: PublicStoryWorldProviderOutput;
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 export type PublicStoryWorldProviderOutput = Omit<StoryWorldProviderOutput, "script"> & {
@@ -61,17 +64,25 @@ export async function createStoryWorld(
   const sessions = new StoryCamSessionRepository(client);
   const artifacts = new StoryCamArtifactRepository(client);
   const mediaAssets = new StoryCamMediaAssetRepository(client);
-  const session = input.sessionId
+  const loadedSession = input.sessionId
     ? await sessions.findById(userId, input.sessionId)
-    : await sessions.create(userId, {
+      : await sessions.create(userId, {
         generationMode: input.generationMode,
-        plannedDurationSeconds: input.plannedDurationSeconds
+        plannedDurationSeconds: input.plannedDurationSeconds,
+        videoAspectRatio: input.videoAspectRatio
       });
 
-  if (!session) {
+  if (!loadedSession) {
     throw new StoryWorldRequestError("session_not_found");
   }
 
+  const session = await applyInitialVideoAspectRatio({
+    artifacts,
+    requestedAspectRatio: input.requestedVideoAspectRatio,
+    session: loadedSession,
+    sessions,
+    userId
+  });
   const uploadedPhotoRefs = await resolveUploadedPhotoRefs(mediaAssets, userId, session.id, input.uploadedPhotoIds);
   const providerResult = await provider.generate({
     idea: input.input,
@@ -126,9 +137,50 @@ export async function createStoryWorld(
         script: toArtifactRef(script)
       },
       sessionId: session.id,
-      storyWorld: toPublicStoryWorld(storyWorld)
+      storyWorld: toPublicStoryWorld(storyWorld),
+      videoAspectRatio: parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio
     }
   };
+}
+
+async function applyInitialVideoAspectRatio({
+  artifacts,
+  requestedAspectRatio,
+  session,
+  sessions,
+  userId
+}: {
+  artifacts: StoryCamArtifactRepository;
+  requestedAspectRatio: StoryCamVideoAspectRatio | undefined;
+  session: StoryCamSessionRow;
+  sessions: StoryCamSessionRepository;
+  userId: string;
+}): Promise<StoryCamSessionRow> {
+  if (requestedAspectRatio === undefined) {
+    return session;
+  }
+
+  const currentAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
+
+  if (currentAspectRatio === requestedAspectRatio) {
+    return session;
+  }
+
+  const existingArtifacts = (await artifacts.listBySession(userId, { sessionId: session.id })) ?? [];
+
+  if (existingArtifacts.length > 0) {
+    return session;
+  }
+
+  const updatedSession = await sessions.update(userId, session.id, {
+    videoAspectRatio: requestedAspectRatio
+  });
+
+  if (!updatedSession) {
+    throw new StoryWorldRequestError("session_not_found");
+  }
+
+  return updatedSession;
 }
 
 export function toPublicStoryWorld(storyWorld: StoryWorldProviderOutput): PublicStoryWorldProviderOutput {
@@ -157,9 +209,29 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
     input,
     lightweightChoices: parseStringArray(body.lightweightChoices),
     plannedDurationSeconds: parsePlannedDuration(body.plannedDurationSeconds),
+    requestedVideoAspectRatio: parseRequestedVideoAspectRatio(body.videoAspectRatio),
     sessionId: typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined,
-    uploadedPhotoIds: parseStringArray(body.uploadedPhotoIds)
+    uploadedPhotoIds: parseStringArray(body.uploadedPhotoIds),
+    videoAspectRatio: parseVideoAspectRatioWithDefault(body.videoAspectRatio)
   };
+}
+
+function parseRequestedVideoAspectRatio(value: unknown): StoryCamVideoAspectRatio | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const aspectRatio = parseStoryCamVideoAspectRatio(value);
+
+  if (!aspectRatio) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return aspectRatio;
+}
+
+function parseVideoAspectRatioWithDefault(value: unknown): StoryCamVideoAspectRatio {
+  return parseRequestedVideoAspectRatio(value) ?? defaultStoryCamVideoAspectRatio;
 }
 
 async function resolveUploadedPhotoRefs(
