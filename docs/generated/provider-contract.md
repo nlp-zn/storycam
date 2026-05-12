@@ -71,6 +71,7 @@ Requirements:
 - story world optional comma-separated fallback chain from `DEEPSEEK_TEXT_FALLBACK_MODELS`,
 - story world model output must be parsed only from tool call `function.arguments`,
 - server normalizes and owns `id`, `sessionId`, `state`, `version`, and `referenceMediaIds`,
+- `handdrawn-travel-vlog` story-world input carries `storyModeId`, one uploaded photo id, and `travelDestination`; providers must produce one hand-drawn traveler character asset plus one real-destination route scene asset, and server normalization persists `script.storyModeId`,
 - core storyboard primary model name from `OPENROUTER_TEXT_MODEL`,
 - core storyboard optional comma-separated fallback chain from `OPENROUTER_TEXT_FALLBACK_MODELS`,
 - `/api/storyboard` creates one script and main-image prompt per core group.
@@ -114,6 +115,7 @@ Requirements:
 - the Inference.sh app's required `OPENAI_KEY` secret must be configured in Inference.sh,
 - model name from `OPENROUTER_IMAGE_MODEL` for the legacy OpenRouter path,
 - output stored in private StoryCam Storage,
+- handdrawn travel character asset images may send the uploaded user photo plus a server-owned hand-drawn style reference as image inputs; prompts may use the photo only for hair, glasses, clothing silhouette, posture, and travel mood, never for a photorealistic likeness,
 - representative images are stored as `thumbnail` media linked to the core storyboard group,
 - expanded storyboard images are stored as `thumbnail` media linked to their expanded card artifact,
 - storyboard images must use ready story-world character and scene asset images as Inference.sh `images[]` reference inputs plus the frame prompt; pure text fallback is not allowed for storyboard images,

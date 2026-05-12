@@ -56,6 +56,8 @@ Restore responses may be cached client-side in `sessionStorage` only for the cur
 
 New MVP storyboard creation normalizes to one core group, 15 seconds, and one generated clip target. Older restored data may still contain historical duration/count fields and must be tolerated.
 
+`POST /api/story-world` accepts optional `storyModeId` and `travelDestination`. For `storyModeId: "handdrawn-travel-vlog"`, the request must include exactly one `uploadedPhotoIds[]` entry and a non-empty `travelDestination`; validation failures return redacted `400` errors. The response script may include `storyModeId` so downstream server code can keep image and video prompts in the correct visual route.
+
 ## Clip And Final Work Routes
 
 | Route | Purpose |
@@ -94,6 +96,7 @@ Storage bucket/key remain server-owned. API responses may include signed preview
 ## Compatibility Notes
 
 - `script.visualStyle` is the shared style anchor for character, scene, and storyboard images; older restored stories may omit it.
+- `script.storyModeId` is optional. When set to `handdrawn-travel-vlog`, downstream image and video generation should keep one uploaded-photo-derived hand-drawn traveler character on real travel-location backgrounds.
 - `script.directorBrief` is stored only in server-side artifact JSON and intentionally omitted from browser-facing story-world and restore responses; storyboard and clip prompt generation read it from persisted artifacts. Older stories may omit it and fall back to defaults.
 - `script.qualityChecks[]` may contain deterministic, user-friendly quality summaries for the story-world script. Older data defaults to an empty array.
 - Historical multi-core-group or multi-clip data can be restored, but the new MVP creation path creates one core group and one generated clip.
