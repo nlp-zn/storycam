@@ -9,7 +9,6 @@ import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import type { StoryWorldDraft } from "@/components/storycam/IdeaInputPanel";
 import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -32,6 +31,7 @@ import {
   getGenerationJob,
   regenerateStoryboardFrameImage,
   refreshStoryCamSessionRestore,
+  restoreCachedCurrentStoryCamSession,
   restoreCurrentStoryCamSession,
   restoreStoryCamSession,
   uploadStoryCamPhoto,
@@ -433,6 +433,17 @@ export function StoryCamWorkspace() {
       }
 
       try {
+        const cachedRestore = await restoreCachedCurrentStoryCamSession();
+
+        if (isCanceled) {
+          return;
+        }
+
+        if (cachedRestore.restored) {
+          hydrateRestoredProject(cachedRestore, { preserveCurrentPath: true });
+          setIsRestoringSession(false);
+        }
+
         const restored = await restoreCurrentStoryCamSession();
 
         if (isCanceled) {
@@ -440,6 +451,9 @@ export function StoryCamWorkspace() {
         }
 
         if (!restored.restored) {
+          if (!cachedRestore.restored) {
+            setIsRestoringSession(false);
+          }
           return;
         }
 
@@ -1733,7 +1747,7 @@ function StoryWorldPendingReviewShell({
 
   return (
     <section className="storycam-story-world relative" data-testid="story-world-generating">
-      <StoryWorldPendingHero isPending={isPending} />
+      <StoryWorldPendingHero />
 
       <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">
         <div className="storycam-script-column">
@@ -1747,7 +1761,7 @@ function StoryWorldPendingReviewShell({
   );
 }
 
-function StoryWorldPendingHero({ isPending }: { isPending: boolean }) {
+function StoryWorldPendingHero() {
   return (
     <div className="storycam-story-world-hero">
       <div className="storycam-section-kicker">
@@ -1757,9 +1771,6 @@ function StoryWorldPendingHero({ isPending }: { isPending: boolean }) {
       </div>
       <h1 className="storycam-heading-lg">确认故事世界</h1>
       <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
-      <Badge className="px-4 py-2 text-sm" variant="pink">
-        {isPending ? "生成中" : "需要重试"}
-      </Badge>
     </div>
   );
 }
@@ -1982,7 +1993,6 @@ function CoreStoryboardPendingShell({
         </div>
         <h1 className="storycam-heading-xl">核心分镜</h1>
         <p>把已确认的故事世界整理成一组可生成片段的核心分镜。</p>
-        <span className="storycam-core-status-pill">{isPending ? "生成中" : "需要重试"}</span>
       </header>
 
       <div className="storycam-core-workbench">

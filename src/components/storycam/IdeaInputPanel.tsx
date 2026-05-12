@@ -5,7 +5,14 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, Clapperboard, Heart, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAuthStatus, listRecentStoryCamProjects, prefetchStoryCamSessionRestore } from "@/features/storycam/client/storycamApi";
+import {
+  getAuthStatus,
+  isRecentStoryCamProjectsCacheStale,
+  listRecentStoryCamProjects,
+  prefetchStoryCamSessionRestore,
+  recentProjectsRefreshIntervalMs,
+  readCachedRecentStoryCamProjects
+} from "@/features/storycam/client/storycamApi";
 import type { RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
 import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
 import {
@@ -87,6 +94,7 @@ export function IdeaInputPanel({
   const aspectRatioMenuRef = useRef<HTMLDivElement>(null);
   const recentProjectsAbortRef = useRef<AbortController | null>(null);
   const recentProjectsInFlightRef = useRef(false);
+  const recentProjectsLastRefreshMsRef = useRef(0);
   const recentProjectsRequestIdRef = useRef(0);
   const recentProjectThumbnailCacheRef = useRef<Record<string, CachedRecentProjectThumbnail>>({});
   const canSubmit = idea.trim().length > 0 && authStatus === "authenticated";
@@ -125,8 +133,14 @@ export function IdeaInputPanel({
     };
   }, []);
 
-  const refreshRecentProjects = useCallback(async (options: { showLoading?: boolean } = {}) => {
+  const refreshRecentProjects = useCallback(async (options: { force?: boolean; showLoading?: boolean } = {}) => {
     if (authStatus !== "authenticated") {
+      return;
+    }
+
+    const nowMs = Date.now();
+
+    if (!options.force && recentProjectsLastRefreshMsRef.current + recentProjectsRefreshIntervalMs > nowMs) {
       return;
     }
 
@@ -156,10 +170,11 @@ export function IdeaInputPanel({
       if (recentProjectsRequestIdRef.current === requestId) {
         setRecentProjects(cacheRecentProjectThumbnails(response.projects, recentProjectThumbnailCacheRef.current));
         setRecentProjectsStatus("ready");
+        recentProjectsLastRefreshMsRef.current = Date.now();
       }
     } catch {
       if (recentProjectsRequestIdRef.current === requestId) {
-        setRecentProjectsStatus("error");
+        setRecentProjectsStatus((current) => (current === "ready" && options.showLoading === false ? current : "error"));
       }
     } finally {
       window.clearTimeout(timeout);
@@ -179,8 +194,22 @@ export function IdeaInputPanel({
       return;
     }
 
+    const cached = readCachedRecentStoryCamProjects();
+
+    if (cached) {
+      setRecentProjects(cacheRecentProjectThumbnails(cached.projects, recentProjectThumbnailCacheRef.current));
+      setRecentProjectsStatus("ready");
+      recentProjectsLastRefreshMsRef.current = cached.fetchedAtMs;
+    }
+
+    const shouldRefresh = !cached || isRecentStoryCamProjectsCacheStale(cached);
+
+    if (!shouldRefresh) {
+      return;
+    }
+
     const timer = window.setTimeout(() => {
-      void refreshRecentProjects({ showLoading: true });
+      void refreshRecentProjects({ force: !cached, showLoading: !cached });
     }, 0);
 
     return () => {
@@ -336,7 +365,7 @@ export function IdeaInputPanel({
     setIsRecentProjectsOpen(true);
 
     if (authStatus === "authenticated") {
-      void refreshRecentProjects({ showLoading: recentProjects.length === 0 });
+      void refreshRecentProjects({ force: true, showLoading: recentProjects.length === 0 });
     }
   }
 
@@ -348,14 +377,14 @@ export function IdeaInputPanel({
   return (
     <section className="relative mx-auto w-full">
       <div className="mx-auto flex w-full max-w-[920px] flex-col items-stretch">
-        <div className="mb-8 flex items-center justify-center gap-5 text-center">
-          <div className="hidden h-px w-14 bg-[#00f0ff]/35 sm:block" />
-          <div>
-            <span className="storycam-eyebrow text-[11px] tracking-[0.18em]">第一步：核心前提</span>
-            <h1 className="mt-3 text-[16px] font-black leading-none tracking-wide text-[#f4ffff] md:text-[18px]">私人小剧场相机</h1>
+        <header className="storycam-input-hero">
+          <div className="storycam-section-kicker">
+            <span />
+            <p>第一步：核心前提</p>
+            <span />
           </div>
-          <div className="hidden h-px w-14 bg-[#00f0ff]/35 sm:block" />
-        </div>
+          <h1 className="storycam-heading-xl">私人小剧场相机</h1>
+        </header>
 
         <label className="mb-3 ml-1 block text-[14px] font-black leading-none text-[#f4ffff]" htmlFor="story-idea">
           你的这一幕

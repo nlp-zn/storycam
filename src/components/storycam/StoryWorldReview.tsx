@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState, type SetStateAction } from "r
 import { Info, X } from "lucide-react";
 import { AssetCard } from "@/components/storycam/AssetCard";
 import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   generateStoryWorldAssetImage,
@@ -55,7 +54,6 @@ export function StoryWorldReview({
   initialAssetImages,
   initiallyEditing = false,
   isGeneratingStoryboard = false,
-  isConfirmed,
   onAssetImageReady,
   onConfirm,
   onEditSaved,
@@ -295,9 +293,6 @@ export function StoryWorldReview({
         </div>
         <h1 className="storycam-heading-lg">确认故事世界</h1>
         <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
-        <Badge className="px-4 py-2 text-sm" variant={isConfirmed ? "neon" : "pink"}>
-          {isConfirmed ? "已确认" : "待确认"}
-        </Badge>
       </div>
 
       <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">

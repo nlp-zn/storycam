@@ -104,7 +104,6 @@ export function ClipGenerationWorkspace({
         </div>
         <h1 className="storycam-heading-xl">生成片段</h1>
         <p>在同一页完成生成、预览、保存与导出。</p>
-        <span className="storycam-clip-hero-pill">{finalWork ? "可预览" : statusLabel}</span>
       </header>
 
       <div className="storycam-clip-player-card">

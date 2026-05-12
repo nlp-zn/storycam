@@ -370,6 +370,16 @@ type StoredRestoreSessionCacheEntry = {
   value: RestoreStoryCamSessionResponse;
 };
 
+export type CachedRecentStoryCamProjects = {
+  expiresAtMs: number;
+  fetchedAtMs: number;
+  projects: RecentStoryCamProject[];
+};
+
+type StoredRecentStoryCamProjectsCacheEntry = CachedRecentStoryCamProjects & {
+  userId: string;
+};
+
 type RestoredStoryCamSession = Extract<RestoreStoryCamSessionResponse, { restored: true }>;
 
 type RestoreSessionMedia = {
@@ -399,6 +409,10 @@ const restoreSessionCacheTtlMs = 60_000;
 const restoreSessionCacheSafetyWindowMs = 30_000;
 const restoreSessionCacheVersion = "v1";
 const restoreSessionCurrentKey = `storycam:restore:${restoreSessionCacheVersion}:current-session-id`;
+const recentProjectsCacheVersion = "v1";
+const recentProjectsStorageKey = `storycam:recent-projects:${recentProjectsCacheVersion}:projects`;
+const recentProjectsCacheTtlMs = 5 * 60_000;
+export const recentProjectsRefreshIntervalMs = 45_000;
 let restoreSessionUserId: string | null = null;
 
 export async function getAuthStatus() {
@@ -416,12 +430,14 @@ export async function getAuthStatus() {
 
   if (!authStatus.authenticated) {
     clearRestoreSessionCache();
+    clearRecentStoryCamProjectsCache();
     restoreSessionUserId = null;
     return authStatus;
   }
 
   if (restoreSessionUserId && restoreSessionUserId !== authStatus.user.id) {
     clearRestoreSessionCache();
+    clearRecentStoryCamProjectsCache();
   }
 
   restoreSessionUserId = authStatus.user.id;
@@ -480,6 +496,22 @@ export async function restoreCurrentStoryCamSession() {
   return restored;
 }
 
+export async function restoreCachedCurrentStoryCamSession() {
+  const authStatus = await getAuthStatus();
+
+  if (!authStatus.authenticated) {
+    return { ok: true, restored: false } satisfies RestoreStoryCamSessionResponse;
+  }
+
+  const currentSessionId = readCurrentRestoredSessionId(authStatus.user.id);
+
+  if (!currentSessionId) {
+    return { ok: true, restored: false } satisfies RestoreStoryCamSessionResponse;
+  }
+
+  return readRestoreSessionValue(currentSessionId)?.value ?? ({ ok: true, restored: false } satisfies RestoreStoryCamSessionResponse);
+}
+
 export async function listRecentStoryCamProjects(limit = 5, options: { signal?: AbortSignal } = {}) {
   const response = await fetch(`/api/storycam-sessions/recent?limit=${encodeURIComponent(String(limit))}`, {
     cache: "no-store",
@@ -487,6 +519,7 @@ export async function listRecentStoryCamProjects(limit = 5, options: { signal?: 
   });
 
   if (response.status === 401) {
+    clearRecentStoryCamProjectsCache();
     return { ok: true, projects: [] } satisfies RecentStoryCamProjectsResponse;
   }
 
@@ -494,7 +527,31 @@ export async function listRecentStoryCamProjects(limit = 5, options: { signal?: 
     throw new Error(errorCode(await response.json(), "recent_projects_failed"));
   }
 
-  return (await response.json()) as RecentStoryCamProjectsResponse;
+  const result = (await response.json()) as RecentStoryCamProjectsResponse;
+  writeRecentStoryCamProjectsCache(result.projects);
+
+  return result;
+}
+
+export function readCachedRecentStoryCamProjects(nowMs = Date.now()): CachedRecentStoryCamProjects | null {
+  const stored = readStoredRecentStoryCamProjectsCache();
+
+  if (!stored) {
+    return null;
+  }
+
+  if (stored.expiresAtMs <= nowMs) {
+    clearRecentStoryCamProjectsCache();
+    return null;
+  }
+
+  const { expiresAtMs, fetchedAtMs, projects } = stored;
+
+  return { expiresAtMs, fetchedAtMs, projects };
+}
+
+export function isRecentStoryCamProjectsCacheStale(cached: CachedRecentStoryCamProjects, nowMs = Date.now()) {
+  return cached.fetchedAtMs + recentProjectsRefreshIntervalMs <= nowMs;
 }
 
 export async function restoreStoryCamSession(sessionId: string) {
@@ -597,6 +654,7 @@ export function prefetchStoryCamSessionRestore(sessionId: string) {
 
 export function clearStoryCamRestoreCache() {
   clearRestoreSessionCache();
+  clearRecentStoryCamProjectsCache();
   restoreSessionUserId = null;
 }
 
@@ -692,6 +750,62 @@ function clearRestoreSessionCache() {
     );
 
     keys.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function writeRecentStoryCamProjectsCache(projects: RecentStoryCamProject[], nowMs = Date.now()) {
+  const userId = currentRestoreSessionUserId();
+  const expiresAtMs = recentStoryCamProjectsExpiresAt(projects, nowMs);
+
+  writeStoredRecentStoryCamProjectsCache({
+    expiresAtMs,
+    fetchedAtMs: nowMs,
+    projects,
+    userId
+  });
+}
+
+function readStoredRecentStoryCamProjectsCache(): StoredRecentStoryCamProjectsCacheEntry | null {
+  try {
+    const raw = window.sessionStorage.getItem(recentProjectsStorageKey);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as StoredRecentStoryCamProjectsCacheEntry;
+
+    if (
+      !parsed ||
+      typeof parsed.expiresAtMs !== "number" ||
+      typeof parsed.fetchedAtMs !== "number" ||
+      typeof parsed.userId !== "string" ||
+      !cacheUserMatches(parsed.userId) ||
+      !Array.isArray(parsed.projects) ||
+      !parsed.projects.every(isRecentStoryCamProject)
+    ) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredRecentStoryCamProjectsCache(entry: StoredRecentStoryCamProjectsCacheEntry) {
+  try {
+    window.sessionStorage.setItem(recentProjectsStorageKey, JSON.stringify(entry));
+  } catch {
+    // Storage can be unavailable or full; recent projects will fall back to network.
+  }
+}
+
+function clearRecentStoryCamProjectsCache() {
+  try {
+    window.sessionStorage.removeItem(recentProjectsStorageKey);
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
@@ -1021,6 +1135,54 @@ function isRestoreStoryCamSessionResponse(value: unknown): value is RestoreStory
   return candidate.ok === true && typeof candidate.restored === "boolean";
 }
 
+function recentStoryCamProjectsExpiresAt(projects: RecentStoryCamProject[], nowMs = Date.now()) {
+  const thumbnailExpiresAtMs = projects
+    .map((project) => project.thumbnail)
+    .filter((thumbnail): thumbnail is NonNullable<RecentStoryCamProject["thumbnail"]> => Boolean(thumbnail))
+    .map((thumbnail) => nowMs + thumbnail.signedUrlExpiresIn * 1000 - restoreSessionCacheSafetyWindowMs);
+  const cacheExpiresAtMs = nowMs + recentProjectsCacheTtlMs;
+
+  if (thumbnailExpiresAtMs.length === 0) {
+    return cacheExpiresAtMs;
+  }
+
+  return Math.min(cacheExpiresAtMs, ...thumbnailExpiresAtMs);
+}
+
+function isRecentStoryCamProject(value: unknown): value is RecentStoryCamProject {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<RecentStoryCamProject>;
+
+  return (
+    typeof candidate.coreGroupTargetCount === "number" &&
+    typeof candidate.currentStep === "string" &&
+    typeof candidate.sessionId === "string" &&
+    typeof candidate.summary === "string" &&
+    (candidate.thumbnail === null || isRecentStoryCamProjectThumbnail(candidate.thumbnail)) &&
+    typeof candidate.title === "string" &&
+    typeof candidate.updatedAt === "string" &&
+    (candidate.videoAspectRatio === "16:9" || candidate.videoAspectRatio === "9:16")
+  );
+}
+
+function isRecentStoryCamProjectThumbnail(value: unknown): value is NonNullable<RecentStoryCamProject["thumbnail"]> {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<NonNullable<RecentStoryCamProject["thumbnail"]>>;
+
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.mimeType === "string" &&
+    typeof candidate.signedUrl === "string" &&
+    typeof candidate.signedUrlExpiresIn === "number"
+  );
+}
+
 export async function uploadStoryCamPhoto(input: { file: File; sessionId?: string }) {
   const formData = new FormData();
   formData.set("file", input.file);
@@ -1068,7 +1230,10 @@ export async function createStoryWorld(input: {
     throw new Error(errorCode(await response.json(), "story_world_failed"));
   }
 
-  return (await response.json()) as CreateStoryWorldResponse;
+  const result = (await response.json()) as CreateStoryWorldResponse;
+  clearRecentStoryCamProjectsCache();
+
+  return result;
 }
 
 export async function createStoryboard(input: {
@@ -1241,7 +1406,10 @@ export async function deleteStoryCamSession(sessionId: string) {
     throw new Error(errorCode(await response.json(), "session_deletion_failed"));
   }
 
-  return (await response.json()) as DeleteStoryCamSessionResponse;
+  const result = (await response.json()) as DeleteStoryCamSessionResponse;
+  clearRecentStoryCamProjectsCache();
+
+  return result;
 }
 
 export async function createStitchSuggestion(input: { generatedClipArtifactIds: string[]; sessionId: string }) {
