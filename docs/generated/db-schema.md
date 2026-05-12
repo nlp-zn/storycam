@@ -2,7 +2,7 @@
 
 Source: `supabase/migrations/20260426033600_storycam_phase1_schema.sql` plus follow-up migrations in `supabase/migrations/`.
 
-Status: static migration summary, not introspected from a live database yet.
+Status: implemented migration snapshot, not introspected from a live database.
 
 ## Supabase Tables
 
@@ -77,6 +77,8 @@ Current duration constraints:
 - `storage_path`
 - `source`
 - `linked_artifact_id`
+- `source_media_asset_id`
+- `provider_reference_expires_at`
 - `created_at`
 - `deleted_at`
 

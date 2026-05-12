@@ -1,16 +1,16 @@
-# API Contract
+# API Contract Snapshot
 
-Status: planned contract, to be regenerated from route schemas once implementation exists.
-Source of truth until code exists: `docs/product-specs/storycam-film-machine-design.md` and `docs/exec-plans/active/storycam-web-mvp-implementation-plan.md`.
+Status: implemented snapshot.
+
+Sources: `src/app/api/**/route.ts`, `src/features/storycam/client/storycamApi.ts`, `src/server/storycam/*Service.ts`, and current Playwright/API tests.
 
 ## Global Rules
 
-- All real resource routes require Supabase Auth.
-- Unauthenticated users may view the app shell and starter examples, but cannot upload photos, create sessions, generate clips, or create final work.
-- All responses must be scoped to the current `auth.users.id`.
-- API routes validate input, call server-only services, and return redacted responses.
-- API routes must not call providers directly, bypass repositories, expose prompt packets, expose provider payloads, expose Supabase service role keys, or return long-lived public media URLs.
-- Media preview uses short-lived signed URLs or an authenticated proxy.
+- Real resource routes require Supabase Auth, except app shell and public metadata routes.
+- All session, artifact, job, media, and restore responses are scoped to the current `auth.users.id`.
+- Route handlers validate input, call server-only services, and return redacted responses.
+- Route handlers must not expose prompt packets, raw provider payloads, provider secrets, signed provider-reference URLs, or Supabase service-role keys.
+- Media previews use short-lived signed URLs. Restore responses use `Cache-Control: no-store`.
 
 ## Error Shape
 
@@ -29,27 +29,59 @@ type ApiError = {
 
 Error bodies must not include raw private input, full prompts, full prompt packets, provider secrets, signed URLs, or unredacted provider errors.
 
-## Common Types
+## Auth And Session Routes
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/auth/me` | Returns anonymous/authenticated account state without leaking server internals. |
+| `POST /api/auth/sign-out` | Signs out and clears local auth bypass opt-out state. |
+| `GET /auth/callback` | Exchanges Supabase OAuth callback and returns to StoryCam. |
+| `GET /api/storycam-sessions/current` | Returns current account-scoped active session summary. |
+| `GET /api/storycam-sessions/recent` | Returns recent account-scoped sessions for the input screen. |
+| `DELETE /api/storycam-sessions/[id]` | Tombstones a user-owned session and cleans associated storage where applicable. |
+| `GET /api/storycam-sessions/[id]/restore` | Restores a full account-scoped session snapshot with signed preview URLs. |
+
+Restore responses may be cached client-side in `sessionStorage` only for the current tab, user, and session id. The cache stores JSON and signed URLs, never media bytes, and must preserve absolute URL expiry instead of extending old URLs.
+
+## Creation And Story Routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/uploads` | Uploads a user photo into private Storage and links it to a session. |
+| `POST /api/story-world` | Creates/updates the story-world script, character assets, and scene asset. |
+| `POST /api/story-world/assets/generate-image` | Starts or polls one story-world asset image job. |
+| `POST /api/story-world/assets/generate-images` | Starts or polls batch story-world asset image jobs. |
+| `POST /api/storyboard` | Creates the MVP storyboard script, one core group, and the main image prompt. |
+| `POST /api/storyboard-groups/[id]/expand` | Creates expanded storyboard cards for the selected core group. |
+
+New MVP storyboard creation normalizes to one core group, 15 seconds, and one generated clip target. Older restored data may still contain historical duration/count fields and must be tolerated.
+
+## Clip And Final Work Routes
+
+| Route | Purpose |
+| --- | --- |
+| `POST /api/storyboard-groups/[id]/generate-clip` | Creates or resumes a video generation job for the confirmed core group. |
+| `GET /api/generation-jobs/[id]` | Polls an account-scoped generation job and returns normalized status/output. |
+| `POST /api/generation-jobs/[id]/cancel` | Requests cancellation/tombstone and prevents late provider results from creating outputs. |
+| `POST /api/stitch-suggestion` | Produces a user-facing final-work suggestion from confirmed clips. |
+| `POST /api/final-work` | Creates the account-scoped final work preview/export artifact. |
+
+The server-created clip prompt packet is internal. The UI may show plain product status such as `720p`, ready/failure states, and retry/retake actions, but must not show provider payloads or professional shot-table data.
+
+## Media Refs
 
 ```ts
-type ArtifactState = "idle" | "generating" | "ready" | "failed" | "skipped" | "stale";
-
-type GenerationMode = "mock" | "real";
-
-type ProviderKind = "text" | "multimodal" | "image" | "video" | "stitch";
-
-type JobStatus =
-  | "queued"
-  | "running"
-  | "succeeded"
-  | "failed"
-  | "cancel_requested"
-  | "canceled"
-  | "expired";
-
 type MediaRef = {
   id: string;
-  kind: "uploaded_photo" | "mock_clip" | "generated_clip" | "final_work" | "thumbnail";
+  kind:
+    | "uploaded_photo"
+    | "story_world_asset"
+    | "storyboard_image"
+    | "expanded_storyboard_image"
+    | "mock_clip"
+    | "generated_clip"
+    | "final_work"
+    | "thumbnail";
   mimeType: string;
   byteSize: number;
   previewUrl?: string;
@@ -57,520 +89,11 @@ type MediaRef = {
 };
 ```
 
-## Routes
+Storage bucket/key remain server-owned. API responses may include signed preview URLs only when needed for browser display.
 
-### `POST /api/uploads`
+## Compatibility Notes
 
-Upload a user photo to Supabase Storage.
-
-Auth: required.
-
-Request:
-
-- `multipart/form-data`
-- `file`: image file
-- `kind`: `uploaded_photo`
-- `sessionId?`: optional existing session
-
-Validation:
-
-- Accept image MIME types only.
-- Enforce max file size from config.
-- Reject executable, unknown, or empty files.
-- If `sessionId` is provided, it must belong to the authenticated user and not be deleted; otherwise the route returns `session_not_found` before any Storage write.
-
-Success:
-
-```ts
-type UploadResponse = {
-  ok: true;
-  media: MediaRef;
-  sessionId: string;
-  uploadedPhotoIds: string[];
-  uploadedPhotoRefs: Array<{ mediaAssetId: string }>;
-};
-```
-
-### `POST /api/story-world`
-
-Create or update the story world artifacts from text, lightweight choices, and optional uploaded photos.
-
-Auth: required.
-
-Request:
-
-```ts
-type StoryWorldRequest = {
-  sessionId?: string;
-  input: string;
-  lightweightChoices: string[];
-  uploadedPhotoIds?: string[];
-  plannedDurationSeconds?: number;
-  generationMode?: GenerationMode;
-};
-```
-
-Success:
-
-```ts
-type StoryWorldResponse = {
-  ok: true;
-  sessionId: string;
-  artifacts: {
-    script: VersionedArtifact;
-    characterAssets: VersionedArtifact[];
-    sceneAssets: VersionedArtifact[];
-  };
-  storyWorld: {
-    script: {
-      title: string;
-      logline: string;
-      summary: string;
-      visualStyle?: string;
-      beats: string[];
-      version: number;
-    };
-    characterAssets: Array<{
-      name: string;
-      role: string;
-      relationshipToUserStory: string;
-      stableVisualDescription: string;
-      emotionalBaseline: string;
-      wardrobe?: string;
-      props: string[];
-    }>;
-    sceneAssets: Array<{
-      name: string;
-      location: string;
-      timeOfDay: string;
-      light: string;
-      atmosphere: string;
-      keyObjects: string[];
-      scenePanels: Array<{
-        title: string;
-        shotType: "establishing" | "wide" | "medium" | "detail" | "lighting" | "overhead" | "transition";
-        description: string;
-        purpose: string;
-        keyObjects: string[];
-      }>;
-      spatialLogic: string;
-    }>;
-  };
-};
-```
-
-Rules:
-
-- Does not generate storyboard.
-- Does not start video generation.
-- Returns 1-3 key character assets and exactly 1 scene asset. The single scene asset carries 4-6 `scenePanels` for the multi-panel environment asset image.
-- `script.visualStyle` is the shared style anchor for character and scene asset images; older restored stories may omit it.
-- Uploaded photos must belong to current user.
-
-### `POST /api/storyboard`
-
-Generate the MVP 15-second storyboard: one 9-frame storyboard script plus one core storyboard group from confirmed story world artifacts.
-
-### `GET /api/storycam-sessions/recent?limit=5`
-
-List current user's recent restorable StoryCam projects for the homepage drawer. Empty drafts and upload-only sessions are skipped.
-
-```ts
-type RecentProjectsResponse = {
-  ok: true;
-  projects: Array<{
-    sessionId: string;
-    title: string;
-    summary: string;
-    currentStep: "story-world" | "core-storyboard" | "clip-generation" | "clip-review" | "export";
-    updatedAt: string;
-    coreGroupTargetCount: 1 | 2 | 3;
-    thumbnail: null | {
-      id: string;
-      mimeType: string;
-      signedUrl: string;
-      signedUrlExpiresIn: number;
-    };
-  }>;
-};
-```
-
-### `GET /api/storycam-sessions/:id/restore`
-
-Restore a specific current-user project selected from recent projects. Returns the same restored shape as `/api/storycam-sessions/current`; missing, deleted, unauthorized, or non-restorable sessions return `404 not_found`.
-
-Restore responses include short-lived signed preview URLs and must be served with `Cache-Control: no-store`. Client-side restore caches are per browser tab, user-bound, and keyed by session id; they cache only JSON payloads and signed URLs, never media blobs. Prefetch may warm an in-memory selected-session cache, but it must not persist full restore payloads or change the verified current-session pointer. Signed URL reuse must preserve each media URL's absolute expiry and must not extend an old URL by recomputing a fresh TTL.
-
-Storyboard image state:
-
-```ts
-type StoryboardImageState =
-  | {
-      status: "ready";
-      placeholder: false;
-      mediaId: string;
-      mimeType: string;
-      signedUrl: string;
-      signedUrlExpiresIn: number;
-    }
-  | {
-      status: "generating";
-      placeholder: true;
-      jobId: string;
-    }
-  | {
-      status: "placeholder";
-      placeholder: true;
-      reason?: "waiting_for_asset_images" | "reference_images_unsupported" | "provider_failed" | "storage_failed";
-    };
-```
-
-Auth: required.
-
-Request:
-
-```ts
-type StoryboardRequest = {
-  sessionId: string;
-  confirmedArtifactVersions: Record<string, number>;
-  coreGroupTargetCount?: 1 | 2 | 3;
-  plannedDurationSeconds?: number;
-};
-```
-
-Compatibility: `coreGroupTargetCount` and `plannedDurationSeconds` remain accepted for older clients and restored data, but new MVP storyboard creation normalizes all requests to `coreGroupTargetCount: 1`, `plannedDurationSeconds: 15`, and `clipDurationTargets: [15]`.
-
-Success:
-
-```ts
-type StoryboardResponse = {
-  ok: true;
-  sessionId: string;
-  storyboardScript: VersionedArtifact;
-  coreStoryboardGroups: VersionedArtifact[];
-  artifacts: {
-    storyboardScript: VersionedArtifact;
-    storyboardScripts: VersionedArtifact[];
-    coreStoryboardGroups: VersionedArtifact[];
-  };
-  storyboard: {
-    storyboardScript: {
-      planSummary: string;
-      tone: string;
-      rhythm: string;
-      plannedDurationSeconds: number;
-      mainImagePrompt?: string;
-      frames: StoryboardFrame[];
-      version: number;
-    };
-    storyboardScripts: Array<{
-      planSummary: string;
-      tone: string;
-      rhythm: string;
-      plannedDurationSeconds: number;
-      mainImagePrompt?: string;
-      frames: StoryboardFrame[];
-      version: number;
-    }>;
-    coreStoryboardGroups: Array<{
-      title: string;
-      storyPurpose: string;
-      emotionalTurn: string;
-      estimatedClipDurationSeconds: number;
-      scriptArtifact: VersionedArtifact;
-      representativeImage: StoryboardImageState;
-      expandedStoryboardImages: StoryboardImageState[];
-      version: number;
-    }>;
-  };
-  durationPlan: {
-    plannedDurationSeconds: number;
-    coreGroupTargetCount: 1 | 2 | 3;
-    clipDurationTargets: number[];
-  };
-};
-
-type StoryboardFrame = {
-  frameNumber: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
-  canvasPosition: "center" | "top-left" | "top" | "top-right" | "left" | "right" | "bottom-left" | "bottom" | "bottom-right";
-  timeRange: string;
-  durationSeconds: number;
-  cameraAngle: string;
-  shotSize: string;
-  visualContent: string;
-  scene: string;
-  sound: string;
-  technicalNotes: string;
-  narrativePurpose: string;
-  title: string;
-  beatType: string;
-  imagePrompt: string;
-};
-```
-
-Rules:
-
-- Reject if story world is not confirmed.
-- New MVP results contain exactly 1 group, targeting about 15 seconds and exactly 9 storyboard frames.
-- When a configured reference-image storyboard provider is available, storyboard creation first checks that every confirmed character and scene asset has a ready thumbnail. Missing thumbnails return HTTP `409` with `error: "story_world_asset_images_not_ready"` and no storyboard/core-group artifacts are created.
-- The representative core image is generated from frame 1 only after all referenced story-world character and scene asset images have ready thumbnails.
-- If required asset images are not ready, `representativeImage` returns a placeholder with `reason: "waiting_for_asset_images"` and no storyboard image job is submitted.
-- If the configured storyboard image provider does not support reference images, image generation returns `reason: "reference_images_unsupported"` instead of falling back to pure text prompts.
-- Planned total duration is 15 seconds for new storyboard creation.
-- Downstream stale artifacts must be handled by service layer.
-
-### `POST /api/storyboard-groups/:id/expand`
-
-Generate expanded storyboard cards for one core group from that group's stored frames 2-9.
-
-Auth: required.
-
-Request:
-
-```ts
-type ExpansionRequest = {
-  sessionId: string;
-  coreStoryboardGroupId: string;
-  action?: "default" | "more" | "new_angle" | "stronger_emotion";
-  targetCount?: number;
-};
-```
-
-Success:
-
-```ts
-type ExpansionResponse = {
-  ok: true;
-  sessionId: string;
-  expansionCards: Array<{
-    beatType: string;
-    frameNumber: number;
-    canvasPosition: string;
-    title: string;
-    description: string;
-    guidance: string;
-    imagePrompt?: string;
-    image: StoryboardImageState;
-    sortOrder: number;
-    version: number;
-  }>;
-  expandedStoryboardImages: StoryboardImageState[];
-  expandedStoryboardCards: VersionedArtifact[];
-};
-```
-
-Rules:
-
-- Default target is 8 cards/images, derived from storyboard frames 2-9.
-- Maximum is 8 cards.
-- Expansion never creates a video job.
-- Expanded storyboard image jobs require the same ready story-world character and scene asset image references as the core frame.
-- Repeated expansion reuses existing expanded storyboard card artifacts instead of duplicating them.
-
-### `POST /api/storyboard-groups/:id/frames/:frameNumber/regenerate-image`
-
-Regenerate one storyboard frame image without accepting a user prompt. The server reuses the stored `imagePrompt` for that frame.
-
-Auth: required.
-
-Request:
-
-```ts
-type RegenerateStoryboardFrameImageRequest = {
-  sessionId: string;
-};
-```
-
-Success:
-
-```ts
-type RegenerateStoryboardFrameImageResponse = {
-  ok: true;
-  sessionId: string;
-  frameNumber: number;
-  image: StoryboardImageState;
-};
-```
-
-Rules:
-
-- `frameNumber=1` creates a `storyboard_image` job linked to the core storyboard group artifact.
-- `frameNumber=2..9` creates an `expanded_storyboard_image` job linked to the corresponding expanded storyboard card artifact.
-- Regeneration never accepts a user prompt and never bypasses required story-world asset image references.
-- No free-form user prompt is accepted.
-
-### `POST /api/storyboard-groups/:id/generate-clip`
-
-Create a clip prompt packet and enqueue a video generation job.
-
-Auth: required.
-
-Request:
-
-```ts
-type GenerateClipRequest = {
-  sessionId: string;
-  coreStoryboardGroupId: string;
-  idempotencyKey: string;
-  confirmedArtifactVersions: Record<string, number>;
-  providerSendConfirmed: true;
-  generationMode?: GenerationMode;
-};
-```
-
-Success:
-
-```ts
-type GenerateClipResponse = {
-  ok: true;
-  jobId: string;
-  status: JobStatus;
-  confirmationSummary: string;
-};
-```
-
-Rules:
-
-- `providerSendConfirmed` must be true.
-- Response must not include full clip prompt packet.
-- Duplicate `idempotencyKey` returns the existing active job.
-- The server-created `clip_prompt_packet` contains the 9-frame storyboard summary, planned duration, core/expanded storyboard image media references, and a provider prompt assembled from those internal artifacts.
-- Real Seedance jobs are submitted immediately through the configured video provider; the generation job stores `provider_request_id` and is polled through `GET /api/generation-jobs/:id`.
-
-### `GET /api/generation-jobs/:id`
-
-Poll job status.
-
-Auth: required.
-
-Success:
-
-```ts
-type GenerationJobResponse = {
-  ok: true;
-  job: {
-    id: string;
-    sessionId: string;
-    type: "story_world" | "storyboard" | "video_clip" | "final_work";
-    status: JobStatus;
-    providerKind: ProviderKind;
-    providerName: string;
-    attempts: number;
-    retryable?: boolean;
-    redactedError?: string;
-    outputArtifactId?: string;
-    outputPreview?: {
-      durationSeconds: number;
-      mimeType: "video/mp4";
-      signedUrl: string;
-      signedUrlExpiresIn: number;
-    };
-  };
-};
-```
-
-Rules:
-
-- Image jobs resolve provider output and store ready thumbnail media.
-- Real Seedance video jobs poll the provider task id; on success the server downloads `content.video_url`, stores it in private StoryCam storage, creates a `generated_clip` artifact, and marks the job succeeded.
-- Succeeded video jobs may include a short-lived account preview URL for the stored generated clip.
-- Provider URLs and full prompts are never returned.
-
-### `POST /api/generation-jobs/:id/cancel`
-
-Request job cancellation.
-
-Auth: required.
-
-Success:
-
-```ts
-type CancelJobResponse = {
-  ok: true;
-  jobId: string;
-  status: "cancel_requested" | "canceled";
-};
-```
-
-Rules:
-
-- Tombstone locally even if provider cannot cancel.
-- Late provider results must be discarded.
-
-### `POST /api/stitch-suggestion`
-
-Create a stitch suggestion for one ready generated clip. In the v1 UI, clicking “生成最终作品” is the confirmation action for that clip.
-
-Auth: required.
-
-Request:
-
-```ts
-type StitchSuggestionRequest = {
-  sessionId: string;
-  generatedClipArtifactIds: string[];
-};
-```
-
-Success:
-
-```ts
-type StitchSuggestionResponse = {
-  ok: true;
-  stitchSuggestion: VersionedArtifact;
-};
-```
-
-### `POST /api/final-work`
-
-Generate final work and store it in Supabase Storage.
-
-Auth: required.
-
-Request:
-
-```ts
-type FinalWorkRequest = {
-  sessionId: string;
-  stitchSuggestionArtifactId: string;
-  idempotencyKey: string;
-};
-```
-
-Success:
-
-```ts
-type FinalWorkResponse = {
-  ok: true;
-  finalWork: VersionedArtifact;
-  media: MediaRef;
-  preview: {
-    durationSeconds: number;
-    mimeType: "video/mp4";
-    signedUrl: string;
-    signedUrlExpiresIn: number;
-  };
-};
-```
-
-Rules:
-
-- A single clip still creates a new final work artifact.
-- Final work is account-scoped preview/save only.
-- No sharing link is created in Phase 1.
-
-## Versioned Artifact Shape
-
-```ts
-type VersionedArtifact = {
-  id: string;
-  type: string;
-  state: ArtifactState;
-  version: number;
-  parentArtifactId?: string;
-  data: unknown;
-  dependsOn?: Record<string, number>;
-  createdAt: string;
-  updatedAt: string;
-};
-```
+- `script.visualStyle` is the shared style anchor for character, scene, and storyboard images; older restored stories may omit it.
+- Historical multi-core-group or multi-clip data can be restored, but the new MVP creation path creates one core group and one generated clip.
+- Placeholder image states are allowed when required upstream asset images are still generating, missing, or unsupported by a provider.
+- Downstream artifacts become stale when upstream story-world or storyboard material changes; stale provider packets cannot create new video jobs.

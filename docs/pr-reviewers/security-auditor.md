@@ -10,7 +10,7 @@ Review the current diff for StoryCam security, privacy, and trust-boundary risks
 
 - The current diff against the intended base branch.
 - Relevant auth, API, storage, database, provider, upload, and logging code.
-- `docs/SECURITY.md`, `ARCHITECTURE.md`, `docs/references/providers.md`, and `docs/PR_REVIEW.md`.
+- `docs/SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/references/providers.md`, and `docs/PR_REVIEW.md`.
 
 ## Review Focus
 

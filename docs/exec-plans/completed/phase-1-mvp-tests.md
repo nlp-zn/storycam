@@ -1,3 +1,9 @@
+# Completion Note
+
+Status: completed historical test plan.
+
+This plan has been superseded by the current Vitest, API, Playwright E2E, visual QA, and progressive gate scripts. Use `docs/PR_REVIEW.md`, `docs/references/local-dev.md`, and the `scripts/check-*.sh` gates for current verification.
+
 # StoryCam 测试计划
 
 日期：2026-04-25  
