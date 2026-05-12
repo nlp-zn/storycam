@@ -87,7 +87,7 @@ describe("story world service", () => {
           characterAssets: [
             {
               consistencyNotes: ["动作克制"],
-              emotionalBaseline: "少说话，用停顿表达情绪",
+              emotionalBaseline: "少台词，用停顿表达情绪",
               id: "character-test-1",
               name: "她",
               props: ["手机"],
@@ -165,7 +165,7 @@ describe("story world service", () => {
       "user-1",
       {
         input: "我想把暗恋拍成韩剧雨夜",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       },
       provider
     );
@@ -173,7 +173,7 @@ describe("story world service", () => {
     expect(provider.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         idea: "我想把暗恋拍成韩剧雨夜",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
   });
@@ -191,7 +191,7 @@ describe("story world service", () => {
           characterAssets: [
             {
               consistencyNotes: ["动作克制"],
-              emotionalBaseline: "少说话，用停顿表达情绪",
+              emotionalBaseline: "少台词，用停顿表达情绪",
               id: "character-test-1",
               name: "她",
               props: ["手机"],

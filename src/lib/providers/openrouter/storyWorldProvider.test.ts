@@ -30,6 +30,17 @@ const storyWorldDraft = {
   ],
   script: {
     beats: ["她在雨声里删掉短信", "便利店门铃响起", "两人的倒影短暂重叠"],
+    directorBrief: {
+      dialogueStrategy: "少台词，以停顿和手部动作表达。",
+      microRhythm: "0-3秒建立雨夜等待，3-8秒推进删短信动作，8-12秒用门铃触发反应，12-15秒留在玻璃倒影。",
+      shotDensity: "慢进入，门铃后轻微加速，最后停住。",
+      shotSizeFocus: "中景到近景，再回到空镜。",
+      soundStrategy: "雨声持续，门铃作为转折，低声配乐托底。",
+      tone: "雨夜、私人、克制",
+      transitionStrategy: "用声音先行和动作反应连接。",
+      userFacingSummary: "这一段会先安静等待，再让门铃把情绪推到玻璃倒影里。",
+      visualMotifs: ["雨声", "玻璃倒影", "未发送短信"]
+    },
     logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
     summary: "冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的那一秒。",
     title: "雨夜未发送",
@@ -48,7 +59,7 @@ describe("openrouter story world provider", () => {
 
     const result = await provider.generate({
       idea: "我想把暗恋拍成韩剧雨夜",
-      lightweightChoices: ["更遗憾一点", "像私人回忆"],
+      lightweightChoices: ["留白多一点", "像旧照片"],
       sessionId: "session-1",
       uploadedPhotoRefs: [{ mediaAssetId: "photo-1" }]
     });
@@ -79,7 +90,12 @@ describe("openrouter story world provider", () => {
           })
         ],
         script: expect.objectContaining({
+          directorBrief: expect.objectContaining({
+            soundStrategy: expect.stringContaining("雨声"),
+            visualMotifs: expect.arrayContaining(["玻璃倒影"])
+          }),
           id: "script-session-1",
+          qualityChecks: expect.arrayContaining([expect.stringContaining("可见动作")]),
           sessionId: "session-1",
           title: "雨夜未发送",
           visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
@@ -152,6 +168,9 @@ describe("openrouter story world provider", () => {
         ],
         script: expect.objectContaining({
           logline: "我想把雨夜错过的人拍成短片",
+          directorBrief: expect.objectContaining({
+            microRhythm: expect.stringContaining("0-3秒")
+          }),
           title: "私人短片",
           visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
         })
@@ -162,7 +181,7 @@ describe("openrouter story world provider", () => {
   it("builds prompts from text and lightweight choices without leaking uploaded storage paths", () => {
     const prompt = buildOpenRouterStoryWorldPrompt({
       idea: "把旧照片里的毕业告别拍成短片",
-      lightweightChoices: ["少说话"],
+      lightweightChoices: ["像旧照片"],
       sessionId: "session-1",
       uploadedPhotoRefs: [
         {
@@ -174,13 +193,15 @@ describe("openrouter story world provider", () => {
     });
 
     expect(prompt.prompt).toContain("把旧照片里的毕业告别拍成短片");
-    expect(prompt.prompt).toContain("少说话");
+    expect(prompt.prompt).toContain("像旧照片");
     expect(prompt.prompt).toContain("photo-1");
     expect(prompt.prompt).toContain("不是分镜拆解阶段");
     expect(prompt.prompt).toContain("script.beats 是剧情节点");
     expect(prompt.prompt).toContain("不是镜头列表");
     expect(prompt.prompt).toContain("场景资产必须且只能生成 1 个");
     expect(prompt.prompt).toContain("script.visualStyle");
+    expect(prompt.prompt).toContain("script.directorBrief");
+    expect(prompt.prompt).toContain("视听化微调");
     expect(prompt.prompt).toContain("会正面出镜、持续互动或承担情感关系的角色");
     expect(prompt.prompt).toContain("宠物故事里，如果主人会出现在门口、抚摸、团聚");
     expect(prompt.prompt).toContain("scenePanels 生成 4-6 个小切图描述");

@@ -57,7 +57,7 @@ type RecentProjectsDrawerProps = {
 type RecentProjectsDrawerContentProps = Omit<RecentProjectsDrawerProps, "onClose">;
 
 export function IdeaInputPanel({
-  initialChoices = ["像私人回忆"],
+  initialChoices = ["留白多一点"],
   initialIdea = "我想把暗恋拍成韩剧雨夜",
   onProjectSelected,
   onSubmitStoryWorldDraft

@@ -104,6 +104,7 @@ describe("mock storyboard provider", () => {
           beats: [],
           id: "bad",
           logline: "",
+          qualityChecks: [],
           sessionId: "session-1",
           state: "ready",
           summary: "",

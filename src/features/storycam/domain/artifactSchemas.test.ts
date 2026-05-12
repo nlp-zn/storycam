@@ -27,7 +27,19 @@ const script = {
   logline: "她在雨夜删改一条没有发出的告白短信。",
   summary: "便利店外的雨和玻璃反光，让两个人短暂重叠又错过。",
   visualStyle: "写实韩剧电影感，雨夜冷暖混合光，低饱和色彩",
-  beats: ["删改短信", "门铃响起", "擦肩而过"]
+  beats: ["删改短信", "门铃响起", "擦肩而过"],
+  directorBrief: {
+    dialogueStrategy: "少台词，用停顿和动作表达。",
+    microRhythm: "0-3秒建立雨夜等待，3-8秒推进手机和门铃动作，8-12秒给反应，12-15秒留白收束。",
+    shotDensity: "前慢后轻微加速，最后停住。",
+    shotSizeFocus: "中景建立空间，近景落到手机和反应，结尾回到空镜。",
+    soundStrategy: "雨声做底，门铃作为转折，配乐压低。",
+    tone: "克制、遗憾、私人回忆",
+    transitionStrategy: "动作之间自然衔接，结尾用停留而不是明显转场。",
+    userFacingSummary: "这一段会先安静等待，再用门铃和玻璃反光完成错过。",
+    visualMotifs: ["雨声", "玻璃反光", "未发送短信"]
+  },
+  qualityChecks: ["剧本已转成可见动作和可听声音。"]
 };
 
 const character = {
@@ -149,12 +161,24 @@ describe("artifact schemas", () => {
   });
 
   it("keeps old script artifacts restorable when they do not have a visual style yet", () => {
-    const { visualStyle: _visualStyle, ...oldScript } = script;
+    const { directorBrief: _directorBrief, qualityChecks: _qualityChecks, visualStyle: _visualStyle, ...oldScript } = script;
 
     expect(storyScriptSchema.parse(oldScript)).toMatchObject({
       id: "script-1",
+      qualityChecks: [],
       title: "雨夜便利店"
     });
+  });
+
+  it("accepts the internal director brief on story scripts", () => {
+    const parsed = storyScriptSchema.parse(script);
+
+    expect(parsed.directorBrief).toMatchObject({
+      microRhythm: expect.stringContaining("0-3秒"),
+      shotSizeFocus: expect.stringContaining("中景"),
+      userFacingSummary: expect.stringContaining("门铃")
+    });
+    expect(parsed.qualityChecks).toEqual(["剧本已转成可见动作和可听声音。"]);
   });
 
   it("accepts storyboard scripts with exactly nine structured frames", () => {
@@ -292,7 +316,7 @@ describe("artifact schemas", () => {
       id: "director-packet-1",
       input: "我想把暗恋拍成韩剧雨夜",
       intent: "私人记忆预告片",
-      directorTone: "更遗憾一点，少说话",
+      directorTone: "留白多一点，像旧照片",
       script,
       characterAssets: [character],
       sceneAssets: [scene],

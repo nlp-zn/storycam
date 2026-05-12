@@ -421,7 +421,7 @@ function frameToExpandedCard(coreGroup: CoreStoryboardGroup, frame: StoryboardFr
     coreGroupId: coreGroup.id,
     description: frame.visualContent,
     frameNumber: frame.frameNumber,
-    guidance: `${frame.narrativePurpose} ${frame.technicalNotes}`,
+    guidance: `${frame.narrativePurpose} ${frame.technicalNotes} 节奏：${frame.timeRange}。声音意图：${frame.sound}`,
     id: `${coreGroup.id}-frame-${frame.frameNumber}`,
     imagePrompt: frame.imagePrompt,
     sessionId,

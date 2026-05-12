@@ -8,11 +8,11 @@ test.describe("StoryCam app shell", () => {
     await expect(page.getByRole("button", { name: "生成故事雏形" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "StoryCam steps" })).toHaveCount(0);
     await expect(page.getByText("第一步：核心前提")).toBeVisible();
-    await expect(page.getByTestId("story-idea-params").getByRole("button", { name: "移除 像私人回忆" })).toBeVisible();
+    await expect(page.getByTestId("story-idea-params").getByRole("button", { name: "移除 留白多一点" })).toBeVisible();
     await expect(page.getByRole("button", { name: /宠物小剧场/ })).toBeVisible();
 
-    await page.getByRole("button", { name: "少说话" }).click();
-    await expect(page.getByTestId("story-idea-params").getByRole("button", { name: "移除 少说话" })).toBeVisible();
+    await page.getByRole("button", { name: "像旧照片" }).click();
+    await expect(page.getByTestId("story-idea-params").getByRole("button", { name: "移除 像旧照片" })).toBeVisible();
   });
 
   test("exposes robots and sitemap routes", async ({ page }) => {

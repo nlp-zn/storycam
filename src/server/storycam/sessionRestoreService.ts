@@ -17,6 +17,7 @@ import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamSignedUrlTtlSeconds, type StoryCamPrivateBucket } from "./mediaStore";
 import { StoryCamSessionRepository } from "./sessionRepository";
 import { generatingStoryboardImage, placeholderStoryboardImage, type GeneratedStoryboardImageState } from "./storyboardImageService";
+import { toPublicStoryWorld, type PublicStoryWorldProviderOutput } from "./storyWorldService";
 
 type ArtifactRef = {
   id: string;
@@ -85,9 +86,9 @@ type RestoredStoryWorld = {
   ok: true;
   sessionId: string;
   storyWorld: {
-    characterAssets: unknown[];
-    sceneAssets: unknown[];
-    script: unknown;
+    characterAssets: PublicStoryWorldProviderOutput["characterAssets"];
+    sceneAssets: PublicStoryWorldProviderOutput["sceneAssets"];
+    script: PublicStoryWorldProviderOutput["script"];
   };
 };
 
@@ -361,11 +362,11 @@ async function restoreStoryWorld(
     },
     ok: true,
     sessionId,
-    storyWorld: {
+    storyWorld: toPublicStoryWorld({
       characterAssets: bundle.characterRows.map((row) => characterAssetSchema.parse(row.data_json)),
       sceneAssets: bundle.sceneRows.map((row) => sceneAssetSchema.parse(row.data_json)),
       script: storyScriptSchema.parse(bundle.scriptRow.data_json)
-    }
+    })
   };
 }
 

@@ -101,6 +101,9 @@ describe("GET /api/storycam-sessions/current", () => {
         }
       }
     });
+    expect(body.storyWorld.storyWorld.script.qualityChecks).toEqual(["剧本已转成可见动作和可听声音。"]);
+    expect(body.storyWorld.storyWorld.script).not.toHaveProperty("directorBrief");
+    expect(JSON.stringify(body)).not.toContain("shotDensity");
   });
 
   it("restores storyboard groups and private image signed urls without exposing storage paths", async () => {
@@ -569,8 +572,20 @@ function storyWorldArtifacts(sessionId: string) {
   return [
     artifactRow("script-artifact-1", "script", sessionId, {
       beats: ["她站在屋檐下看着未发送短信。"],
+      directorBrief: {
+        dialogueStrategy: "少台词，以动作和停顿表达。",
+        microRhythm: "0-3秒建立雨夜等待，3-8秒推进删短信动作，8-12秒用门铃触发反应，12-15秒留在玻璃倒影。",
+        shotDensity: "慢进入，门铃后轻微加速，最后停住。",
+        shotSizeFocus: "中景到近景，再回到空镜。",
+        soundStrategy: "雨声持续，门铃作为转折，低声配乐托底。",
+        tone: "雨夜、私人、克制",
+        transitionStrategy: "用声音先行和动作反应连接。",
+        userFacingSummary: "这一段会先安静等待，再让门铃把情绪推到玻璃倒影里。",
+        visualMotifs: ["雨声", "玻璃倒影", "未发送短信"]
+      },
       id: "script-story",
       logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
+      qualityChecks: ["剧本已转成可见动作和可听声音。"],
       sessionId,
       state: "ready",
       summary: "冷白灯、雨水和玻璃反光让两个人短暂同框。",

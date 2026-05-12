@@ -222,6 +222,9 @@ function buildVideoProviderPrompt(input: {
     : undefined;
   const frames = input.storyboardScript?.frames.map((frame) => formatSeedanceFrameBeat(frame, input.referenceFrames ?? [])).join("\n");
   const audioPlan = buildNativeAudioPlan(input.storyboardScript);
+  const rhythmPlan = input.storyboardScript
+    ? `Director rhythm: ${clipText(input.storyboardScript.rhythm, 160)} Tone: ${clipText(input.storyboardScript.tone, 100)}. Keep the clip inside one 15s micro arc: establish state, visible action, reaction or turn, quiet ending.`
+    : "";
 
   return [
     `Create one continuous ${Math.min(15, Math.round(input.durationSeconds))}s 16:9 cinematic clip for "${input.coreGroupTitle}".`,
@@ -230,6 +233,7 @@ function buildVideoProviderPrompt(input: {
     "No subtitles, no readable UI text, no new characters or locations.",
     referenceImagePlan ? `Reference order: ${referenceImagePlan}.` : "",
     "Use each 图片n reference image as a comic storyboard anchor for its matching frame; preserve character design, wardrobe, location, lighting, rain, and screen direction.",
+    rhythmPlan,
     frames ? `Director nine-frame plan:\n${frames}` : "",
     audioPlan,
     "Camera: restrained natural movement between frames, visible subject action before each transition, final beat held emotionally."
