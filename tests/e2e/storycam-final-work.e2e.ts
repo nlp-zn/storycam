@@ -28,6 +28,61 @@ test.describe("StoryCam final work", () => {
     expect(routes.finalWorkCalls()).toBe(2);
   });
 
+  test("restoring an unfinished clip clears stale auto-save guards", async ({ page }) => {
+    const routes = await installWorkflowRoutes(page, { failFirstFinalWork: true });
+
+    await driveToClipGeneration(page);
+
+    await expect(page.getByRole("heading", { name: "最终作品保存失败" })).toBeVisible();
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          projects: [
+            {
+              coreGroupTargetCount: 1,
+              currentStep: "clip-generation",
+              sessionId: "session-1",
+              summary: "雨夜便利店门口，她停在未发送的短信前。",
+              thumbnail: null,
+              title: "雨夜未发送",
+              updatedAt: "2026-05-12T10:00:00.000Z"
+            }
+          ]
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-1/restore", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          clipJob: clipJobFixture("clip-artifact-1", "job-1", "data:video/mp4;base64,Q0xJUDEx"),
+          coreGroupTargetCount: 1,
+          currentStep: "clip-generation",
+          finalWork: undefined,
+          ok: true,
+          restored: true,
+          sessionId: "session-1",
+          storyboard: storyboardResponseFixture(),
+          storyWorld: storyWorldResponseFixture(),
+          storyWorldConfirmed: true
+        })
+      });
+    });
+
+    await page.getByRole("button", { name: "返回首页" }).click();
+    await page.getByRole("button", { name: "继续创作 雨夜未发送" }).click();
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(1);
+    await expect(page.getByText("最终作品保存失败，请重试。")).toHaveCount(0);
+    expect(routes.finalWorkCalls()).toBe(2);
+  });
+
   test("retake keeps the latest clip when an older final-work save resolves late", async ({ page }) => {
     const routes = await installWorkflowRoutes(page, { delayFirstFinalWork: true });
 
@@ -218,22 +273,11 @@ async function installWorkflowRoutes(
       contentType: "application/json",
       status: 200,
       body: JSON.stringify({
-        job: {
-          attempts: 0,
-          id: isSecondJob ? "job-2" : "job-1",
+        job: clipJobFixture(
           outputArtifactId,
-          outputPreview: {
-            durationSeconds: 15,
-            mimeType: "video/mp4",
-            signedUrl: isSecondJob ? "data:video/mp4;base64,Q0xJUDAy" : "data:video/mp4;base64,Q0xJUDEx",
-            signedUrlExpiresIn: 300
-          },
-          providerKind: "video",
-          providerName: "mock",
-          sessionId: "session-1",
-          status: "succeeded",
-          type: "video_clip"
-        },
+          isSecondJob ? "job-2" : "job-1",
+          isSecondJob ? "data:video/mp4;base64,Q0xJUDAy" : "data:video/mp4;base64,Q0xJUDEx"
+        ),
         ok: true
       })
     });
@@ -334,6 +378,63 @@ async function installWorkflowRoutes(
     firstFinalWorkStarted,
     generatedClipIds: () => [...generatedClipIds],
     releaseFirstFinalWork: () => releaseFirstFinalWork()
+  };
+}
+
+function clipJobFixture(outputArtifactId: string, id: string, signedUrl: string) {
+  return {
+    attempts: 0,
+    id,
+    outputArtifactId,
+    outputPreview: {
+      durationSeconds: 15,
+      mimeType: "video/mp4",
+      signedUrl,
+      signedUrlExpiresIn: 300
+    },
+    providerKind: "video",
+    providerName: "mock",
+    sessionId: "session-1",
+    status: "succeeded",
+    type: "video_clip"
+  };
+}
+
+function storyWorldResponseFixture() {
+  return {
+    artifacts: {
+      characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+      sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+      script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+    },
+    ok: true,
+    sessionId: "session-1",
+    storyWorld: storyWorldFixture()
+  };
+}
+
+function storyboardResponseFixture() {
+  return {
+    artifacts: {
+      coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+      expandedStoryboardCards: Array.from({ length: 8 }, (_, index) => ({
+        id: `expanded-${index + 1}`,
+        parentArtifactId: "core-artifact-1",
+        state: "ready",
+        type: "expanded_storyboard_card",
+        version: 1
+      })),
+      storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+      storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
+    },
+    durationPlan: {
+      clipDurationTargets: [15],
+      coreGroupTargetCount: 1,
+      plannedDurationSeconds: 15
+    },
+    ok: true,
+    sessionId: "session-1",
+    storyboard: storyboardFixture()
   };
 }
 

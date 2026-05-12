@@ -307,7 +307,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(restored.clipJob ?? null);
     setFinalWork(restored.finalWork ?? null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     setIsStoryWorldEditorOpen(false);
     setStoryWorldGeneration({ kind: "idle" });
     setStoryboardGeneration({ kind: "idle" });
@@ -712,7 +712,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
@@ -738,7 +738,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
@@ -862,7 +862,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     setClipGeneration({ kind: "idle" });
     setSelectedStepIndex(null);
     setStoryboardStatus("generating");
@@ -880,7 +880,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     abandonStoryboardGeneration();
     abandonClipGeneration();
     setIsStoryWorldEditorOpen(false);
@@ -916,7 +916,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
-      setFinalWorkSaveError(null);
+      resetFinalWorkSaveState();
       setIsStoryWorldEditorOpen(false);
       setStoryWorldGeneration({ kind: "idle" });
       setStoryboardGeneration({ kind: "idle" });
@@ -954,7 +954,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
-      setFinalWorkSaveError(null);
+      resetFinalWorkSaveState();
       setClipGeneration({ kind: "idle" });
       setIsStoryWorldEditorOpen(false);
       setSelectedStepIndex(null);
@@ -1253,7 +1253,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
   }
 
   function prepareClipGeneration(index = selectedCoreGroupIndex ?? 0) {
@@ -1267,7 +1267,7 @@ export function StoryCamWorkspace() {
     setSelectedCoreGroupIndex(index);
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     setSelectedStepIndex(null);
 
     const readyCount = readyExpandedFrameCount(group);
@@ -1389,7 +1389,7 @@ export function StoryCamWorkspace() {
 
       setClipJob(null);
       setFinalWork(null);
-      setFinalWorkSaveError(null);
+      resetFinalWorkSaveState();
       setClipGeneration({ kind: "pending", request });
       setStoryboardMessage("正在创建片段生成任务。");
       setSelectedStepIndex(null);
@@ -1400,7 +1400,7 @@ export function StoryCamWorkspace() {
 
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     prepareClipGeneration(selectedCoreGroupIndex ?? 0);
   }
 
@@ -1408,7 +1408,7 @@ export function StoryCamWorkspace() {
     abandonClipGeneration();
     setClipJob(null);
     setFinalWork(null);
-    setFinalWorkSaveError(null);
+    resetFinalWorkSaveState();
     setSelectedStepIndex(2);
     syncStepPath(2);
   }
@@ -1425,6 +1425,13 @@ export function StoryCamWorkspace() {
 
   function isActiveClipRequest(requestId: number) {
     return clipRequestIdRef.current === requestId;
+  }
+
+  function resetFinalWorkSaveState() {
+    finalWorkActiveSaveKeyRef.current = null;
+    finalWorkAutoSubmittedKeyRef.current = null;
+    finalWorkSaveFailedKeyRef.current = null;
+    setFinalWorkSaveError(null);
   }
 
   async function createFinalWorkFromAcceptedClip(options: { force?: boolean } = {}) {
