@@ -1187,12 +1187,12 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 ### Task 30：Clip generation workbench + final work UI
 
-**Description:** 在 `/storycam/clip-generation` 内展示 generated clips、重拍路径、stitch suggestion、final work 生成、账号内预览/保存和 MP4 导出；`clip-review` / `export` 只保留历史恢复兼容。
+**Description:** 在 `/storycam/clip-generation` 内展示 generated clips、重拍路径、自动 final work 保存、账号内预览/保存和 MP4 导出；`clip-review` / `export` 只保留历史恢复兼容。
 
 **Acceptance criteria:**
 
 - [x] 用户能重拍不满意片段。
-- [x] 点击生成最终作品会调用 final-work route。
+- [x] 片段生成成功后自动调用 final-work route，失败时提供重试保存。
 - [x] 片段生成页只提供账号内预览/保存和导出 MP4，不出现分享入口。
 
 **Verification:**
