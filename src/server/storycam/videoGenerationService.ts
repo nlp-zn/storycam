@@ -5,7 +5,11 @@ import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors
 import type { ProviderResult } from "@/lib/providers/types";
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
-import { writeGeneratedStoryCamMedia, type WriteGeneratedStoryCamMediaResult } from "./generatedMediaService";
+import {
+  storyCamGeneratedMediaMaxBytes,
+  writeGeneratedStoryCamMedia,
+  type WriteGeneratedStoryCamMediaResult
+} from "./generatedMediaService";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 
 export type StoreProviderGeneratedClipInput = {
@@ -42,6 +46,9 @@ const mockIdentity = {
   providerKind: "video",
   providerName: "mock"
 } as const;
+const allowedProviderVideoMimeTypes = new Set(["video/mp4", "application/octet-stream"]);
+const providerVideoDownloadTimeoutMs = 60_000;
+const providerVideoSizeLimitError = "Provider video download exceeded the StoryCam media size limit.";
 
 export type StoreMockGeneratedClipInput = Omit<StoreProviderGeneratedClipInput, "fetch" | "providerName" | "providerRequestId" | "videoUrl">;
 
@@ -192,20 +199,86 @@ export async function storeProviderGeneratedClip(
   }
 }
 
-async function downloadProviderVideo(request: typeof fetch, videoUrl: string) {
-  const response = await request(videoUrl);
+async function downloadProviderVideo(request: typeof fetch, videoUrl: string): Promise<Uint8Array> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), providerVideoDownloadTimeoutMs);
 
+  try {
+    const response = await request(videoUrl, { signal: controller.signal });
+
+    assertProviderVideoResponse(response);
+
+    return await readProviderVideoBody(response);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function assertProviderVideoResponse(response: Response): void {
   if (!response.ok) {
     throw new Error("Provider video download failed.");
   }
 
   const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
 
-  if (mimeType && mimeType !== "video/mp4" && mimeType !== "application/octet-stream") {
+  if (mimeType && !allowedProviderVideoMimeTypes.has(mimeType)) {
     throw new Error("Provider video download returned an unsupported media type.");
   }
 
-  return new Uint8Array(await response.arrayBuffer());
+  const contentLength = response.headers.get("content-length");
+
+  if (!contentLength) {
+    return;
+  }
+
+  const declaredByteSize = Number(contentLength);
+
+  if (!Number.isFinite(declaredByteSize) || declaredByteSize > storyCamGeneratedMediaMaxBytes) {
+    throw new Error(providerVideoSizeLimitError);
+  }
+}
+
+async function readProviderVideoBody(response: Response): Promise<Uint8Array> {
+  if (!response.body) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+
+    if (bytes.byteLength > storyCamGeneratedMediaMaxBytes) {
+      throw new Error(providerVideoSizeLimitError);
+    }
+
+    return bytes;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    byteLength += value.byteLength;
+
+    if (byteLength > storyCamGeneratedMediaMaxBytes) {
+      await reader.cancel();
+      throw new Error(providerVideoSizeLimitError);
+    }
+
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return bytes;
 }
 
 function requireArtifactRow(row: StoryCamArtifactRow | null) {
