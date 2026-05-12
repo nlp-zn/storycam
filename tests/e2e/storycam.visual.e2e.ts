@@ -54,19 +54,23 @@ test.describe("StoryCam visual smoke", () => {
     await expect(page.getByText("状态更新失败。")).toBeVisible();
 
     await page.getByRole("button", { name: "重试" }).click();
-    await expect(page.getByRole("heading", { name: "片段已生成" })).toBeVisible();
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
     await expect(page.getByRole("button", { name: "重拍这个片段" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "生成最终作品" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成最终作品" })).toHaveCount(0);
+    await expect(page.getByText("待保存")).toHaveCount(0);
 
     const clipReviewScreenshot = await page.screenshot();
     expect(clipReviewScreenshot.byteLength).toBeGreaterThan(20_000);
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole("button", { name: "生成最终作品" }).first().click();
     await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "导出 MP4" }).first()).toBeVisible();
-    await expect(page.getByText("打开最终作品")).toBeVisible();
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "生成最终作品" })).toHaveCount(0);
+    await expect(page.getByText("待保存")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "查看" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "打开最终作品" })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
   });
 });

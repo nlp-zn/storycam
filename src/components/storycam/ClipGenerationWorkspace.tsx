@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { ArrowLeft, Download, ExternalLink, RotateCcw, Save, Trash2, XCircle } from "lucide-react";
+import { ArrowLeft, Download, RotateCcw, Save, Trash2, XCircle } from "lucide-react";
 import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import type { FinalWorkResponse, GenerationJobStatus, GenerationJobSummary } from "@/features/storycam/client/storycamApi";
 import { isTerminalGenerationJobStatus } from "@/features/storycam/client/jobPolling";
 import { storyCamSeedanceOutputResolutionLabel } from "@/features/storycam/domain/videoSettings";
-import { cn } from "@/lib/utils";
 
 type ClipGenerationState =
   | { kind: "idle" }
@@ -17,12 +16,13 @@ type ClipGenerationWorkspaceProps = {
   clipJob: GenerationJobSummary | null;
   durationSeconds?: number;
   finalWork: FinalWorkResponse | null;
+  finalWorkError?: string | null;
   isDeletingStory?: boolean;
   isFinalWorkSubmitting: boolean;
   onBackToCoreStoryboard: () => void;
   onCancelClip: () => void;
-  onCreateFinalWork: () => Promise<FinalWorkResponse | null>;
   onDeleteStory?: () => void;
+  onRetryFinalWork: () => Promise<FinalWorkResponse | null>;
   onRetake: () => void;
   title?: string;
   posterImageUrl?: string;
@@ -35,50 +35,49 @@ export function ClipGenerationWorkspace({
   clipJob,
   durationSeconds = 15,
   finalWork,
+  finalWorkError,
   isDeletingStory = false,
   isFinalWorkSubmitting,
   onBackToCoreStoryboard,
   onCancelClip,
-  onCreateFinalWork,
   onDeleteStory,
+  onRetryFinalWork,
   onRetake,
   posterImageUrl,
   title = "Clip 01"
 }: ClipGenerationWorkspaceProps) {
   const [isExporting, setIsExporting] = useState(false);
-  const activePreview = finalWork?.preview ?? clipJob?.outputPreview;
+  const clipPreview = clipJob?.outputPreview;
+  const finalPreview = finalWork?.preview;
+  const activePreview = finalPreview ?? clipPreview;
   const finalWorkSignedUrl = finalWork?.preview?.signedUrl;
   const isCreatingClip = clipGenerationState.kind === "pending";
   const isClipCreationError = clipGenerationState.kind === "error";
   const canCancel = clipJob?.status === "queued" || clipJob?.status === "running";
   const canRetry = clipJob?.status === "failed" || clipJob?.status === "canceled" || clipJob?.status === "expired";
   const isClipReady = clipJob?.status === "succeeded";
-  const canExport = !isCreatingClip && !isClipCreationError && Boolean(finalWorkSignedUrl || (isClipReady && clipJob?.outputArtifactId));
-  const canCreateFinalWork = isClipReady && !finalWork;
+  const canExport = !isCreatingClip && !isClipCreationError && Boolean(finalWorkSignedUrl);
+  const saveStatusLabel = clipSaveStatusLabel({ hasFinalWork: Boolean(finalWork), hasSaveError: Boolean(finalWorkError), isClipReady });
   const durationLabel = formatDuration(durationSeconds);
   const progress = progressNumberForStatus(clipJob?.status);
   const statusLabel = clipGenerationStatusLabel(clipGenerationState, clipJob?.status, Boolean(finalWork));
   const statusHeading = clipStatusHeading({
     durationLabel,
+    hasSaveError: Boolean(finalWorkError),
     isClipReady,
     isSaved: Boolean(finalWork),
     title
   });
 
   async function exportMp4(): Promise<void> {
-    if (isExporting || isFinalWorkSubmitting || (!finalWorkSignedUrl && !clipJob?.outputArtifactId)) {
+    if (isExporting || isFinalWorkSubmitting || !finalWorkSignedUrl) {
       return;
     }
 
     setIsExporting(true);
 
     try {
-      const readyFinalWork = finalWork ?? (await onCreateFinalWork());
-      const signedUrl = readyFinalWork?.preview?.signedUrl;
-
-      if (signedUrl) {
-        triggerDownload(signedUrl, "storycam-final-work.mp4");
-      }
+      triggerDownload(finalWorkSignedUrl, "storycam-final-work.mp4");
     } finally {
       setIsExporting(false);
     }
@@ -108,7 +107,7 @@ export function ClipGenerationWorkspace({
           <div className="storycam-clip-pills storycam-clip-pills--status">
             <span>视频 {isClipReady ? "READY" : statusLabel}</span>
             <span>音频 {isClipReady ? "READY" : "待生成"}</span>
-            <span>{finalWork ? "已保存" : "待保存"}</span>
+            <span>{saveStatusLabel}</span>
           </div>
         </div>
 
@@ -157,6 +156,7 @@ export function ClipGenerationWorkspace({
       <h2 className="sr-only">{statusHeading}</h2>
       {clipJob ? <p className="sr-only">任务 {clipJob.id}</p> : null}
       {clipJob?.redactedError ? <p className="storycam-clip-error">{clipJob.redactedError}</p> : null}
+      {finalWorkError ? <p className="storycam-clip-error">{finalWorkError}</p> : null}
       {clipJob?.providerErrorCategory ? <p className="storycam-clip-error">失败类型：{clipJob.providerErrorCategory}</p> : null}
 
       <div className="storycam-clip-footer-actions" aria-label="片段工具">
@@ -184,34 +184,12 @@ export function ClipGenerationWorkspace({
             重拍这个片段
           </Button>
         ) : null}
-        {activePreview ? (
-          <a
-            className={cn(buttonVariants({ variant: "secondaryGlass", size: "dock" }), "storycam-clip-link-button")}
-            href={activePreview.signedUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <ExternalLink aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
-            查看
-          </a>
-        ) : null}
-        {finalWork?.preview ? (
-          <a
-            className={cn(buttonVariants({ variant: "secondaryGlass", size: "dock" }), "storycam-clip-link-button")}
-            href={finalWork.preview.signedUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <ExternalLink aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
-            打开最终作品
-          </a>
-        ) : null}
       </div>
 
       <StoryCamBottomDock className="storycam-clip-dock">
         <div className="storycam-clip-dock-meta">1 个片段 · {durationLabel}</div>
         <div className="storycam-clip-dock-status">
-          <span /> 视频 {isClipReady ? "READY" : statusLabel} · 音频 {isClipReady ? "READY" : "待生成"} · {finalWork ? "已保存" : "待保存"}
+          <span /> 视频 {isClipReady ? "READY" : statusLabel} · 音频 {isClipReady ? "READY" : "待生成"} · {saveStatusLabel}
         </div>
         <Button onClick={onBackToCoreStoryboard} type="button" variant="secondaryGlass">
           <ArrowLeft aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
@@ -231,15 +209,23 @@ export function ClipGenerationWorkspace({
             <RotateCcw aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
             重试
           </Button>
-        ) : canCreateFinalWork ? (
-          <Button disabled={isFinalWorkSubmitting} onClick={onCreateFinalWork} type="button" variant="primaryNeon">
-            <Save aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
-            {isFinalWorkSubmitting ? "正在生成最终作品" : "生成最终作品"}
-          </Button>
-        ) : (
+        ) : finalWork ? (
           <Button disabled={!canExport || isExporting || isFinalWorkSubmitting} onClick={exportMp4} type="button" variant="primaryNeon">
             <Download aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
             导出 MP4
+          </Button>
+        ) : finalWorkError ? (
+          <Button disabled={isFinalWorkSubmitting} onClick={onRetryFinalWork} type="button" variant="primaryNeon">
+            <Save aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
+            {isFinalWorkSubmitting ? "保存中" : "重试保存"}
+          </Button>
+        ) : isClipReady ? (
+          <Button disabled type="button" variant="primaryNeon">
+            保存中
+          </Button>
+        ) : (
+          <Button disabled type="button" variant="primaryNeon">
+            等待片段
           </Button>
         )}
       </StoryCamBottomDock>
@@ -281,19 +267,41 @@ function clipStatusLabel(status: GenerationJobStatus | undefined, isSaved: boole
   return labels[status];
 }
 
+function clipSaveStatusLabel(input: { hasFinalWork: boolean; hasSaveError: boolean; isClipReady: boolean }): string {
+  if (input.hasFinalWork) {
+    return "已保存";
+  }
+
+  if (input.hasSaveError) {
+    return "保存失败";
+  }
+
+  if (input.isClipReady) {
+    return "保存中";
+  }
+
+  return "准备中";
+}
+
 function clipStatusHeading({
   durationLabel,
+  hasSaveError,
   isClipReady,
   isSaved,
   title
 }: {
   durationLabel: string;
+  hasSaveError: boolean;
   isClipReady: boolean;
   isSaved: boolean;
   title: string;
 }): string {
   if (isSaved) {
     return "账号内预览已保存";
+  }
+
+  if (hasSaveError) {
+    return "最终作品保存失败";
   }
 
   if (isClipReady) {

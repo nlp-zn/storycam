@@ -117,6 +117,7 @@ export function StoryCamWorkspace() {
   const [clipJob, setClipJob] = useState<GenerationJobSummary | null>(null);
   const [isClipSubmitting, setIsClipSubmitting] = useState(false);
   const [finalWork, setFinalWork] = useState<FinalWorkResponse | null>(null);
+  const [finalWorkSaveError, setFinalWorkSaveError] = useState<string | null>(null);
   const [isFinalWorkSubmitting, setIsFinalWorkSubmitting] = useState(false);
   const [isDeletingStory, setIsDeletingStory] = useState(false);
   const [isStoryWorldEditorOpen, setIsStoryWorldEditorOpen] = useState(false);
@@ -137,12 +138,18 @@ export function StoryCamWorkspace() {
   const storyWorldAssetImagePollAttemptsRef = useRef<Record<string, number>>({});
   const videoPollAttemptsRef = useRef<Record<string, number>>({});
   const mediaRefreshInFlightRef = useRef(false);
+  const storyWorldAssetImagesInFlightRef = useRef<Set<string>>(new Set());
+  const finalWorkCreationInFlightRef = useRef<Set<string>>(new Set());
+  const finalWorkActiveSaveKeyRef = useRef<string | null>(null);
+  const finalWorkAutoSubmittedKeyRef = useRef<string | null>(null);
+  const finalWorkSaveFailedKeyRef = useRef<string | null>(null);
   const storyWorldRequestIdRef = useRef(0);
   const storyboardRequestIdRef = useRef(0);
   const initialStoryboardImageRetryAttemptsRef = useRef<Record<number, number>>({});
   const clipRequestIdRef = useRef(0);
   const storyWorldRef = useLatestRef(storyWorld);
   const storyboardRef = useLatestRef(storyboard);
+  const clipJobRef = useLatestRef(clipJob);
   const expansionRef = useLatestRef(expansion);
   const selectedCoreGroupIndexRef = useLatestRef(selectedCoreGroupIndex);
   const storyboardGenerationRef = useLatestRef(storyboardGeneration);
@@ -300,6 +307,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(restored.clipJob ?? null);
     setFinalWork(restored.finalWork ?? null);
+    setFinalWorkSaveError(null);
     setIsStoryWorldEditorOpen(false);
     setStoryWorldGeneration({ kind: "idle" });
     setStoryboardGeneration({ kind: "idle" });
@@ -497,6 +505,32 @@ export function StoryCamWorkspace() {
   }, [clipJob]);
 
   useEffect(() => {
+    if (!clipJob?.outputArtifactId || clipJob.status !== "succeeded" || finalWork || finalWorkSaveError || !storyboard) {
+      return;
+    }
+
+    const inFlight = finalWorkCreationInFlightRef.current;
+    const key = `${storyboard.sessionId}:${clipJob.outputArtifactId}`;
+
+    if (finalWorkSaveFailedKeyRef.current === key || finalWorkAutoSubmittedKeyRef.current === key) {
+      return;
+    }
+
+    if (inFlight.has(key)) {
+      return;
+    }
+
+    inFlight.add(key);
+    finalWorkAutoSubmittedKeyRef.current = key;
+
+    void createFinalWorkFromAcceptedClip().finally(() => {
+      inFlight.delete(key);
+    });
+    // Final work creation is tied to the current completed clip artifact.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipJob?.outputArtifactId, clipJob?.status, finalWork, finalWorkSaveError, storyboard?.sessionId]);
+
+  useEffect(() => {
     const imageJobIds = collectStoryboardImageJobIds(storyboard, expansion);
 
     if (imageJobIds.length === 0) {
@@ -678,6 +712,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
@@ -703,6 +738,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
@@ -826,6 +862,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     setClipGeneration({ kind: "idle" });
     setSelectedStepIndex(null);
     setStoryboardStatus("generating");
@@ -843,6 +880,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     abandonStoryboardGeneration();
     abandonClipGeneration();
     setIsStoryWorldEditorOpen(false);
@@ -878,6 +916,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
+      setFinalWorkSaveError(null);
       setIsStoryWorldEditorOpen(false);
       setStoryWorldGeneration({ kind: "idle" });
       setStoryboardGeneration({ kind: "idle" });
@@ -915,6 +954,7 @@ export function StoryCamWorkspace() {
       setClipConfirmationSummary(null);
       setClipJob(null);
       setFinalWork(null);
+      setFinalWorkSaveError(null);
       setClipGeneration({ kind: "idle" });
       setIsStoryWorldEditorOpen(false);
       setSelectedStepIndex(null);
@@ -943,11 +983,17 @@ export function StoryCamWorkspace() {
   async function ensureStoryWorldAssetImages(targetStoryWorld: CreateStoryWorldResponse) {
     const assetIds = storyWorldAssetIds(targetStoryWorld);
     const readyAssetImages = targetStoryWorld.assetImagesByArtifactId ?? {};
-    const missingAssetIds = assetIds.filter((artifactId) => !readyAssetImages[artifactId]);
+    const inFlight = storyWorldAssetImagesInFlightRef.current;
+    const missingAssetIds = assetIds.filter(
+      (artifactId) => !readyAssetImages[artifactId] && !inFlight.has(assetArtifactInFlightKey(targetStoryWorld.sessionId, artifactId))
+    );
 
     if (missingAssetIds.length === 0) {
       return;
     }
+
+    const inFlightKeys = missingAssetIds.map((artifactId) => assetArtifactInFlightKey(targetStoryWorld.sessionId, artifactId));
+    inFlightKeys.forEach((key) => inFlight.add(key));
 
     try {
       const result = await generateStoryWorldAssetImages({
@@ -964,6 +1010,8 @@ export function StoryCamWorkspace() {
       }
     } catch {
       setStoryboardMessage("分镜脚本会先生成，资产图稍后可回到故事世界重试。");
+    } finally {
+      inFlightKeys.forEach((key) => inFlight.delete(key));
     }
   }
 
@@ -1205,6 +1253,7 @@ export function StoryCamWorkspace() {
     setClipConfirmationSummary(null);
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
   }
 
   function prepareClipGeneration(index = selectedCoreGroupIndex ?? 0) {
@@ -1218,6 +1267,7 @@ export function StoryCamWorkspace() {
     setSelectedCoreGroupIndex(index);
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     setSelectedStepIndex(null);
 
     const readyCount = readyExpandedFrameCount(group);
@@ -1339,6 +1389,7 @@ export function StoryCamWorkspace() {
 
       setClipJob(null);
       setFinalWork(null);
+      setFinalWorkSaveError(null);
       setClipGeneration({ kind: "pending", request });
       setStoryboardMessage("正在创建片段生成任务。");
       setSelectedStepIndex(null);
@@ -1349,6 +1400,7 @@ export function StoryCamWorkspace() {
 
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     prepareClipGeneration(selectedCoreGroupIndex ?? 0);
   }
 
@@ -1356,6 +1408,7 @@ export function StoryCamWorkspace() {
     abandonClipGeneration();
     setClipJob(null);
     setFinalWork(null);
+    setFinalWorkSaveError(null);
     setSelectedStepIndex(2);
     syncStepPath(2);
   }
@@ -1374,34 +1427,62 @@ export function StoryCamWorkspace() {
     return clipRequestIdRef.current === requestId;
   }
 
-  async function createFinalWorkFromAcceptedClip() {
+  async function createFinalWorkFromAcceptedClip(options: { force?: boolean } = {}) {
     if (!clipJob?.outputArtifactId || !storyboard) {
       return null;
     }
 
+    const clipArtifactId = clipJob.outputArtifactId;
+    const sessionId = storyboard.sessionId;
+    const saveKey = `${sessionId}:${clipArtifactId}`;
+
     try {
+      finalWorkActiveSaveKeyRef.current = saveKey;
       setIsFinalWorkSubmitting(true);
+      if (options.force || finalWorkSaveFailedKeyRef.current === saveKey) {
+        finalWorkSaveFailedKeyRef.current = null;
+      }
+      setFinalWorkSaveError(null);
       const suggestion = await createStitchSuggestion({
-        generatedClipArtifactIds: [clipJob.outputArtifactId],
-        sessionId: storyboard.sessionId
+        generatedClipArtifactIds: [clipArtifactId],
+        sessionId
       });
       const nextFinalWork = await createFinalWork({
-        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${clipJob.outputArtifactId}-${Date.now()}`,
-        sessionId: storyboard.sessionId,
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${clipArtifactId}-${Date.now()}`,
+        sessionId,
         stitchSuggestionArtifactId: suggestion.stitchSuggestion.id
       });
 
+      if (clipJobRef.current?.outputArtifactId !== clipArtifactId || storyboardRef.current?.sessionId !== sessionId) {
+        return null;
+      }
+
       setFinalWork(nextFinalWork);
+      finalWorkSaveFailedKeyRef.current = null;
+      setFinalWorkSaveError(null);
       setSelectedStepIndex(null);
       setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
       syncStepPath(3);
       return nextFinalWork;
     } catch {
-      setStoryboardMessage("最终作品生成失败，请稍后再试。");
+      if (clipJobRef.current?.outputArtifactId !== clipArtifactId || storyboardRef.current?.sessionId !== sessionId) {
+        return null;
+      }
+
+      finalWorkSaveFailedKeyRef.current = saveKey;
+      setFinalWorkSaveError("最终作品保存失败，请重试。");
+      setStoryboardMessage("最终作品保存失败，请重试。");
       return null;
     } finally {
-      setIsFinalWorkSubmitting(false);
+      if (finalWorkActiveSaveKeyRef.current === saveKey) {
+        finalWorkActiveSaveKeyRef.current = null;
+        setIsFinalWorkSubmitting(false);
+      }
     }
+  }
+
+  function retryFinalWorkSave() {
+    return createFinalWorkFromAcceptedClip({ force: true });
   }
 
   const selectedGroup =
@@ -1460,12 +1541,13 @@ export function StoryCamWorkspace() {
           15
         }
         finalWork={finalWork}
+        finalWorkError={finalWorkSaveError}
         isDeletingStory={isDeletingStory}
         isFinalWorkSubmitting={isFinalWorkSubmitting}
         onBackToCoreStoryboard={clipGeneration.kind !== "idle" ? returnToCoreStoryboardFromClipGeneration : () => navigateToStep(2)}
         onCancelClip={cancelClipJob}
-        onCreateFinalWork={createFinalWorkFromAcceptedClip}
         onDeleteStory={deleteCurrentStory}
+        onRetryFinalWork={retryFinalWorkSave}
         onRetake={retryClipGeneration}
         posterImageUrl={selectedGroup?.representativeImage.status === "ready" ? selectedGroup.representativeImage.signedUrl : undefined}
         title={selectedGroup?.title}
@@ -1985,6 +2067,10 @@ function storyWorldAssetIds(storyWorld: CreateStoryWorldResponse) {
   ];
 }
 
+function assetArtifactInFlightKey(sessionId: string, artifactId: string) {
+  return `${sessionId}:${artifactId}`;
+}
+
 function mediaFromReadyStoryboardImage(image: Extract<StoryboardImageState, { status: "ready" }>): StoryWorldAssetImage {
   return {
     id: image.mediaId,
@@ -2383,11 +2469,9 @@ function StoryCamProgress({
 }) {
   const progressStages = workflowStages.slice(1);
   const progressReachedIndex = Math.max(0, Math.min(progressStages.length - 1, reachedIndex - 1));
-  const activeSize =
-    progressStages.length > 1 ? `${(progressReachedIndex / (progressStages.length - 1)) * 100}%` : "0%";
+  const activeProgress = progressStages.length > 1 ? progressReachedIndex / (progressStages.length - 1) : 0;
   const activeStyle = {
-    "--storycam-progress": activeSize,
-    width: activeSize
+    "--storycam-progress": activeProgress
   } as CSSProperties;
 
   return (

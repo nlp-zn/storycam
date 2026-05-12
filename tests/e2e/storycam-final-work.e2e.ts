@@ -1,86 +1,155 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mockAuthenticated } from "./helpers/auth";
 
+type FinalWorkRoutes = {
+  finalWorkCalls: () => number;
+  firstFinalWorkStarted: Promise<void>;
+  generatedClipIds: () => string[];
+  releaseFirstFinalWork: () => void;
+};
+
 test.describe("StoryCam final work", () => {
-  test("mock happy path with photo can retake and create a private final work preview", async ({ page }) => {
-    let generateCalls = 0;
-    let finalWorkCalled = false;
+  test("auto-save failure is recoverable without exposing export", async ({ page }) => {
+    const routes = await installWorkflowRoutes(page, { failFirstFinalWork: true });
 
-    await mockAuthenticated(page);
-    await page.route("**/api/uploads", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
-          media: {
-            byteSize: 4,
-            id: "media-photo-1",
-            kind: "uploaded_photo",
-            mimeType: "image/png"
-          },
-          ok: true,
-          sessionId: "session-1",
-          uploadedPhotoIds: ["media-photo-1"],
-          uploadedPhotoRefs: [{ mediaAssetId: "media-photo-1" }]
-        })
-      });
+    await driveToClipGeneration(page);
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "最终作品保存失败" })).toBeVisible();
+    await expect(page.getByText("最终作品保存失败，请重试。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "重试保存" }).click();
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(1);
+    expect(routes.finalWorkCalls()).toBe(2);
+  });
+
+  test("retake keeps the latest clip when an older final-work save resolves late", async ({ page }) => {
+    const routes = await installWorkflowRoutes(page, { delayFirstFinalWork: true });
+
+    await driveToClipGeneration(page);
+    await routes.firstFinalWorkStarted;
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByRole("button", { name: "保存中" })).toBeVisible();
+    await page.getByRole("button", { name: "重拍这个片段" }).click();
+
+    await expect(page.getByText("任务 job-2")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.locator("video.storycam-clip-video")).toHaveAttribute("src", "data:video/mp4;base64,RklOQUwy");
+
+    routes.releaseFirstFinalWork();
+    await page.waitForTimeout(50);
+
+    await expect(page.locator("video.storycam-clip-video")).toHaveAttribute("src", "data:video/mp4;base64,RklOQUwy");
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "生成最终作品" })).toHaveCount(0);
+    await expect(page.getByText("待保存")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "查看" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "打开最终作品" })).toHaveCount(0);
+    expect(routes.generatedClipIds()).toEqual(["clip-artifact-1", "clip-artifact-2"]);
+  });
+
+  test("retake ignores an older final-work save failure that resolves late", async ({ page }) => {
+    const routes = await installWorkflowRoutes(page, { delayFirstFinalWork: true, failDelayedFirstFinalWork: true });
+
+    await driveToClipGeneration(page);
+    await routes.firstFinalWorkStarted;
+
+    await page.getByRole("button", { name: "重拍这个片段" }).click();
+    await expect(page.getByText("任务 job-2")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    await expect(page.locator("video.storycam-clip-video")).toHaveAttribute("src", "data:video/mp4;base64,RklOQUwy");
+
+    routes.releaseFirstFinalWork();
+    await page.waitForTimeout(50);
+
+    await expect(page.getByText("最终作品保存失败，请重试。")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(1);
+    await expect(page.locator("video.storycam-clip-video")).toHaveAttribute("src", "data:video/mp4;base64,RklOQUwy");
+    expect(routes.finalWorkCalls()).toBe(2);
+    expect(routes.generatedClipIds()).toEqual(["clip-artifact-1", "clip-artifact-2"]);
+  });
+});
+
+async function driveToClipGeneration(page: Page) {
+  await page.goto("/");
+  await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+  await page.getByTestId("story-photo-input").setInputFiles({
+    buffer: Buffer.from([137, 80, 78, 71]),
+    mimeType: "image/png",
+    name: "rain.png"
+  });
+  await page.getByRole("button", { name: "生成故事雏形" }).click();
+  await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+  await page.getByRole("button", { name: "用这一组生成片段" }).click();
+}
+
+async function installWorkflowRoutes(
+  page: Page,
+  options: { delayFirstFinalWork?: boolean; failDelayedFirstFinalWork?: boolean; failFirstFinalWork?: boolean } = {}
+): Promise<FinalWorkRoutes> {
+  let generateCalls = 0;
+  let finalWorkCalls = 0;
+  let resolveFirstFinalWorkStarted: () => void = () => undefined;
+  let releaseFirstFinalWork: () => void = () => undefined;
+  const generatedClipIds: string[] = [];
+  const firstFinalWorkStarted = new Promise<void>((resolve) => {
+    resolveFirstFinalWorkStarted = resolve;
+  });
+
+  await mockAuthenticated(page);
+  await page.route("**/api/uploads", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        media: {
+          byteSize: 4,
+          id: "media-photo-1",
+          kind: "uploaded_photo",
+          mimeType: "image/png"
+        },
+        ok: true,
+        sessionId: "session-1",
+        uploadedPhotoIds: ["media-photo-1"],
+        uploadedPhotoRefs: [{ mediaAssetId: "media-photo-1" }]
+      })
     });
+  });
 
-    await page.route("**/api/story-world", async (route) => {
-      const body = route.request().postDataJSON() as { uploadedPhotoIds?: string[] };
+  await page.route("**/api/story-world", async (route) => {
+    const body = route.request().postDataJSON() as { uploadedPhotoIds?: string[] };
 
-      expect(body.uploadedPhotoIds).toEqual(["media-photo-1"]);
+    expect(body.uploadedPhotoIds).toEqual(["media-photo-1"]);
 
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
-          artifacts: {
-            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
-            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
-            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
-          },
-          ok: true,
-          sessionId: "session-1",
-          storyWorld: storyWorldFixture()
-        })
-      });
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        artifacts: {
+          characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+          sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+          script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+        },
+        ok: true,
+        sessionId: "session-1",
+        storyWorld: storyWorldFixture()
+      })
     });
+  });
 
-    await page.route("**/api/storyboard", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
-          artifacts: {
-            coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
-            expandedStoryboardCards: Array.from({ length: 8 }, (_, index) => ({
-              id: `expanded-${index + 1}`,
-              parentArtifactId: "core-artifact-1",
-              state: "ready",
-              type: "expanded_storyboard_card",
-              version: 1
-            })),
-            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
-            storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
-          },
-          durationPlan: {
-            clipDurationTargets: [15],
-            coreGroupTargetCount: 1,
-            plannedDurationSeconds: 15
-          },
-          ok: true,
-          sessionId: "session-1",
-          storyboard: storyboardFixture()
-        })
-      });
-    });
-
-    await page.route("**/api/storyboard-groups/*/expand", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
+  await page.route("**/api/storyboard", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        artifacts: {
+          coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
           expandedStoryboardCards: Array.from({ length: 8 }, (_, index) => ({
             id: `expanded-${index + 1}`,
             parentArtifactId: "core-artifact-1",
@@ -88,134 +157,185 @@ test.describe("StoryCam final work", () => {
             type: "expanded_storyboard_card",
             version: 1
           })),
-          expandedStoryboardImages: Array.from({ length: 8 }, (_, index) => readyImage(`expanded-media-${index + 1}`)),
-          expansionCards: Array.from({ length: 8 }, (_, index) => ({
-            ...expansionCardFixture(index),
-            image: readyImage(`expanded-media-${index + 1}`),
-            sortOrder: index
-          })),
-          ok: true,
-          sessionId: "session-1"
-        })
-      });
-    });
-
-    await page.route("**/api/storyboard-groups/*/generate-clip", async (route) => {
-      generateCalls += 1;
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
-          confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
-          jobId: `job-${generateCalls}`,
-          ok: true,
-          status: "queued"
-        })
-      });
-    });
-
-    await page.route("**/api/generation-jobs/job-*", async (route) => {
-      const jobId = route.request().url().includes("job-2") ? "job-2" : "job-1";
-      const outputArtifactId = jobId === "job-2" ? "clip-artifact-2" : "clip-artifact-1";
-
-      await route.fulfill({
-        contentType: "application/json",
-        status: 200,
-        body: JSON.stringify({
-          job: {
-            attempts: 0,
-            id: jobId,
-            outputArtifactId,
-            outputPreview: {
-              durationSeconds: 15,
-              mimeType: "video/mp4",
-              signedUrl: "data:video/mp4;base64,AAAA",
-              signedUrlExpiresIn: 300
-            },
-            providerKind: "video",
-            providerName: "mock",
-            sessionId: "session-1",
-            status: "succeeded",
-            type: "video_clip"
-          },
-          ok: true
-        })
-      });
-    });
-
-    await page.route("**/api/stitch-suggestion", async (route) => {
-      const body = route.request().postDataJSON() as { generatedClipArtifactIds: string[]; sessionId: string };
-
-      expect(body).toMatchObject({
-        generatedClipArtifactIds: ["clip-artifact-2"],
-        sessionId: "session-1"
-      });
-
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
-          ok: true,
-          stitchSuggestion: { id: "stitch-suggestion-artifact-1", state: "ready", type: "stitch_suggestion", version: 1 }
-        })
-      });
-    });
-
-    await page.route("**/api/final-work", async (route) => {
-      finalWorkCalled = true;
-      const body = route.request().postDataJSON() as { stitchSuggestionArtifactId: string; sessionId: string };
-
-      expect(body).toMatchObject({
+          storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+          storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
+        },
+        durationPlan: {
+          clipDurationTargets: [15],
+          coreGroupTargetCount: 1,
+          plannedDurationSeconds: 15
+        },
+        ok: true,
         sessionId: "session-1",
-        stitchSuggestionArtifactId: "stitch-suggestion-artifact-1"
-      });
+        storyboard: storyboardFixture()
+      })
+    });
+  });
 
-      await route.fulfill({
-        contentType: "application/json",
-        status: 201,
-        body: JSON.stringify({
-          finalWork: { id: "final-work-artifact-1", state: "ready", type: "final_work", version: 1 },
-          media: { byteSize: 1024, id: "media-final-1", kind: "final_work", mimeType: "video/mp4" },
-          ok: true,
-          preview: {
+  await page.route("**/api/storyboard-groups/*/expand", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        expandedStoryboardCards: Array.from({ length: 8 }, (_, index) => ({
+          id: `expanded-${index + 1}`,
+          parentArtifactId: "core-artifact-1",
+          state: "ready",
+          type: "expanded_storyboard_card",
+          version: 1
+        })),
+        expandedStoryboardImages: Array.from({ length: 8 }, (_, index) => readyImage(`expanded-media-${index + 1}`)),
+        expansionCards: Array.from({ length: 8 }, (_, index) => ({
+          ...expansionCardFixture(index),
+          image: readyImage(`expanded-media-${index + 1}`),
+          sortOrder: index
+        })),
+        ok: true,
+        sessionId: "session-1"
+      })
+    });
+  });
+
+  await page.route("**/api/storyboard-groups/*/generate-clip", async (route) => {
+    generateCalls += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
+        jobId: `job-${generateCalls}`,
+        ok: true,
+        status: "queued"
+      })
+    });
+  });
+
+  await page.route("**/api/generation-jobs/job-*", async (route) => {
+    const isSecondJob = route.request().url().includes("job-2");
+    const outputArtifactId = isSecondJob ? "clip-artifact-2" : "clip-artifact-1";
+
+    await route.fulfill({
+      contentType: "application/json",
+      status: 200,
+      body: JSON.stringify({
+        job: {
+          attempts: 0,
+          id: isSecondJob ? "job-2" : "job-1",
+          outputArtifactId,
+          outputPreview: {
             durationSeconds: 15,
             mimeType: "video/mp4",
-            signedUrl: "data:video/mp4;base64,AAAA",
+            signedUrl: isSecondJob ? "data:video/mp4;base64,Q0xJUDAy" : "data:video/mp4;base64,Q0xJUDEx",
             signedUrlExpiresIn: 300
-          }
+          },
+          providerKind: "video",
+          providerName: "mock",
+          sessionId: "session-1",
+          status: "succeeded",
+          type: "video_clip"
+        },
+        ok: true
+      })
+    });
+  });
+
+  await page.route("**/api/stitch-suggestion", async (route) => {
+    const body = route.request().postDataJSON() as { generatedClipArtifactIds: string[]; sessionId: string };
+    const clipArtifactId = body.generatedClipArtifactIds[0] ?? "";
+
+    expect(body.sessionId).toBe("session-1");
+    expect(clipArtifactId).toMatch(/^clip-artifact-[12]$/);
+    generatedClipIds.push(clipArtifactId);
+
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        ok: true,
+        stitchSuggestion: {
+          id: `stitch-suggestion-${clipArtifactId}`,
+          state: "ready",
+          type: "stitch_suggestion",
+          version: 1
+        }
+      })
+    });
+  });
+
+  await page.route("**/api/final-work", async (route) => {
+    finalWorkCalls += 1;
+    const body = route.request().postDataJSON() as { stitchSuggestionArtifactId: string; sessionId: string };
+    const isSecondClip = body.stitchSuggestionArtifactId.endsWith("clip-artifact-2");
+
+    expect(body.sessionId).toBe("session-1");
+
+    if (options.failFirstFinalWork && !options.delayFirstFinalWork && finalWorkCalls === 1) {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 500,
+        body: JSON.stringify({
+          error: "final_work_failed",
+          redactedError: "Final work save failed.",
+          redactionApplied: true
         })
       });
+      return;
+    }
+
+    if (options.delayFirstFinalWork && finalWorkCalls === 1) {
+      resolveFirstFinalWorkStarted();
+      await new Promise<void>((resolve) => {
+        releaseFirstFinalWork = resolve;
+      });
+
+      if (options.failDelayedFirstFinalWork) {
+        await route.fulfill({
+          contentType: "application/json",
+          status: 500,
+          body: JSON.stringify({
+            error: "final_work_failed",
+            redactedError: "Final work save failed.",
+            redactionApplied: true
+          })
+        });
+        return;
+      }
+    }
+
+    await route.fulfill({
+      contentType: "application/json",
+      status: 201,
+      body: JSON.stringify({
+        finalWork: {
+          id: isSecondClip ? "final-work-artifact-2" : "final-work-artifact-1",
+          state: "ready",
+          type: "final_work",
+          version: 1
+        },
+        media: {
+          byteSize: 1024,
+          id: isSecondClip ? "media-final-2" : "media-final-1",
+          kind: "final_work",
+          mimeType: "video/mp4"
+        },
+        ok: true,
+        preview: {
+          durationSeconds: 15,
+          mimeType: "video/mp4",
+          signedUrl: isSecondClip ? "data:video/mp4;base64,RklOQUwy" : "data:video/mp4;base64,RklOQUwx",
+          signedUrlExpiresIn: 300
+        }
+      })
     });
-
-    await page.goto("/");
-    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
-    await page.getByTestId("story-photo-input").setInputFiles({
-      buffer: Buffer.from([137, 80, 78, 71]),
-      mimeType: "image/png",
-      name: "rain.png"
-    });
-    await page.getByRole("button", { name: "生成故事雏形" }).click();
-    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
-    await page.getByRole("button", { name: "用这一组生成片段" }).click();
-
-    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
-    await expect(page.getByRole("heading", { name: "片段已生成" })).toBeVisible();
-    await page.getByRole("button", { name: "重拍这个片段" }).click();
-    await expect(page.getByText("任务 job-2")).toBeVisible();
-    expect(generateCalls).toBe(2);
-
-    await page.getByRole("button", { name: "生成最终作品" }).first().click();
-    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
-    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "导出 MP4" }).first()).toBeVisible();
-    await expect(page.getByText("打开最终作品")).toBeVisible();
-    await expect(page.getByText("分享")).toHaveCount(0);
-    await expect(page.getByText("prompt packet")).toHaveCount(0);
-    await expect(page.getByText("Shanyin")).toHaveCount(0);
-    await expect(page.getByText("模型参数")).toHaveCount(0);
-    expect(finalWorkCalled).toBe(true);
   });
-});
+
+  return {
+    finalWorkCalls: () => finalWorkCalls,
+    firstFinalWorkStarted,
+    generatedClipIds: () => [...generatedClipIds],
+    releaseFirstFinalWork: () => releaseFirstFinalWork()
+  };
+}
 
 function storyWorldFixture() {
   return {
