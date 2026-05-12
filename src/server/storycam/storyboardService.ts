@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { characterAssetSchema, sceneAssetSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { CharacterAsset, CoreStoryboardGroup, SceneAsset, StoryboardScript, StoryScript } from "@/features/storycam/domain/artifacts";
 import { createDurationPlan } from "@/features/storycam/domain/durationRules";
+import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import { createMockStoryboardProvider, type MockStoryboardInput, type MockStoryboardOutput } from "@/lib/providers/mock/storyboardProvider";
 import type { ImageGenerationProvider, ProviderFailure, TextGenerationProvider } from "@/lib/providers/types";
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
@@ -162,6 +163,7 @@ export async function createStoryboard(
         storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
         scripts: storyboardScripts,
         sessionId: session.id,
+        videoAspectRatio: parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio,
         userId
       });
   const storyboardCoreGroups = providerResult.value.coreStoryboardGroups.map((group, index) => ({
@@ -236,6 +238,7 @@ async function generateRepresentativeImages(input: {
   scripts: StoryboardScript[];
   storyboardScriptArtifacts: StoryCamArtifactRow[];
   sessionId: string;
+  videoAspectRatio: "16:9" | "9:16";
   userId: string;
 }) {
   if (!input.imageProvider) {
@@ -266,7 +269,13 @@ async function generateRepresentativeImages(input: {
       }
 
       const result = await submitImageGenerationJob(input.client, input.userId, {
-        imageInput: toStoryboardRepresentativeProviderInput(coreGroup, input.sessionId, input.scripts[index], visualContext),
+        imageInput: toStoryboardRepresentativeProviderInput(
+          coreGroup,
+          input.sessionId,
+          input.videoAspectRatio,
+          input.scripts[index],
+          visualContext
+        ),
         inputArtifactVersionsJson: {
           ...visualContext.inputArtifactVersionsJson,
           [linkedArtifact.id]: linkedArtifact.version,

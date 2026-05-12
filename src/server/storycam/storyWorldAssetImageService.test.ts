@@ -163,7 +163,8 @@ function storyCamSession(): StoryCamSessionRow {
     planned_duration_seconds: 12,
     status: "draft",
     updated_at: "2026-04-26T00:00:00.000Z",
-    user_id: "user-1"
+    user_id: "user-1",
+    video_aspect_ratio: "16:9"
   };
 }
 

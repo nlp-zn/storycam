@@ -1,4 +1,4 @@
-export const directorChoices = ["更遗憾一点", "像私人回忆", "少说话", "加旁白"] as const;
+export const directorChoices = ["留白多一点", "像旧照片", "雨夜韩剧感", "靠小动作推进"] as const;
 
 export const storyModeEntries = [
   {
@@ -7,22 +7,22 @@ export const storyModeEntries = [
     sampleIdea: "我想把暗恋拍成韩剧雨夜",
     text: "把一句真实念头拍成 10-15 秒私人短片。",
     directorChoices,
-    defaultChoices: ["像私人回忆"]
+    defaultChoices: ["留白多一点"]
   },
   {
     id: "pet-theater",
     label: "宠物小剧场",
     sampleIdea: "我想拍一只小狗等主人回家的十秒小剧场",
     text: "让宠物变成这一幕里的主角。",
-    directorChoices: ["等它回头", "日常可爱", "少说话", "加旁白"],
-    defaultChoices: ["等它回头"]
+    directorChoices: ["低机位跟随", "日常观察感", "温暖回家感", "轻喜剧反应"],
+    defaultChoices: ["低机位跟随"]
   },
   {
     id: "novel-character",
     label: "小说角色",
     sampleIdea: "我想让我的小说女主第一次走进雨夜城市",
     text: "把角色出场拍成短短一段预告。",
-    directorChoices: ["初登场感", "世界观更强", "少说话", "加旁白"],
+    directorChoices: ["初登场感", "世界观更强", "预告片节奏", "英雄式剪影"],
     defaultChoices: ["初登场感"]
   },
   {
@@ -30,8 +30,8 @@ export const storyModeEntries = [
     label: "情绪短片",
     sampleIdea: "我想把一种说不出口的难过拍成风里的短片",
     text: "把一种情绪变成可看见的画面。",
-    directorChoices: ["留白多一点", "像一阵风", "少说话", "加旁白"],
-    defaultChoices: ["留白多一点"]
+    directorChoices: ["空镜多一点", "像一阵风", "声音先走", "情绪慢慢压上来"],
+    defaultChoices: ["空镜多一点"]
   }
 ] as const;
 

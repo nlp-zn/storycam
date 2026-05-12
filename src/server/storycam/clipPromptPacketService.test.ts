@@ -68,6 +68,30 @@ describe("clip-packet service", () => {
     expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("对白");
   });
 
+  it("stores session video aspect ratio in the clip packet and provider prompt", async () => {
+    const client = new FakeSupabaseClient({
+      artifactRows: [coreGroupRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()],
+      sessionRow: storyCamSessionRow({ video_aspect_ratio: "9:16" })
+    });
+
+    const result = await createClipPromptPacket(client.asSupabaseClient(), "user-1", {
+      confirmedArtifactVersions: {
+        "core-artifact-1": 1,
+        ...Object.fromEntries(expandedCardRows().map((row) => [row.id, row.version]))
+      },
+      coreStoryboardGroupId: "core-artifact-1",
+      providerSendConfirmed: true,
+      sessionId: "session-1"
+    });
+
+    expect(result.value.clipPromptPacketPayload).toMatchObject({
+      aspectRatio: "9:16",
+      resolution: "720p"
+    });
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("9:16 vertical portrait");
+  });
+
   it("rejects stale or unconfirmed core groups", async () => {
     const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow({ version: 2 })] });
 
@@ -192,6 +216,7 @@ function baseArtifactRow(): StoryCamArtifactRow {
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
   mediaRows?: unknown[];
+  sessionRow?: unknown;
 };
 
 class FakeSupabaseClient {
@@ -270,17 +295,7 @@ class FakeQuery {
     return Promise.resolve({
       data:
         this.table === "storycam_sessions"
-          ? {
-              core_group_target_count: 1,
-              created_at: "2026-04-26T00:00:00.000Z",
-              deleted_at: null,
-              generation_mode: "mock",
-              id: "session-1",
-              planned_duration_seconds: 12,
-              status: "ready",
-              updated_at: "2026-04-26T00:00:00.000Z",
-              user_id: "user-1"
-            }
+          ? this.options.sessionRow ?? storyCamSessionRow()
           : this.table === "media_assets"
             ? this.findMediaRows()[0] ?? null
           : null,
@@ -320,6 +335,22 @@ class FakeQuery {
         (!this.eqFilters.kind || (row as { kind?: unknown }).kind === this.eqFilters.kind)
     );
   }
+}
+
+function storyCamSessionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    core_group_target_count: 1,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    generation_mode: "mock",
+    id: "session-1",
+    planned_duration_seconds: 12,
+    status: "ready",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    video_aspect_ratio: "16:9",
+    ...overrides
+  };
 }
 
 function mediaRow(id: string, linkedArtifactId: string) {

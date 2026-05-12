@@ -57,6 +57,17 @@ const storyWorldArguments = {
   ],
   script: {
     beats: ["她站在屋檐下看着未发送短信。"],
+    directorBrief: {
+      dialogueStrategy: "少台词，以动作和停顿表达。",
+      microRhythm: "0-3秒建立屋檐等待，3-8秒推进短信动作，8-12秒用门铃触发反应，12-15秒留在玻璃反光。",
+      shotDensity: "前半段慢，门铃后略微加快，结尾停住。",
+      shotSizeFocus: "中景建立空间，近景落到手机和反应，结尾空镜。",
+      soundStrategy: "雨声持续，门铃作为转折，配乐保持低声。",
+      tone: "雨夜、克制、遗憾",
+      transitionStrategy: "用门铃和视线反应自然连接，不做强剪辑感。",
+      userFacingSummary: "这一段会先安静等待，再用门铃和玻璃反光收住。",
+      visualMotifs: ["雨声", "玻璃反光", "未发送短信"]
+    },
     logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
     summary: "便利店冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的一秒。",
     title: "雨夜未发送",
@@ -79,7 +90,7 @@ describe("deepseek story world provider", () => {
 
     const result = await provider.generate({
       idea: "我想把暗恋拍成韩剧雨夜",
-      lightweightChoices: ["像私人回忆", "少说话"],
+      lightweightChoices: ["留白多一点", "像旧照片"],
       sessionId: "session-1",
       uploadedPhotoRefs: [{ mediaAssetId: "photo-1", storagePath: "users/user-1/private.jpg" }]
     });
@@ -110,7 +121,12 @@ describe("deepseek story world provider", () => {
           })
         ],
         script: expect.objectContaining({
+          directorBrief: expect.objectContaining({
+            microRhythm: expect.stringContaining("0-3秒"),
+            visualMotifs: expect.arrayContaining(["玻璃反光"])
+          }),
           id: "script-session-1",
+          qualityChecks: expect.arrayContaining([expect.stringContaining("可见动作")]),
           sessionId: "session-1",
           title: "雨夜未发送",
           visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
@@ -302,7 +318,7 @@ describe("deepseek story world provider", () => {
     const request = buildDeepSeekStoryWorldRequest({
       input: {
         idea: "把旧照片里的毕业告别拍成短片",
-        lightweightChoices: ["少说话"],
+        lightweightChoices: ["像旧照片"],
         sessionId: "session-1",
         uploadedPhotoRefs: [
           {
@@ -325,12 +341,16 @@ describe("deepseek story world provider", () => {
     expect(containsUnsupportedDeepSeekStrictSchemaKeyword(request.tools[0]?.function.parameters)).toBe(false);
     expect(JSON.stringify(request)).toContain("photo-1");
     expect(JSON.stringify(request)).toContain("script.visualStyle");
+    expect(JSON.stringify(request)).toContain("script.directorBrief");
+    expect(JSON.stringify(request)).toContain("视听化微调");
+    expect(JSON.stringify(request)).toContain("comic film / animation storyboard");
     expect(JSON.stringify(request)).toContain("不是分镜拆解阶段");
     expect(JSON.stringify(request)).toContain("script.beats 是剧情节点");
     expect(JSON.stringify(request)).toContain("不是镜头列表");
     expect(JSON.stringify(request)).toContain("不要写可见人物");
     expect(JSON.stringify(request)).not.toContain("private.jpg");
     expect(JSON.stringify(request)).not.toContain("storycam-uploads");
+    expect(JSON.stringify(request)).not.toContain("live-action realistic");
   });
 });
 

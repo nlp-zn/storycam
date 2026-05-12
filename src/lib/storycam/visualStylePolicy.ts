@@ -18,9 +18,11 @@ export function normalizeStoryCamVisualStyle(style?: string) {
   return `${storyCamComicVisualStyle}；将原始风格倾向“${trimmed}”转译为漫画电影语言，不输出写实真人、真人照片感或名人相似脸。`;
 }
 
-export function storyCamComicImagePromptLine() {
+export function storyCamComicImagePromptLine(aspectRatio: "16:9" | "9:16" = "16:9") {
+  const composition = aspectRatio === "9:16" ? "9:16 portrait vertical composition" : "16:9 landscape";
+
   return [
-    "Style: stylized comic animation storyboard frame, polished cinematic illustration, 16:9 landscape.",
+    `Style: stylized comic animation storyboard frame, polished cinematic illustration, ${composition}.`,
     storyCamComicVisualSafetyLine
   ].join("\n");
 }

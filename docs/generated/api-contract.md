@@ -94,6 +94,8 @@ Storage bucket/key remain server-owned. API responses may include signed preview
 ## Compatibility Notes
 
 - `script.visualStyle` is the shared style anchor for character, scene, and storyboard images; older restored stories may omit it.
+- `script.directorBrief` is stored only in server-side artifact JSON and intentionally omitted from browser-facing story-world and restore responses; storyboard and clip prompt generation read it from persisted artifacts. Older stories may omit it and fall back to defaults.
+- `script.qualityChecks[]` may contain deterministic, user-friendly quality summaries for the story-world script. Older data defaults to an empty array.
 - Historical multi-core-group or multi-clip data can be restored, but the new MVP creation path creates one core group and one generated clip.
 - Placeholder image states are allowed when required upstream asset images are still generating, missing, or unsupported by a provider.
 - Downstream artifacts become stale when upstream story-world or storyboard material changes; stale provider packets cannot create new video jobs.

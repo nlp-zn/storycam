@@ -4,7 +4,7 @@ const requireUserMock = vi.hoisted(() => vi.fn());
 const createSupabaseAdminClientMock = vi.hoisted(() => vi.fn());
 const createConfiguredStoryboardImageProviderMock = vi.hoisted(() => vi.fn());
 const createConfiguredStoryWorldAssetImageProviderMock = vi.hoisted(() => vi.fn());
-const createConfiguredVideoProviderMock = vi.hoisted(() => vi.fn());
+const createConfiguredVideoProvidersMock = vi.hoisted(() => vi.fn());
 
 vi.mock("server-only", () => ({}));
 
@@ -30,7 +30,7 @@ vi.mock("@/server/storycam/storyWorldAssetImageProviderFactory", () => ({
 }));
 
 vi.mock("@/server/storycam/videoProviderFactory", () => ({
-  createConfiguredVideoProvider: createConfiguredVideoProviderMock
+  createConfiguredVideoProviders: createConfiguredVideoProvidersMock
 }));
 
 describe("generation job API routes", () => {
@@ -40,10 +40,10 @@ describe("generation job API routes", () => {
     createSupabaseAdminClientMock.mockReset();
     createConfiguredStoryboardImageProviderMock.mockReset();
     createConfiguredStoryWorldAssetImageProviderMock.mockReset();
-    createConfiguredVideoProviderMock.mockReset();
+    createConfiguredVideoProvidersMock.mockReset();
     createConfiguredStoryboardImageProviderMock.mockReturnValue(undefined);
     createConfiguredStoryWorldAssetImageProviderMock.mockReturnValue(undefined);
-    createConfiguredVideoProviderMock.mockReturnValue(undefined);
+    createConfiguredVideoProvidersMock.mockReturnValue({});
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://storycam.test";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
@@ -203,7 +203,7 @@ describe("generation job API routes", () => {
       })
     };
 
-    createConfiguredVideoProviderMock.mockReturnValue(videoProvider);
+    createConfiguredVideoProvidersMock.mockReturnValue({ seedance_2_0: videoProvider });
     requireUserMock.mockResolvedValue({ id: "user-1" });
     createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
 
@@ -261,6 +261,71 @@ describe("generation job API routes", () => {
     });
   });
 
+  it("uses the selected Seedance Fast provider for clip generation", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
+    const client = new FakeSupabaseClient({
+      artifactRows: [coreGroupRow(), storyboardScriptRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()]
+    });
+    process.env.STORYCAM_GENERATION_MODE = "real";
+    process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
+    process.env.SEEDANCE_API_KEY = "seedance-secret";
+    process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+    const fastProvider = {
+      generateClip: vi.fn(),
+      providerKind: "video" as const,
+      providerName: "seedance_2_0_fast",
+      resolveClipTask: vi.fn(),
+      submitClipTask: vi.fn().mockResolvedValue({
+        ok: true,
+        providerKind: "video",
+        providerName: "seedance_2_0_fast",
+        value: { providerRequestId: "seedance-fast-task-1" }
+      })
+    };
+
+    createConfiguredVideoProvidersMock.mockReturnValue({ seedance_2_0_fast: fastProvider });
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(generateClipRequest({ videoModel: "seedance_2_0_fast" }), {
+      params: { id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      providerName: "seedance_2_0_fast",
+      status: "running"
+    });
+    expect(fastProvider.submitClipTask).toHaveBeenCalledWith(expect.objectContaining({ ratio: "16:9", resolution: "720p" }));
+    expect(
+      client.queries
+        .filter((query) => query.table === "generation_jobs")
+        .flatMap((query) => query.calls)
+        .find((call) => call[0] === "insert")?.[1]
+    ).toMatchObject({
+      provider_name: "seedance_2_0_fast"
+    });
+  });
+
+  it("rejects an unknown video model with a redacted validation error", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const response = await POST(generateClipRequest({ videoModel: "seedance_1_0" }), {
+      params: { id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_input",
+      redactedError: "Invalid generation job request.",
+      redactionApplied: true
+    });
+  });
+
   it("records a failed video job instead of returning 502 when local reference media cannot reach Seedance", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
     const client = new FakeSupabaseClient({
@@ -280,7 +345,7 @@ describe("generation job API routes", () => {
       submitClipTask: vi.fn()
     };
 
-    createConfiguredVideoProviderMock.mockReturnValue(videoProvider);
+    createConfiguredVideoProvidersMock.mockReturnValue({ seedance_2_0: videoProvider });
     requireUserMock.mockResolvedValue({ id: "user-1" });
     createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
 
@@ -403,7 +468,7 @@ describe("generation job API routes", () => {
   });
 });
 
-function generateClipRequest() {
+function generateClipRequest(overrides: Record<string, unknown> = {}) {
   return new Request("https://storycam.test/api/storyboard-groups/core-artifact-1/generate-clip", {
     body: JSON.stringify({
       confirmedArtifactVersions: {
@@ -413,7 +478,8 @@ function generateClipRequest() {
       coreStoryboardGroupId: "core-artifact-1",
       idempotencyKey: "idempotency-secret",
       providerSendConfirmed: true,
-      sessionId: "session-1"
+      sessionId: "session-1",
+      ...overrides
     }),
     headers: { "content-type": "application/json" },
     method: "POST"
@@ -726,7 +792,8 @@ class FakeQuery {
         planned_duration_seconds: 12,
         status: "ready",
         updated_at: "2026-04-26T00:00:00.000Z",
-        user_id: "user-1"
+        user_id: "user-1",
+        video_aspect_ratio: "16:9"
       };
     }
 

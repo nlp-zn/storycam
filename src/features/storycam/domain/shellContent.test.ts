@@ -12,7 +12,7 @@ describe("StoryCam shell content", () => {
   });
 
   it("offers lightweight director choices instead of professional controls", () => {
-    expect(directorChoices).toContain("像私人回忆");
+    expect(directorChoices).toEqual(["留白多一点", "像旧照片", "雨夜韩剧感", "靠小动作推进"]);
     expect(storyModeEntries[0].directorChoices).toEqual(directorChoices);
     expect(
       storyModeEntries.every((entry) => {
@@ -25,7 +25,10 @@ describe("StoryCam shell content", () => {
       storyModeEntries
         .flatMap((entry) => [...entry.directorChoices, ...entry.defaultChoices])
         .join(" ")
-    ).not.toMatch(/prompt|packet|model|shot/i);
+    ).not.toMatch(/prompt|packet|model|shot|少说话|加旁白/i);
+    expect(new Set(storyModeEntries.flatMap((entry) => entry.directorChoices)).size).toBe(
+      storyModeEntries.reduce((count, entry) => count + entry.directorChoices.length, 0)
+    );
   });
 
   it("keeps playable story mode templates visible in a stable order", () => {

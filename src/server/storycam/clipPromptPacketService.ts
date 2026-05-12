@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import { assertClipPromptPacketCanCreateVideoJob, buildClipPromptPacketPayload } from "@/features/storycam/domain/clipPromptPacket";
 import type { ClipPromptPacket, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import {
+  defaultStoryCamVideoAspectRatio,
+  parseStoryCamVideoAspectRatio,
+  storyCamSeedanceOutputResolution
+} from "@/features/storycam/domain/videoSettings";
 import { storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { Database, Json, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -55,6 +60,7 @@ export async function createClipPromptPacket(
   }
 
   const rows = (await artifacts.listBySession(userId, { sessionId: session.id })) ?? [];
+  const videoAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
   const coreGroupArtifact = findConfirmedArtifact(rows, input.coreStoryboardGroupId, input.confirmedArtifactVersions, "core_storyboard_group");
 
   if (!coreGroupArtifact) {
@@ -87,6 +93,7 @@ export async function createClipPromptPacket(
     coreGroupId: coreGroupArtifact.id,
     coreGroupTitle: coreGroup.title,
     estimatedClipDurationSeconds: coreGroup.estimatedClipDurationSeconds,
+    aspectRatio: videoAspectRatio,
     expandedCardIds,
     inputArtifactVersions,
     packetId: `${coreGroupArtifact.id}-clip-packet-v1`,
@@ -94,6 +101,7 @@ export async function createClipPromptPacket(
     providerPrompt: buildVideoProviderPrompt({
       coreGroupTitle: coreGroup.title,
       durationSeconds: coreGroup.estimatedClipDurationSeconds,
+      aspectRatio: videoAspectRatio,
       referenceFrames: storyboardMedia.map((item) => ({
         frameNumber: item.frameNumber,
         kind: item.kind
@@ -107,6 +115,7 @@ export async function createClipPromptPacket(
       mediaId: item.media.id
     })),
     sessionId: session.id,
+    resolution: storyCamSeedanceOutputResolution,
     storyboardFrames: storyboardScript?.frames.map((frame) => ({
       frameNumber: frame.frameNumber,
       summary: `${frame.visualContent} ${frame.narrativePurpose}`,
@@ -207,6 +216,7 @@ function hasCompleteNineFrameMedia(storyboardMedia: Array<{ frameNumber: number;
 }
 
 function buildVideoProviderPrompt(input: {
+  aspectRatio: "16:9" | "9:16";
   coreGroupTitle: string;
   durationSeconds: number;
   referenceFrames?: Array<{
@@ -222,20 +232,28 @@ function buildVideoProviderPrompt(input: {
     : undefined;
   const frames = input.storyboardScript?.frames.map((frame) => formatSeedanceFrameBeat(frame, input.referenceFrames ?? [])).join("\n");
   const audioPlan = buildNativeAudioPlan(input.storyboardScript);
+  const rhythmPlan = input.storyboardScript
+    ? `Director rhythm: ${clipText(input.storyboardScript.rhythm, 160)} Tone: ${clipText(input.storyboardScript.tone, 100)}. Keep the clip inside one 15s micro arc: establish state, visible action, reaction or turn, quiet ending.`
+    : "";
 
   return [
-    `Create one continuous ${Math.min(15, Math.round(input.durationSeconds))}s 16:9 cinematic clip for "${input.coreGroupTitle}".`,
+    `Create one continuous ${Math.min(15, Math.round(input.durationSeconds))}s ${formatAspectRatioForPrompt(input.aspectRatio)} cinematic clip for "${input.coreGroupTitle}".`,
     "Visual style: stylized comic animation film, illustrated characters, clean line art, cinematic lighting, private-memory mood.",
     storyCamComicVisualSafetyLine,
     "No subtitles, no readable UI text, no new characters or locations.",
     referenceImagePlan ? `Reference order: ${referenceImagePlan}.` : "",
     "Use each 图片n reference image as a comic storyboard anchor for its matching frame; preserve character design, wardrobe, location, lighting, rain, and screen direction.",
+    rhythmPlan,
     frames ? `Director nine-frame plan:\n${frames}` : "",
     audioPlan,
     "Camera: restrained natural movement between frames, visible subject action before each transition, final beat held emotionally."
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function formatAspectRatioForPrompt(aspectRatio: "16:9" | "9:16") {
+  return aspectRatio === "9:16" ? "9:16 vertical portrait" : "16:9 horizontal landscape";
 }
 
 function formatSeedanceFrameBeat(frame: StoryboardScript["frames"][number], referenceFrames: Array<{ frameNumber: number }>) {

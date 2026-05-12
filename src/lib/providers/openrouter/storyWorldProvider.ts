@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
   characterAssetSchema,
+  directorBriefSchema,
   sceneAssetSchema,
   scenePanelShotTypes,
   storyScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
+import { defaultDirectorBrief, runStoryCamDirectorQualityChecks } from "@/features/storycam/domain/directorQualityChecks";
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
 import {
   storyWorldProviderOutputSchema,
@@ -28,6 +30,7 @@ const draftTextSchema = z.string().trim().min(1).catch("");
 const draftTextListSchema = (maxItems: number) => z.array(draftTextSchema).max(maxItems).catch([]);
 const emptyDraftScript = {
   beats: [],
+  directorBrief: undefined,
   logline: "",
   summary: "",
   title: "",
@@ -36,6 +39,7 @@ const emptyDraftScript = {
 const draftScriptSchema = z
   .object({
     beats: draftTextListSchema(8),
+    directorBrief: directorBriefSchema.optional().catch(undefined),
     logline: draftTextSchema,
     summary: draftTextSchema,
     title: draftTextSchema,
@@ -132,7 +136,7 @@ export function createOpenRouterStoryWorldProvider(
 }
 
 export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput): OpenRouterStructuredPrompt<StoryWorldProviderInput> {
-  const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "像私人回忆";
+  const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "留白多一点";
   const photoReferences = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
 
   return {
@@ -149,6 +153,9 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       "2. 这是剧本整理阶段，不是分镜拆解阶段；下一阶段 core storyboard 才会根据剧本生成分镜脚本、镜头组和主分镜图。",
       "3. script.summary 和 script.beats 只写短剧本层面的剧情、角色动作、对白/可听声音、关键物件和环境变化。",
       "4. script.beats 是剧情节点/故事段落，不是镜头列表、分镜表或拍摄方案；每条用一句可读的剧情动作描述。",
+      "4a. 生成时先做视听化微调：把心理描写和抽象情绪转为可见动作、物件、空间变化和可听声音。",
+      "4b. script.directorBrief 必须包含 tone、visualMotifs、dialogueStrategy、soundStrategy、microRhythm、shotDensity、shotSizeFocus、transitionStrategy、userFacingSummary。",
+      "4c. directorBrief.microRhythm 必须按 15 秒微型节奏描述：0-3秒建立状态，3-8秒动作推进，8-12秒反应/转折，12-15秒留白收束。",
       "5. 不要写镜头编号、景别、机位、运镜、构图、剪辑、转场指令，也不要出现“镜头”“画面”“特写”“推近”“切到”“第 X 镜”等分镜术语。",
       "6. script.visualStyle 必须定义为漫画电影/动画分镜风格；可以吸收用户的情绪、时代、类型片倾向，但必须转译为非写实真人的虚构漫画角色和动画场景。",
       "7. 只生成 1-3 个主角级/关键对手戏人物资产，不要为背景人群、路人、短暂提及人物建资产。",
@@ -164,6 +171,7 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
     system: [
       "你是 StoryCam 的私人故事剧本整理器，把普通用户的一句话变成可拍摄的故事世界。",
       "参考山音导演方法的前置剧本梳理：先判断叙事目的和情绪基调，再把粗糙文本整理成场景结构和核心事件；不要提前进入节奏规划、镜头组或分镜拆解。",
+      "你需要在内部完成剧本视听化微调和 15 秒导演简报，但不要把专业表格暴露给用户。",
       "写作红线：不要写心理描写，不要用括号暗示，不要说教，不要把专业分镜术语暴露给用户。",
       "Story World 的 beats 是剧情节点，不是分镜；专业镜头语言只允许在后续 core storyboard provider 内部使用。",
       "台词和描述要口语、克制、具体；画面内容只写可见元素，声音只写可听元素。",
@@ -184,12 +192,28 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
   const summary = nonEmptyText(draftScript.summary, logline);
   const beats = nonEmptyList(draftScript.beats, [summary]);
   const visualStyle = normalizeStoryCamVisualStyle(nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title })));
+  const directorBrief =
+    draftScript.directorBrief ??
+    defaultDirectorBrief({
+      idea: input.idea,
+      lightweightChoices: input.lightweightChoices,
+      summary,
+      title
+    });
   const characterDrafts = draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)];
   const sceneDrafts = draftSceneAssets.length ? [draftSceneAssets[0]] : [createFallbackSceneDraft(input, summary)];
   const script = storyScriptSchema.parse({
     beats,
+    directorBrief,
     id: `script-${input.sessionId}`,
     logline,
+    qualityChecks: runStoryCamDirectorQualityChecks({
+      script: {
+        beats,
+        directorBrief,
+        summary
+      }
+    }),
     sessionId: input.sessionId,
     state: "ready",
     summary,

@@ -90,6 +90,7 @@ export type CreateStoryWorldResponse = {
     script: ArtifactRef;
   };
   sessionId: string;
+  videoAspectRatio: "16:9" | "9:16";
   storyWorld: {
     characterAssets: Array<{
       emotionalBaseline: string;
@@ -113,6 +114,7 @@ export type CreateStoryWorldResponse = {
     script: {
       beats: string[];
       logline: string;
+      qualityChecks?: string[];
       summary: string;
       title: string;
       version: number;
@@ -329,6 +331,7 @@ export type RestoreStoryCamSessionResponse =
       storyboard: CreateStoryboardResponse | null;
       storyWorld: CreateStoryWorldResponse;
       storyWorldConfirmed: boolean;
+      videoAspectRatio: "16:9" | "9:16";
     };
 
 export type RecentStoryCamProject = {
@@ -344,6 +347,7 @@ export type RecentStoryCamProject = {
   } | null;
   title: string;
   updatedAt: string;
+  videoAspectRatio: "16:9" | "9:16";
 };
 
 export type RecentStoryCamProjectsResponse = {
@@ -1043,6 +1047,7 @@ export async function createStoryWorld(input: {
   plannedDurationSeconds?: number;
   sessionId?: string;
   uploadedPhotoIds?: string[];
+  videoAspectRatio?: "16:9" | "9:16";
 }) {
   const response = await fetch("/api/story-world", {
     body: JSON.stringify({
@@ -1050,7 +1055,8 @@ export async function createStoryWorld(input: {
       lightweightChoices: input.lightweightChoices,
       plannedDurationSeconds: input.plannedDurationSeconds ?? 12,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-      ...(input.uploadedPhotoIds?.length ? { uploadedPhotoIds: input.uploadedPhotoIds } : {})
+      ...(input.uploadedPhotoIds?.length ? { uploadedPhotoIds: input.uploadedPhotoIds } : {}),
+      ...(input.videoAspectRatio ? { videoAspectRatio: input.videoAspectRatio } : {})
     }),
     headers: {
       "content-type": "application/json"
@@ -1179,6 +1185,7 @@ export async function generateClipJob(input: {
   coreStoryboardGroupId: string;
   idempotencyKey: string;
   sessionId: string;
+  videoModel?: "seedance_2_0" | "seedance_2_0_fast";
 }) {
   const response = await fetch(`/api/storyboard-groups/${input.coreStoryboardGroupId}/generate-clip`, {
     body: JSON.stringify({
@@ -1187,7 +1194,8 @@ export async function generateClipJob(input: {
       generationMode: "mock",
       idempotencyKey: input.idempotencyKey,
       providerSendConfirmed: true,
-      sessionId: input.sessionId
+      sessionId: input.sessionId,
+      ...(input.videoModel ? { videoModel: input.videoModel } : {})
     }),
     headers: {
       "content-type": "application/json"

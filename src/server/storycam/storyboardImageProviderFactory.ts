@@ -22,11 +22,11 @@ export function createConfiguredStoryboardImageProvider(
       apiKey: config.inferenceSh.apiKey,
       app: config.inferenceSh.imageApp,
       buildPrompt: (input) => ({
-        height: 864,
+        height: input.aspectRatio === "9:16" ? 1536 : 864,
         images: input.referenceImages?.map((image) => image.signedUrl),
         prompt: buildStoryboardImagePrompt(input),
         quality: "high",
-        width: 1536
+        width: input.aspectRatio === "9:16" ? 864 : 1536
       }),
       maxAttempts: 2,
       supportsReferenceImages: true
@@ -51,7 +51,7 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
       input.imagePrompt ? `Specific image prompt: ${input.imagePrompt}.` : "",
       referenceImagePrompt(input.referenceImages),
       visibleCharacterAssetPrompt(input),
-      baseStoryboardImagePrompt()
+      baseStoryboardImagePrompt(input.aspectRatio)
     ]
       .filter(Boolean)
       .join("\n");
@@ -65,7 +65,7 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
     `Approximate clip duration: ${input.estimatedClipDurationSeconds} seconds.`,
     referenceImagePrompt(input.referenceImages),
     visibleCharacterAssetPrompt(input),
-    baseStoryboardImagePrompt()
+    baseStoryboardImagePrompt(input.aspectRatio)
   ]
     .filter(Boolean)
     .join("\n");
@@ -117,12 +117,17 @@ function referenceImagePrompt(referenceImages: StoryboardImageInput["referenceIm
   ].join("\n");
 }
 
-function baseStoryboardImagePrompt() {
+function baseStoryboardImagePrompt(aspectRatio: StoryboardImageInput["aspectRatio"]) {
+  const compositionLine =
+    aspectRatio === "9:16"
+      ? "Composition: vertical 9:16 frame for mobile video, full-height staging, keep the key subject readable without cropping heads or important props."
+      : "Composition: horizontal 16:9 frame, readable cinematic staging, natural camera perspective, no collage, no model sheet, no UI.";
+
   return [
-    storyCamComicImagePromptLine(),
+    storyCamComicImagePromptLine(aspectRatio),
     "Subject: fictional illustrated people in a private-memory comic film scene; grounded facial expressions and small visible actions.",
     "Continuity: keep character appearance, wardrobe, props, location, lighting, and mood consistent with the confirmed StoryCam assets.",
-    "Composition: clear single frame, readable staging, natural camera perspective, no collage, no model sheet, no UI.",
+    compositionLine,
     "No readable text, no subtitles, no watermarks, no logos."
   ].join("\n");
 }

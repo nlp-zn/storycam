@@ -49,6 +49,23 @@ describe("storyboard image provider factory", () => {
     });
   });
 
+  it("uses portrait dimensions and prompt language for 9:16 storyboard images", () => {
+    createConfiguredStoryboardImageProvider(inferenceShConfig());
+    const options = createInferenceShImageProviderMock.mock.calls[0]?.[0] as
+      | {
+          buildPrompt(input: ReturnType<typeof storyboardInput>): { height: number; prompt: string; width: number };
+        }
+      | undefined;
+    const prompt = options?.buildPrompt(storyboardInput({ aspectRatio: "9:16" }));
+
+    expect(prompt).toMatchObject({
+      height: 1536,
+      width: 864
+    });
+    expect(prompt?.prompt).toContain("9:16 portrait vertical composition");
+    expect(prompt?.prompt).toContain("vertical 9:16 frame");
+  });
+
   it("locks storyboard image prompts to the frame's visible character assets", () => {
     createConfiguredStoryboardImageProvider(inferenceShConfig());
     const options = createInferenceShImageProviderMock.mock.calls[0]?.[0] as
@@ -89,8 +106,9 @@ function inferenceShConfig(): StoryCamConfig {
   };
 }
 
-function storyboardInput() {
+function storyboardInput(overrides: Partial<{ aspectRatio: "16:9" | "9:16" }> = {}) {
   return {
+    aspectRatio: overrides.aspectRatio ?? "16:9",
     characterAssetIds: ["character-1"],
     coreGroupId: "core-1",
     emotionalTurn: "想说出口",

@@ -4,7 +4,8 @@ import {
   storyboardFrameSchema,
   storyboardScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
-import type { CoreStoryboardGroup, StoryboardFrame } from "@/features/storycam/domain/artifacts";
+import { defaultDirectorBrief } from "@/features/storycam/domain/directorQualityChecks";
+import type { CoreStoryboardGroup, DirectorBrief, StoryboardFrame } from "@/features/storycam/domain/artifacts";
 import { createDurationPlan } from "@/features/storycam/domain/durationRules";
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
 import type { MockStoryboardInput, MockStoryboardOutput } from "@/lib/providers/mock/storyboardProvider";
@@ -98,6 +99,13 @@ export function createOpenRouterStoryboardProvider(
 export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): OpenRouterStructuredPrompt<MockStoryboardInput> {
   const durationPlan = createDurationPlan(input);
   const script = input.storyWorld.script;
+  const directorBrief =
+    script.directorBrief ??
+    defaultDirectorBrief({
+      lightweightChoices: [],
+      summary: script.summary,
+      title: script.title
+    });
   const characters = input.storyWorld.characterAssets
     .map((asset, index) => `${index + 1}. id=${asset.id}；${asset.name}：${asset.role}；${asset.stableVisualDescription}`)
     .join("\n");
@@ -118,6 +126,17 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
       `摘要：${script.summary}`,
       `节拍：${script.beats.join(" / ")}`,
       "",
+      "导演简报（internal director brief）：",
+      `tone: ${directorBrief.tone}`,
+      `visualMotifs: ${directorBrief.visualMotifs.join(" / ")}`,
+      `dialogueStrategy: ${directorBrief.dialogueStrategy}`,
+      `soundStrategy: ${directorBrief.soundStrategy}`,
+      `micro rhythm: ${directorBrief.microRhythm}`,
+      `shotDensity: ${directorBrief.shotDensity}`,
+      `shotSizeFocus: ${directorBrief.shotSizeFocus}`,
+      `transitionStrategy: ${directorBrief.transitionStrategy}`,
+      `userFacingSummary: ${directorBrief.userFacingSummary}`,
+      "",
       `人物资产：\n${characters}`,
       "",
       `场景资产：\n${scenes}`,
@@ -131,9 +150,11 @@ export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): Ope
       "5. frames 每帧必须包含山隐九列分镜所需字段：timeRange、cameraAngle、shotSize、visualContent、scene、sound、technicalNotes、narrativePurpose，并补充 title、beatType、imagePrompt、visibleCharacterAssetIds。",
       "5a. visibleCharacterAssetIds 是本帧可见角色资产 id 数组；每帧只能引用上方人物资产的 id，不得写角色姓名、未知 id、主人/路人/人影等未建资产角色。",
       "5b. 如果剧情需要未列入人物资产的人物，请改写为离屏效果、物件变化、门/灯/声音/视线反应，不要让其身体、脸、背影、剪影、手或局部出现在 imagePrompt 或 visualContent 里。",
-      "6. imagePrompt 用英文写，适合文生图生成 16:9 分镜图；必须强调 stylized comic animation storyboard frame、fictional illustrated characters、consistent character and scene assets、not photorealistic。",
-      "7. mainImagePrompt 必须等于第 1 帧 imagePrompt 的核心含义。",
-      "8. 不要输出内部 id、sessionId、state、version、provider 或 Markdown。"
+      "6. rhythm、timeRange、durationSeconds、shotSize、cameraAngle、sound、narrativePurpose 必须受导演简报约束；15 秒内按 micro rhythm 完成建立状态、动作推进、反应/转折、留白收束。",
+      "7. visualMotifs 至少一个必须落到 visualContent、sound 或 imagePrompt 中。",
+      "8. imagePrompt 用英文写，适合文生图生成 16:9 分镜图；必须强调 stylized comic animation storyboard frame、fictional illustrated characters、consistent character and scene assets、not photorealistic。",
+      "9. mainImagePrompt 必须等于第 1 帧 imagePrompt 的核心含义。",
+      "10. 不要输出内部 id、sessionId、state、version、provider 或 Markdown。"
     ].join("\n"),
     system: [
       "你是 StoryCam 的核心分镜脚本师，把私人故事世界拆成普通用户能确认的 1 个核心分镜组。",
@@ -151,6 +172,12 @@ function normalizeStoryboardDraft(input: MockStoryboardInput, draft: OpenRouterS
   const durationPlan = createDurationPlan(input);
   const characterAssetIds = input.storyWorld.characterAssets.slice(0, 3).map((asset) => asset.id);
   const sceneAssetId = input.storyWorld.sceneAssets[0]?.id;
+  const directorBrief =
+    input.storyWorld.script.directorBrief ??
+    defaultDirectorBrief({
+      summary: input.storyWorld.script.summary,
+      title: input.storyWorld.script.title
+    });
 
   if (!sceneAssetId || characterAssetIds.length === 0) {
     throw new Error("Storyboard generation requires confirmed character and scene assets.");
@@ -179,7 +206,7 @@ function normalizeStoryboardDraft(input: MockStoryboardInput, draft: OpenRouterS
       throw new Error("Storyboard generation requires at least one core group.");
     }
 
-    const frames = normalizeStoryboardFrames(group, coreGroup, input.sessionId);
+    const frames = normalizeStoryboardFrames(group, coreGroup, input.sessionId, directorBrief);
 
     return storyboardScriptSchema.parse({
       id: `storyboard-script-${input.sessionId}-${index + 1}`,
@@ -187,10 +214,10 @@ function normalizeStoryboardDraft(input: MockStoryboardInput, draft: OpenRouterS
       mainImagePrompt: frames[0]?.imagePrompt ?? nonEmptyText(group.mainImagePrompt, fallbackImagePrompt(coreGroup.title)),
       planSummary: nonEmptyText(group.planSummary, coreGroup.storyPurpose),
       plannedDurationSeconds: 15,
-      rhythm: nonEmptyText(group.rhythm, "停顿进入，动作推进，情绪留白"),
+      rhythm: nonEmptyText(group.rhythm, directorBrief.microRhythm),
       sessionId: input.sessionId,
       state: "ready",
-      tone: nonEmptyText(group.tone, "私人、克制、真实"),
+      tone: nonEmptyText(group.tone, directorBrief.tone),
       version: 1
     });
   });
@@ -217,9 +244,10 @@ function normalizeStoryboardDraft(input: MockStoryboardInput, draft: OpenRouterS
 function normalizeStoryboardFrames(
   group: OpenRouterStoryboardGroupDraft,
   coreGroup: CoreStoryboardGroup,
-  sessionId: string
+  sessionId: string,
+  directorBrief: DirectorBrief
 ): StoryboardFrame[] {
-  const fallbackFrames = fallbackFramesForGroup(coreGroup, sessionId);
+  const fallbackFrames = fallbackFramesForGroup(coreGroup, sessionId, directorBrief);
   const draftFrames = group.frames ?? [];
 
   return Array.from({ length: 9 }, (_, index) => {
@@ -251,30 +279,28 @@ function normalizeStoryboardFrames(
   });
 }
 
-function fallbackFramesForGroup(coreGroup: CoreStoryboardGroup, sessionId: string): StoryboardFrame[] {
+function fallbackFramesForGroup(coreGroup: CoreStoryboardGroup, sessionId: string, directorBrief: DirectorBrief): StoryboardFrame[] {
   const positions = ["center", "top-left", "top", "top-right", "left", "right", "bottom-left", "bottom", "bottom-right"] as const;
   const beatTypes = ["core", "enter", "action", "reaction", "atmosphere", "transition", "emotion", "continuation", "reaction"] as const;
+  const motifLine = directorBrief.visualMotifs.join(", ");
 
   return positions.map((canvasPosition, index) =>
     storyboardFrameSchema.parse({
       beatType: beatTypes[index],
-      cameraAngle: index === 0 ? "平视" : "微俯拍",
+      cameraAngle: fallbackCameraAngle(index),
       canvasPosition,
       durationSeconds: index === 0 ? 3 : 1.5,
       frameNumber: index + 1,
-      imagePrompt:
-        index === 0
-          ? fallbackImagePrompt(coreGroup.title)
-          : `Stylized comic animation storyboard frame ${index + 1} for "${coreGroup.title}", ${coreGroup.storyPurpose}, fictional illustrated characters, visible action and reaction, consistent character and location assets, cinematic lighting, 16:9, no text, not photorealistic.`,
-      narrativePurpose: index === 0 ? coreGroup.storyPurpose : "补充中心分镜周围的动作、反应和氛围连续性。",
+      imagePrompt: fallbackFrameImagePrompt(index, coreGroup, motifLine),
+      narrativePurpose: index === 0 ? coreGroup.storyPurpose : `${directorBrief.microRhythm} 补充中心分镜周围的动作、反应和氛围连续性。`,
       scene: `StoryCam confirmed scene for ${sessionId}`,
-      shotSize: index === 0 ? "中景" : "近景",
-      sound: "环境声与细微动作声",
-      technicalNotes: "保持角色、服装、道具、场景与光线连续。",
+      shotSize: index === 0 ? "中景" : directorBrief.shotSizeFocus,
+      sound: directorBrief.soundStrategy,
+      technicalNotes: `${directorBrief.transitionStrategy} 保持角色、服装、道具、场景与光线连续。`,
       timeRange: `00:${String(index).padStart(2, "0")}-00:${String(index + 1).padStart(2, "0")}`,
       title: index === 0 ? coreGroup.title : `扩展分镜 ${index}`,
       visibleCharacterAssetIds: coreGroup.characterAssetIds,
-      visualContent: index === 0 ? coreGroup.storyPurpose : "围绕中心分镜展开一个可见的补充动作。"
+      visualContent: fallbackVisualContent(index, coreGroup, directorBrief)
     })
   );
 }
@@ -311,8 +337,10 @@ function normalizedDraftGroups(groups: OpenRouterStoryboardGroupDraft[], targetC
 }
 
 function fallbackGroup(index: number): OpenRouterStoryboardGroupDraft {
+  const emotionalTurn = fallbackGroupEmotionalTurn(index);
+
   return {
-    emotionalTurn: index === 0 ? "从隐藏到想靠近" : index === 1 ? "靠近后错过" : "把情绪收回去",
+    emotionalTurn,
     mainImagePrompt: fallbackImagePrompt(`核心分镜 ${index + 1}`),
     planSummary: "用一个可见动作承载这段私人情绪。",
     rhythm: "停顿进入，动作推进，情绪留白",
@@ -322,8 +350,50 @@ function fallbackGroup(index: number): OpenRouterStoryboardGroupDraft {
   };
 }
 
-function fallbackImagePrompt(title: string) {
-  return `Stylized comic animation storyboard frame for "${title}", fictional illustrated people in a grounded private-memory scene, consistent character and location assets, restrained emotion, cinematic lighting, 16:9, no text, not photorealistic.`;
+function fallbackCameraAngle(index: number): string {
+  if (index === 0) {
+    return "平视";
+  }
+
+  if (index <= 3) {
+    return "低机位贴近动作";
+  }
+
+  return "微俯拍";
+}
+
+function fallbackFrameImagePrompt(index: number, coreGroup: CoreStoryboardGroup, motifLine: string): string {
+  if (index === 0) {
+    return fallbackImagePrompt(coreGroup.title, motifLine);
+  }
+
+  return `Stylized comic animation storyboard frame ${index + 1} for "${coreGroup.title}", ${coreGroup.storyPurpose}, visual motifs: ${motifLine}, fictional illustrated characters, visible action and reaction, consistent character and location assets, cinematic lighting, 16:9, no text, not photorealistic.`;
+}
+
+function fallbackVisualContent(index: number, coreGroup: CoreStoryboardGroup, directorBrief: DirectorBrief): string {
+  const primaryMotif = directorBrief.visualMotifs[0] ?? "关键物件";
+
+  if (index === 0) {
+    return `${coreGroup.storyPurpose}，画面里落到${primaryMotif}。`;
+  }
+
+  return `围绕${primaryMotif}展开一个可见的补充动作。`;
+}
+
+function fallbackGroupEmotionalTurn(index: number): string {
+  if (index === 0) {
+    return "从隐藏到想靠近";
+  }
+
+  if (index === 1) {
+    return "靠近后错过";
+  }
+
+  return "把情绪收回去";
+}
+
+function fallbackImagePrompt(title: string, visualMotifs = "key object, ambient light, pause") {
+  return `Stylized comic animation storyboard frame for "${title}", visual motifs: ${visualMotifs}, fictional illustrated people in a grounded private-memory scene, consistent character and location assets, restrained emotion, cinematic lighting, 16:9, no text, not photorealistic.`;
 }
 
 function nonEmptyText(value: string | undefined, fallback: string) {

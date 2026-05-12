@@ -10,6 +10,7 @@ const sampleSession = {
   user_id: "user-1",
   status: "draft",
   generation_mode: "mock",
+  video_aspect_ratio: "16:9",
   planned_duration_seconds: 12,
   core_group_target_count: 1,
   created_at: "2026-04-26T00:00:00.000Z",
@@ -37,7 +38,8 @@ describe("StoryCamSessionRepository", () => {
         generation_mode: "real",
         planned_duration_seconds: 15,
         status: "draft",
-        user_id: "user-1"
+        user_id: "user-1",
+        video_aspect_ratio: "16:9"
       }
     ]);
   });

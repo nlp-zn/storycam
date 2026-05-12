@@ -1,6 +1,6 @@
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
-import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
-import type { StoryCamVideoOutputResolution } from "@/features/storycam/domain/videoSettings";
+import type { ProviderIdentity, ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
+import type { StoryCamVideoModel, StoryCamVideoOutputResolution } from "@/features/storycam/domain/videoSettings";
 
 export type SeedanceVideoGenerationInput = {
   callbackUrl?: string;
@@ -33,6 +33,7 @@ export type SeedanceVideoProviderOptions = {
   baseUrl?: string;
   fetch?: typeof fetch;
   model: string;
+  providerName?: StoryCamVideoModel;
   polling?: {
     enabled?: boolean;
     intervalMs?: number;
@@ -55,11 +56,6 @@ type SeedanceTaskResponse = {
   status?: unknown;
 };
 
-const identity = {
-  providerKind: "video",
-  providerName: "seedance_2_0"
-} as const;
-
 const defaultBaseUrl = "https://ark.cn-beijing.volces.com/api/v3";
 
 export function createSeedanceVideoProvider(
@@ -70,6 +66,10 @@ export function createSeedanceVideoProvider(
 } {
   const request = options.fetch ?? fetch;
   const baseUrl = trimTrailingSlash(options.baseUrl ?? defaultBaseUrl);
+  const identity = {
+    providerKind: "video",
+    providerName: options.providerName ?? "seedance_2_0"
+  } as const satisfies ProviderIdentity;
 
   return {
     ...identity,
@@ -78,6 +78,7 @@ export function createSeedanceVideoProvider(
         const submitted = await submitSeedanceTask({
           apiKey: options.apiKey,
           baseUrl,
+          identity,
           input,
           model: options.model,
           request
@@ -106,6 +107,7 @@ export function createSeedanceVideoProvider(
         return pollSeedanceTask({
           apiKey: options.apiKey,
           baseUrl,
+          identity,
           model: options.model,
           providerRequestId,
           request,
@@ -123,6 +125,7 @@ export function createSeedanceVideoProvider(
       return resolveSeedanceTask({
         apiKey: options.apiKey,
         baseUrl,
+        identity,
         model: options.model,
         providerRequestId,
         request
@@ -132,6 +135,7 @@ export function createSeedanceVideoProvider(
       return submitSeedanceTask({
         apiKey: options.apiKey,
         baseUrl,
+        identity,
         input,
         model: options.model,
         request
@@ -167,6 +171,7 @@ export function normalizeSeedanceTaskResponse(response: SeedanceTaskResponse) {
 async function pollSeedanceTask(input: {
   apiKey: string;
   baseUrl: string;
+  identity: ProviderIdentity;
   intervalMs: number;
   maxAttempts: number;
   model: string;
@@ -174,7 +179,7 @@ async function pollSeedanceTask(input: {
   request: typeof fetch;
 }): Promise<ProviderResult<SeedanceVideoGenerationOutput>> {
   const requestIdentity = {
-    ...identity,
+    ...input.identity,
     providerRequestId: input.providerRequestId
   };
 
@@ -203,6 +208,7 @@ async function pollSeedanceTask(input: {
 async function submitSeedanceTask(input: {
   apiKey: string;
   baseUrl: string;
+  identity: ProviderIdentity;
   input: SeedanceVideoGenerationInput;
   model: string;
   request: typeof fetch;
@@ -217,21 +223,22 @@ async function submitSeedanceTask(input: {
   });
 
   if (!createResponse.ok) {
-    return seedanceFailure(await safeJson(createResponse), createResponse.status);
+    return seedanceFailure(input.identity, await safeJson(createResponse), createResponse.status);
   }
 
-  return providerSuccess(identity, parseCreateTaskResponse(await safeJson(createResponse)));
+  return providerSuccess(input.identity, parseCreateTaskResponse(await safeJson(createResponse)));
 }
 
 async function resolveSeedanceTask(input: {
   apiKey: string;
   baseUrl: string;
+  identity: ProviderIdentity;
   model: string;
   providerRequestId: string;
   request: typeof fetch;
 }): Promise<ProviderResult<SeedanceVideoGenerationOutput>> {
   const requestIdentity = {
-    ...identity,
+    ...input.identity,
     providerRequestId: input.providerRequestId
   };
   const response = await input.request(`${input.baseUrl}/contents/generations/tasks/${input.providerRequestId}`, {
@@ -243,7 +250,7 @@ async function resolveSeedanceTask(input: {
   });
 
   if (!response.ok) {
-    return seedanceFailure(await safeJson(response), response.status, input.providerRequestId);
+    return seedanceFailure(input.identity, await safeJson(response), response.status, input.providerRequestId);
   }
 
   const responseBody = await safeJson(response);
@@ -259,7 +266,7 @@ async function resolveSeedanceTask(input: {
   }
 
   if (normalized.status === "failed" || normalized.status === "expired") {
-    return seedanceFailure(responseBody, 200, input.providerRequestId, normalized.status);
+    return seedanceFailure(input.identity, responseBody, 200, input.providerRequestId, normalized.status);
   }
 
   return providerSuccess(requestIdentity, {
@@ -307,7 +314,7 @@ function parseCreateTaskResponse(value: unknown) {
   };
 }
 
-function seedanceFailure(error: unknown, httpStatus: number, providerRequestId?: string, taskStatus?: SeedanceTaskStatus) {
+function seedanceFailure(identity: ProviderIdentity, error: unknown, httpStatus: number, providerRequestId?: string, taskStatus?: SeedanceTaskStatus) {
   const errorCode = seedanceErrorCode(error, httpStatus, taskStatus);
   const providerErrorCategory = seedanceErrorCategory(error, httpStatus, taskStatus);
 

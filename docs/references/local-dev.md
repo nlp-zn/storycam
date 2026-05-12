@@ -131,6 +131,7 @@ STORYCAM_GENERATION_MODE=real
 STORYCAM_VIDEO_PROVIDER=seedance_2_0
 SEEDANCE_API_KEY=<your-seedance-key>
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
+SEEDANCE_FAST_MODEL=doubao-seedance-2-0-fast-260128
 ```
 
 Real image-reference testing requires public HTTPS media URLs. If `NEXT_PUBLIC_SUPABASE_URL` points to local Supabase (`localhost`, `127.0.0.1`, or `::1`), StoryCam will create a failed local job or placeholder instead of submitting to Seedance/Inference.sh, because external providers cannot fetch local-only StoryCam images.
@@ -335,6 +336,7 @@ INFERENCE_API_KEY=
 INFERENCE_IMAGE_APP=openai/gpt-image-2
 SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
+SEEDANCE_FAST_MODEL=doubao-seedance-2-0-fast-260128
 ```
 
 Run real provider smoke commands only when you explicitly intend to spend provider credits:

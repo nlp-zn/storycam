@@ -4,7 +4,14 @@ import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
 import { Button } from "@/components/ui/button";
 import type { FinalWorkResponse, GenerationJobStatus, GenerationJobSummary } from "@/features/storycam/client/storycamApi";
 import { isTerminalGenerationJobStatus } from "@/features/storycam/client/jobPolling";
-import { storyCamSeedanceOutputResolutionLabel } from "@/features/storycam/domain/videoSettings";
+import {
+  storyCamSeedanceOutputResolutionLabel,
+  storyCamVideoAspectRatioLabel,
+  storyCamVideoModelLabel,
+  type StoryCamVideoAspectRatio,
+  type StoryCamVideoModel
+} from "@/features/storycam/domain/videoSettings";
+import { cn } from "@/lib/utils";
 
 type ClipGenerationState =
   | { kind: "idle" }
@@ -26,6 +33,8 @@ type ClipGenerationWorkspaceProps = {
   onRetake: () => void;
   title?: string;
   posterImageUrl?: string;
+  videoAspectRatio: StoryCamVideoAspectRatio;
+  videoModel: StoryCamVideoModel;
 };
 
 const audioWaveHeights = Array.from({ length: 36 }, (_, index) => 8 + ((index * 7) % 24));
@@ -44,7 +53,9 @@ export function ClipGenerationWorkspace({
   onRetryFinalWork,
   onRetake,
   posterImageUrl,
-  title = "Clip 01"
+  title = "Clip 01",
+  videoAspectRatio,
+  videoModel
 }: ClipGenerationWorkspaceProps) {
   const [isExporting, setIsExporting] = useState(false);
   const clipPreview = clipJob?.outputPreview;
@@ -101,6 +112,8 @@ export function ClipGenerationWorkspace({
           <div className="storycam-clip-pills">
             <span>Clip 01</span>
             <span>输出 {storyCamSeedanceOutputResolutionLabel}</span>
+            <span>{storyCamVideoAspectRatioLabel(videoAspectRatio)}</span>
+            <span>{storyCamVideoModelLabel(videoModel)}</span>
             <span>{durationLabel}</span>
             <span>含音频</span>
           </div>
@@ -111,7 +124,7 @@ export function ClipGenerationWorkspace({
           </div>
         </div>
 
-        <div className="storycam-clip-video-frame">
+        <div className={cn("storycam-clip-video-frame", videoAspectRatio === "9:16" && "storycam-clip-video-frame--portrait")}>
           {isCreatingClip ? (
             <div className="storycam-cinematic-frame storycam-clip-placeholder storycam-clip-placeholder--pending" data-testid="clip-generation-pending-frame">
               <p className="storycam-clip-boundary-copy">

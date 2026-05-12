@@ -9,7 +9,7 @@ Sources: `src/lib/providers/types.ts`, `src/server/config.ts`, provider factorie
 ```ts
 type GenerationMode = "mock" | "real";
 type ProviderKind = "text" | "multimodal" | "image" | "video" | "stitch";
-type ProviderName = "mock" | "deepseek" | "openrouter" | "inference_sh" | "seedance_2_0" | string;
+type ProviderName = "mock" | "deepseek" | "openrouter" | "inference_sh" | "seedance_2_0" | "seedance_2_0_fast" | string;
 ```
 
 Provider identity must keep these concepts separate. Do not use a single enum that mixes stage, provider, and mode.
@@ -130,19 +130,19 @@ Used for:
 
 Real path:
 
-- Seedance 2.0 behind `VideoGenerationProvider`.
+- Seedance 2.0 / Seedance 2.0 Fast behind `VideoGenerationProvider`.
 
 Requirements:
 
 - provider-send confirmation must be true,
 - async job only,
-- `clip_prompt_packet` must include the 9-frame storyboard summary, target duration, and any ready core/expanded storyboard image media references,
+- `clip_prompt_packet` must include the 9-frame storyboard summary, target duration, output aspect ratio, resolution, and any ready core/expanded storyboard image media references,
 - Seedance input uses the packet provider prompt plus signed storyboard image URLs as `image_url` content items,
 - idempotency,
 - timeout,
 - cancellation/tombstone,
 - late-result discard,
-- model name from `SEEDANCE_MODEL`,
+- model name from `SEEDANCE_MODEL` or `SEEDANCE_FAST_MODEL`, selected by `generation_jobs.provider_name`,
 - create tasks with `POST /contents/generations/tasks`,
 - poll or normalize webhook payloads from `GET /contents/generations/tasks/{id}`,
 - terminal success returns `content.video_url`, which must be downloaded before the provider URL expires,
@@ -192,4 +192,5 @@ INFERENCE_IMAGE_APP=openai/gpt-image-2
 
 SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
+SEEDANCE_FAST_MODEL=doubao-seedance-2-0-fast-260128
 ```

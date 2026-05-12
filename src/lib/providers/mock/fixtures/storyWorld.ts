@@ -18,6 +18,18 @@ export const rainyKDramaStoryWorldFixture = {
     beats: ["雨夜删改短信", "便利店门铃响起", "玻璃倒影短暂重叠"],
     id: "script-rainy-kdrama-crush",
     logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
+    directorBrief: {
+      dialogueStrategy: "少台词，用删短信、停顿和回头表达。",
+      microRhythm: "0-3秒建立雨夜屋檐等待，3-8秒推进手机删改动作，8-12秒用门铃触发回头反应，12-15秒留在玻璃反光里。",
+      shotDensity: "慢进入，门铃后轻微加密，最后停住。",
+      shotSizeFocus: "中景建立便利店门口，近景落到手机和眼神，结尾回到玻璃反光空镜。",
+      soundStrategy: "雨声持续，便利店门铃作为转折，低声配乐托住私人回忆感。",
+      tone: "雨夜、克制、私人回忆",
+      transitionStrategy: "用门铃和视线反应自然连接，不做强技术感转场。",
+      userFacingSummary: "这一段会先安静等待，再用门铃和玻璃反光完成一次错过。",
+      visualMotifs: ["雨声", "玻璃反光", "未发送短信"]
+    },
+    qualityChecks: ["剧本已转成可见动作和可听声音。", "剧本已转成 15 秒节奏。"],
     summary: "冷白灯、雨水和玻璃反光让两个人短暂同框，故事停在没有说出口的那一秒。",
     title: "雨夜未发送",
     visualStyle: "漫画电影/动画分镜风格，雨夜冷暖混合光，低饱和色彩，克制真实的私人回忆质感，非写实真人"

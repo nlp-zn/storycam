@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { defaultStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { ImageGenerationProvider, ProviderFailure } from "@/lib/providers/types";
 import { characterAssetSchema, sceneAssetSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
@@ -20,6 +21,7 @@ import {
 } from "./mediaStore";
 
 export type StoryboardRepresentativeImageInput = {
+  aspectRatio: StoryCamVideoAspectRatio;
   characterAssetIds: string[];
   coreGroupId: string;
   emotionalTurn: string;
@@ -35,6 +37,7 @@ export type StoryboardRepresentativeImageInput = {
 };
 
 export type ExpandedStoryboardImageInput = {
+  aspectRatio: StoryCamVideoAspectRatio;
   beatType: string;
   coreGroup: StoryboardRepresentativeImageInput;
   description: string;
@@ -142,10 +145,13 @@ export async function generateCoreStoryboardRepresentativeImage(
     storyboardScript?: StoryboardScript;
     provider: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>;
     sessionId: string;
+    videoAspectRatio?: StoryCamVideoAspectRatio;
     userId: string;
   }
 ): Promise<StoryboardRepresentativeImageResult> {
-  const providerResult = await input.provider.generateImage(toProviderInput(input.coreGroup, input.sessionId, input.storyboardScript));
+  const providerResult = await input.provider.generateImage(
+    toProviderInput(input.coreGroup, input.sessionId, input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio, input.storyboardScript)
+  );
 
   if (!providerResult.ok) {
     return {
@@ -197,12 +203,14 @@ export async function generateExpandedStoryboardImage(
     coreGroup: CoreStoryboardGroup;
     provider: ImageGenerationProvider<ExpandedStoryboardImageInput, StoryboardRepresentativeImageOutput>;
     sessionId: string;
+    videoAspectRatio?: StoryCamVideoAspectRatio;
     userId: string;
   }
 ): Promise<GeneratedStoryboardImageState> {
   const providerResult = await input.provider.generateImage({
+    aspectRatio: input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio,
     beatType: input.card.beatType,
-    coreGroup: toProviderInput(input.coreGroup, input.sessionId),
+    coreGroup: toProviderInput(input.coreGroup, input.sessionId, input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio),
     description: input.card.description,
     guidance: input.card.guidance,
     imagePrompt: input.card.imagePrompt,
@@ -242,9 +250,11 @@ export function placeholderStoryboardImage(reason?: "provider_failed" | "referen
 function toProviderInput(
   coreGroup: CoreStoryboardGroup,
   sessionId: string,
+  videoAspectRatio: StoryCamVideoAspectRatio = defaultStoryCamVideoAspectRatio,
   storyboardScript?: StoryboardScript
 ): StoryboardRepresentativeImageInput {
   return {
+    aspectRatio: videoAspectRatio,
     characterAssetIds: coreGroup.characterAssetIds,
     coreGroupId: coreGroup.id,
     emotionalTurn: coreGroup.emotionalTurn,
@@ -269,21 +279,24 @@ function toProviderInput(
 export function toStoryboardRepresentativeProviderInput(
   coreGroup: CoreStoryboardGroup,
   sessionId: string,
+  videoAspectRatio: StoryCamVideoAspectRatio,
   storyboardScript?: StoryboardScript,
   visualContext?: Extract<StoryWorldVisualContext, { ok: true }>
 ) {
-  return withVisualContext(toProviderInput(coreGroup, sessionId, storyboardScript), visualContext);
+  return withVisualContext(toProviderInput(coreGroup, sessionId, videoAspectRatio, storyboardScript), visualContext);
 }
 
 export function toExpandedStoryboardProviderInput(input: {
   card: ExpandedStoryboardCard;
   coreGroup: CoreStoryboardGroup;
   sessionId: string;
+  videoAspectRatio?: StoryCamVideoAspectRatio;
   visualContext?: Extract<StoryWorldVisualContext, { ok: true }>;
 }) {
   return {
+    aspectRatio: input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio,
     beatType: input.card.beatType,
-    coreGroup: withVisualContext(toProviderInput(input.coreGroup, input.sessionId), input.visualContext),
+    coreGroup: withVisualContext(toProviderInput(input.coreGroup, input.sessionId, input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio), input.visualContext),
     description: input.card.description,
     frame:
       input.card.frameNumber && input.card.imagePrompt

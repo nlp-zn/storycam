@@ -25,6 +25,7 @@ describe("story world service", () => {
           script: { type: "script", version: 1 }
         },
         sessionId: "session-1",
+        videoAspectRatio: "16:9",
         storyWorld: {
           characterAssets: expect.arrayContaining([
             expect.objectContaining({ name: "她" }),
@@ -36,7 +37,110 @@ describe("story world service", () => {
       }
     });
     expect(client.queries[0]?.table).toBe("storycam_sessions");
+    expect(client.queries[0]?.calls).toContainEqual([
+      "insert",
+      expect.objectContaining({
+        video_aspect_ratio: "16:9"
+      })
+    ]);
     expect(client.queries.filter((query) => query.table === "storycam_artifacts")).toHaveLength(4);
+  });
+
+  it("parses and stores a portrait video aspect ratio for new sessions", async () => {
+    const client = new FakeSupabaseClient();
+
+    const result = await createStoryWorld(client.asSupabaseClient(), "user-1", {
+      input: "我想拍竖版小狗等主人",
+      videoAspectRatio: "9:16"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        videoAspectRatio: "9:16"
+      }
+    });
+    expect(client.queries[0]?.calls).toContainEqual([
+      "insert",
+      expect.objectContaining({
+        video_aspect_ratio: "9:16"
+      })
+    ]);
+  });
+
+  it("updates an upload-created empty session to the requested portrait aspect ratio while preserving uploaded photo refs", async () => {
+    const client = new FakeSupabaseClient({
+      mediaRows: [
+        {
+          byte_size: 5,
+          created_at: "2026-04-26T00:00:00.000Z",
+          deleted_at: null,
+          id: "photo-1",
+          kind: "uploaded_photo",
+          linked_artifact_id: null,
+          mime_type: "image/jpeg",
+          session_id: "session-1",
+          source: "upload",
+          storage_bucket: "storycam-uploads",
+          storage_path: "users/user-1/sessions/session-1/uploads/private.jpg",
+          user_id: "user-1"
+        }
+      ]
+    });
+
+    const result = await createStoryWorld(client.asSupabaseClient(), "user-1", {
+      input: "我想用照片拍竖版小狗等主人",
+      sessionId: "session-1",
+      uploadedPhotoIds: ["photo-1"],
+      videoAspectRatio: "9:16"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        videoAspectRatio: "9:16"
+      }
+    });
+    expect(
+      client.queries.find(
+        (query) =>
+          query.table === "storycam_sessions" &&
+          query.calls.some((call) => call[0] === "update")
+      )?.calls
+    ).toContainEqual([
+      "update",
+      expect.objectContaining({
+        video_aspect_ratio: "9:16"
+      })
+    ]);
+    const artifactWrites = client.queries
+      .filter((query) => query.table === "storycam_artifacts")
+      .flatMap((query) => query.calls);
+
+    expect(JSON.stringify(artifactWrites)).not.toContain("private.jpg");
+    expect(artifactWrites.some((call) => JSON.stringify(call).includes("photo-1"))).toBe(true);
+  });
+
+  it("preserves an existing draft session aspect ratio when the request omits videoAspectRatio", async () => {
+    const client = new FakeSupabaseClient({ sessionAspectRatio: "9:16" });
+
+    const result = await createStoryWorld(client.asSupabaseClient(), "user-1", {
+      input: "继续生成这个竖版故事",
+      sessionId: "session-1"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        videoAspectRatio: "9:16"
+      }
+    });
+    expect(
+      client.queries
+        .filter((query) => query.table === "storycam_sessions")
+        .flatMap((query) => query.calls)
+        .some((call) => call[0] === "update")
+    ).toBe(false);
   });
 
   it("keeps uploaded photo refs as media ids and does not pass storage paths to the provider output", async () => {
@@ -87,7 +191,7 @@ describe("story world service", () => {
           characterAssets: [
             {
               consistencyNotes: ["动作克制"],
-              emotionalBaseline: "少说话，用停顿表达情绪",
+              emotionalBaseline: "少台词，用停顿表达情绪",
               id: "character-test-1",
               name: "她",
               props: ["手机"],
@@ -165,7 +269,7 @@ describe("story world service", () => {
       "user-1",
       {
         input: "我想把暗恋拍成韩剧雨夜",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       },
       provider
     );
@@ -173,7 +277,7 @@ describe("story world service", () => {
     expect(provider.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         idea: "我想把暗恋拍成韩剧雨夜",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
   });
@@ -191,7 +295,7 @@ describe("story world service", () => {
           characterAssets: [
             {
               consistencyNotes: ["动作克制"],
-              emotionalBaseline: "少说话，用停顿表达情绪",
+              emotionalBaseline: "少台词，用停顿表达情绪",
               id: "character-test-1",
               name: "她",
               props: ["手机"],
@@ -266,6 +370,7 @@ describe("story world service", () => {
 
 type FakeSupabaseClientOptions = {
   mediaRows?: unknown[];
+  sessionAspectRatio?: "16:9" | "9:16";
 };
 
 class FakeSupabaseClient {
@@ -287,6 +392,7 @@ class FakeSupabaseClient {
 class FakeQuery {
   readonly calls: unknown[][] = [];
   private inserted: Record<string, unknown> | null = null;
+  private updated: Record<string, unknown> | null = null;
 
   constructor(
     readonly table: string,
@@ -296,6 +402,12 @@ class FakeQuery {
   insert(value: Record<string, unknown>) {
     this.inserted = value;
     this.calls.push(["insert", value]);
+    return this;
+  }
+
+  update(value: Record<string, unknown>) {
+    this.updated = value;
+    this.calls.push(["update", value]);
     return this;
   }
 
@@ -339,7 +451,8 @@ class FakeQuery {
               planned_duration_seconds: 12,
               status: "draft",
               updated_at: "2026-04-26T00:00:00.000Z",
-              user_id: "user-1"
+              user_id: "user-1",
+              video_aspect_ratio: this.options.sessionAspectRatio ?? "16:9"
             }
           : null,
       error: null
@@ -359,12 +472,13 @@ class FakeQuery {
         core_group_target_count: this.inserted?.core_group_target_count ?? 1,
         created_at: "2026-04-26T00:00:00.000Z",
         deleted_at: null,
-        generation_mode: this.inserted?.generation_mode ?? "mock",
+        generation_mode: this.updated?.generation_mode ?? this.inserted?.generation_mode ?? "mock",
         id: "session-1",
-        planned_duration_seconds: this.inserted?.planned_duration_seconds ?? 12,
-        status: this.inserted?.status ?? "draft",
+        planned_duration_seconds: this.updated?.planned_duration_seconds ?? this.inserted?.planned_duration_seconds ?? 12,
+        status: this.updated?.status ?? this.inserted?.status ?? "draft",
         updated_at: "2026-04-26T00:00:00.000Z",
-        user_id: this.inserted?.user_id ?? "user-1"
+        user_id: this.inserted?.user_id ?? "user-1",
+        video_aspect_ratio: this.updated?.video_aspect_ratio ?? this.inserted?.video_aspect_ratio ?? this.options.sessionAspectRatio ?? "16:9"
       };
     }
 

@@ -62,6 +62,40 @@ describe("seedance video provider", () => {
     );
   });
 
+  it("submits Seedance Fast with the selected provider identity and portrait ratio", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ id: "cgt-2026-fast" }));
+    const provider = createSeedanceVideoProvider({
+      apiKey: "seedance-secret",
+      fetch,
+      model: "doubao-seedance-2-0-fast-260128",
+      providerName: "seedance_2_0_fast"
+    });
+
+    const result = await provider.submitClipTask({
+      ...input,
+      ratio: "9:16",
+      resolution: "720p"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      providerKind: "video",
+      providerName: "seedance_2_0_fast",
+      value: {
+        providerRequestId: "cgt-2026-fast"
+      }
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        body: expect.stringContaining('"model":"doubao-seedance-2-0-fast-260128"')
+      })
+    );
+    expect(fetch.mock.calls[0]?.[1]?.body).toContain('"ratio":"9:16"');
+    expect(fetch.mock.calls[0]?.[1]?.body).toContain('"resolution":"720p"');
+  });
+
+
   it("polls until Seedance returns a succeeded task with content.video_url", async () => {
     const fetch = vi
       .fn()
