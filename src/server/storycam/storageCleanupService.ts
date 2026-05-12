@@ -17,6 +17,7 @@ export type PreparedStorageCleanup = {
 
 export type StorageCleanupRepository = {
   listBySession(userId: string, sessionId: string): Promise<MediaAssetRow[] | null>;
+  listStorageCleanupCandidates(userId: string, sessionId: string): Promise<MediaAssetRow[] | null>;
 };
 
 export type StorageCleanupSessionRepository = {
@@ -52,12 +53,12 @@ export class StoryCamStorageCleanupService {
   }
 
   async removeSessionMedia(userId: string, sessionId: string): Promise<StorageCleanupSummary> {
-    const mediaRows = (await this.mediaRepository.listBySession(userId, sessionId)) ?? [];
+    const mediaRows = (await this.mediaRepository.listStorageCleanupCandidates(userId, sessionId)) ?? [];
     return this.removePreparedSessionMedia(groupPrivateStoragePaths(mediaRows));
   }
 
   async prepareSessionMediaRemoval(userId: string, sessionId: string): Promise<PreparedStorageCleanup> {
-    const mediaRows = (await this.mediaRepository.listBySession(userId, sessionId)) ?? [];
+    const mediaRows = (await this.mediaRepository.listStorageCleanupCandidates(userId, sessionId)) ?? [];
     return groupPrivateStoragePaths(mediaRows);
   }
 
