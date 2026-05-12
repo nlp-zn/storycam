@@ -35,6 +35,33 @@ describe("story-world asset image service", () => {
     });
     expect(provider.submitImageTask).not.toHaveBeenCalled();
   });
+
+  it("returns an asset placeholder instead of failing the batch when one stored asset is malformed", async () => {
+    const { sceneAssets } = rainyKDramaStoryWorldFixture;
+    const { location: _location, ...malformedSceneAsset } = sceneAssets[0];
+    const client = new FakeSupabaseClient([
+      artifactRow("scene-artifact-1", "scene_asset", malformedSceneAsset as StoryCamArtifactRow["data_json"])
+    ]);
+    const provider = asyncImageProvider();
+
+    const result = await submitStoryWorldAssetImageJobs(
+      client.asStoryCamDbClient(),
+      "user-1",
+      {
+        assetArtifactIds: ["scene-artifact-1"],
+        sessionId: "session-1"
+      },
+      provider
+    );
+
+    expect(result.value.imagesByArtifactId["scene-artifact-1"]?.image).toEqual({
+      placeholder: true,
+      reason: "storage_failed",
+      redactedError: "Asset image generation is unavailable for this asset.",
+      status: "placeholder"
+    });
+    expect(provider.submitImageTask).not.toHaveBeenCalled();
+  });
 });
 
 function asyncImageProvider() {
@@ -52,12 +79,14 @@ function asyncImageProvider() {
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
 
+  constructor(private readonly artifactRows = storyWorldArtifactRows()) {}
+
   asStoryCamDbClient() {
     return this as unknown as StoryCamDbClient;
   }
 
   from(table: keyof Database["public"]["Tables"]) {
-    const query = new FakeQuery(table);
+    const query = new FakeQuery(table, this.artifactRows);
     this.queries.push(query);
     return query;
   }
@@ -66,7 +95,10 @@ class FakeSupabaseClient {
 class FakeQuery {
   readonly calls: unknown[][] = [];
 
-  constructor(readonly table: keyof Database["public"]["Tables"]) {}
+  constructor(
+    readonly table: keyof Database["public"]["Tables"],
+    private readonly artifactRows: StoryCamArtifactRow[]
+  ) {}
 
   select(columns: string) {
     this.calls.push(["select", columns]);
@@ -87,7 +119,7 @@ class FakeQuery {
     this.calls.push(["order", column, options]);
 
     if (this.table === "storycam_artifacts") {
-      return Promise.resolve({ data: storyWorldArtifactRows(), error: null });
+      return Promise.resolve({ data: this.artifactRows, error: null });
     }
 
     return this;
