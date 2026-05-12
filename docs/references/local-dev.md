@@ -144,7 +144,7 @@ Recommended environments:
 
 `STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS` controls provider reference signed URLs and defaults to 3600 seconds. UI preview URLs keep the shorter 5 minute TTL.
 
-The browser may cache restored StoryCam JSON payloads and their signed preview URLs in `sessionStorage` for the current tab. This cache is user-bound, expires before the earliest signed URL safety window closes, and is cleared on sign-out, anonymous auth, user switch, restore 401, or restore failure. Closing the tab discards the cache; no image or video bytes are cached.
+The browser may cache restored StoryCam JSON payloads, recent-project summaries, and their signed preview URLs in `sessionStorage` for the current tab. These caches are user-bound, expire before the earliest signed URL safety window closes, and are cleared on sign-out, anonymous auth, user switch, restore 401, restore failure, session deletion, or new story creation. Closing the tab discards the cache; no image or video bytes are cached.
 
 For manual browser testing without a Google account, use a Supabase local stack and set:
 
