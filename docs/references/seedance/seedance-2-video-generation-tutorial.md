@@ -1,6 +1,6 @@
 # Doubao Seedance 2.0 Video Generation Tutorial
 
-> Paste the official Doubao Seedance 2.0 video generation tutorial here.
+> Local provider reference snapshot. Treat official provider docs as the authority when implementing new Seedance behavior.
 
 ## Source
 
@@ -3144,6 +3144,5 @@ seedance 2.0 系列模型不支持直接上传含有真人人脸的参考图/视
 | | | |
 |^^|9:16 |<video src="https://p9-arcosite.byteimg.com/tos-cn-i-goo7wpa0wc/1423ee0fc9cf451398788dc57e9f55c4~tplv-goo7wpa0wc-image.image" controls></video>|\
 | | | |
-
 
 

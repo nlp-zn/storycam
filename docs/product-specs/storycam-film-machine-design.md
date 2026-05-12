@@ -1024,41 +1024,45 @@ Never：
 - 数据库：Supabase Postgres。
 - 媒体存储：Supabase Storage，保存上传照片、生成视频片段、最终作品和封面。
 - AI SDK：Vercel AI SDK 作为服务端 AI 编排层。
-- 文生/图生模型：优先使用 OpenRouter 中可用的文本、多模态和图像模型，通过 provider adapter 接入。
+- 文生/图生模型：通过 provider adapter 接入；story-world 文本当前优先 DeepSeek strict tool calling，storyboard/多模态仍可使用 OpenRouter，图像当前优先 Inference.sh `openai/gpt-image-2`。
 - 视频生成：Seedance 2.0 通过独立 `VideoGenerationProvider` 接入。
 - Job：使用数据库 job 状态机 + 可替换 runner，真实 provider path 必须能轮询、取消、超时和丢弃晚到结果。
-- 媒体合成：PLAN 中比较 FFmpeg、Remotion 或云端媒体服务。
+- 媒体合成：通过 final-work provider/composer 边界实现；Phase 1 仍不暴露公开分享。
 
-PLAN 需要明确最终技术栈、目录结构、依赖、API contract、job lifecycle、provider mode、测试命令和部署边界。
+工程实现需要保持技术栈、目录结构、依赖、API contract、job lifecycle、provider mode、测试命令和部署边界与 `docs/ARCHITECTURE.md`、`docs/generated/` 和 `docs/PR_REVIEW.md` 同步。
 
 ## 命令
 
-当前仓库主要是文档和静态设计参考。Web app scaffold 后，实施计划假设支持以下命令：
+当前仓库已经包含 Web app、服务端 route handlers、Supabase repository/service 边界、provider adapters 和浏览器测试。常用命令：
 
 ```bash
 pnpm install
 pnpm dev
 pnpm storycam:seed
-pnpm storycam:reset
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
+pnpm storycam:verify:mock
+scripts/check-local.sh
+scripts/check-pr.sh
+scripts/check-dev.sh
+scripts/check-release.sh
 ```
 
-在 app 尚未存在前，文档验证以人工 review 为主；后续可加入 markdown/link checks。
+本地与 CI 使用渐进式 gate：local 轻量、PR fast、dev integration、main release。真实 provider smoke tests 仍然是 secret-gated opt-in。
 
 ## 项目结构
 
 Canonical 文档必须放在 `docs/` 下。
 
-当前和预期文档结构：
+当前文档结构：
 
 ```text
 AGENTS.md                                  智能体入口地图
-ARCHITECTURE.md                            系统架构地图
+docs/ARCHITECTURE.md                       系统架构地图
 docs/
   README.md                                  项目文档索引
   product-specs/
@@ -1071,13 +1075,16 @@ docs/
     storycam-ui-design.md                   实用 UI 设计 brief
     assets/                                 UI 图片和参考素材
   exec-plans/
-    active/
-    storycam-web-mvp-implementation-plan.md 工程实施计划
-    test-plan.md                            测试计划
+    active/                                当前 feature plans，可为空
     completed/
+      phase-1-web-mvp-plan.md              历史 MVP 实施计划
+      phase-1-mvp-tests.md             历史测试计划
     tech-debt-tracker.md                    技术债追踪
   generated/
+    api-contract.md                         API snapshot
     db-schema.md                            数据库 schema 摘要
+    job-lifecycle.md                        job lifecycle snapshot
+    provider-contract.md                    provider boundary snapshot
   references/
     shanyin-director-master-source.md       参考来源和集成说明
     shanyin-director-master/                本地导演脑方法论快照
@@ -1091,21 +1098,22 @@ docs/
   SECURITY.md
 ```
 
-Web app scaffold 后的预期结构：
+当前 app 结构：
 
 ```text
 src/
   app/                                      Next.js App Router pages/routes
-  components/                               用户可见 UI 组件
-  features/storycam/                        StoryCam 领域流程
-  lib/providers/                            Mock 和真实 provider 边界
-  lib/jobs/                                 异步 job 编排
+  components/ui/                            shadcn-style primitives
+  components/storycam/                      StoryCam 用户可见 UI 和 composition wrappers
+  features/storycam/                        StoryCam client API/state/types
+  server/storycam/                          server-only services/repositories
+  server/ai/                                AI SDK/proxy helpers
+  lib/providers/                            provider result/error contracts
   lib/privacy/                              脱敏和删除工具
-  server/                                   服务端 actions/routes
 tests/
-  unit/
   api/
-e2e/
+  e2e/
+  scripts/
 ```
 
 ## 代码风格

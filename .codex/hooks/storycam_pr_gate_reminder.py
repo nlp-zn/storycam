@@ -166,11 +166,15 @@ def handle_pre_tool_use(payload: dict) -> int:
 
 
 def handle_post_tool_use(payload: dict) -> int:
-    pending = load_pending()
-    pending_tool_use_id = pending.get("tool_use_id")
+    tool_input_command = extract_command(payload.get("tool_input"))
     tool_use_id = payload.get("tool_use_id")
-    if not isinstance(pending_tool_use_id, str) or pending_tool_use_id != tool_use_id:
-        return 0
+    direct_git_push = is_git_push(tool_input_command)
+
+    if not direct_git_push:
+        pending = load_pending()
+        pending_tool_use_id = pending.get("tool_use_id")
+        if not isinstance(pending_tool_use_id, str) or pending_tool_use_id != tool_use_id:
+            return 0
 
     clear_pending()
 

@@ -4,11 +4,15 @@
 
 ## Verification
 
-- [ ] `pnpm lint`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm test`
-- [ ] `pnpm build`
-- [ ] E2E or visual check, if UI flow changed:
+- [ ] Local fast gate: `scripts/check-local.sh`
+- [ ] PR fast gate, if run locally: `scripts/check-pr.sh`
+- [ ] Browser/visual check, if UI flow changed: `scripts/check-dev.sh` or targeted Playwright command
+
+## CI Expectations
+
+- PR CI runs the fast gate: lint, typecheck, unit tests, and build.
+- Merge to `dev` runs the integration gate: PR fast gate plus E2E and visual QA.
+- Promotion to `main` runs the release gate: dev integration gate plus mock verification and dependency audit.
 
 ## Codex PR Gate
 

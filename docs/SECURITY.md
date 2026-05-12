@@ -23,9 +23,10 @@
 
 ## AI Providers
 
-- Vercel AI SDK and OpenRouter keys must be server-only.
+- DeepSeek, OpenRouter, Inference.sh, and Vercel AI SDK provider keys must be server-only.
 - Seedance API keys must be server-only.
 - Do not expose full provider requests or raw provider errors to the client.
+- Do not expose provider reference signed URLs to the browser as UI preview URLs.
 
 ## Privacy
 

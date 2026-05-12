@@ -1,3 +1,9 @@
+# Completion Note
+
+Status: completed historical plan.
+
+This plan drove the Phase 1 Web MVP scaffold and core StoryCam flow. The current source of truth is the implemented code, `docs/ARCHITECTURE.md`, `docs/product-specs/`, `docs/generated/`, and `docs/PR_REVIEW.md`. Do not treat unfinished checklist language below as active scope without first opening a new plan under `docs/exec-plans/active/`.
+
 # StoryCam Web MVP 详细实施计划
 
 日期：2026-04-26
@@ -341,9 +347,9 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Acceptance criteria:**
 
-- [x] `storycam-web-mvp-implementation-plan.md` 明确第一版不支持分享链接。
-- [x] `storycam-web-mvp-implementation-plan.md` 明确 final work 必须真实合成。
-- [x] `test-plan.md` 的关键路径从 save/share 改为 account save/preview。
+- [x] `this implementation plan` 明确第一版不支持分享链接。
+- [x] `this implementation plan` 明确 final work 必须真实合成。
+- [x] `the MVP test plan` 的关键路径从 save/share 改为 account save/preview。
 
 **Verification:**
 
@@ -353,8 +359,8 @@ users/{user_id}/sessions/{session_id}/generated/storyboards/{thumbnail_id}.{ext}
 
 **Files likely touched:**
 
-- `docs/exec-plans/active/storycam-web-mvp-implementation-plan.md`
-- `docs/exec-plans/active/test-plan.md`
+- `docs/exec-plans/completed/phase-1-web-mvp-plan.md`
+- `docs/exec-plans/completed/phase-1-mvp-tests.md`
 
 **Estimated scope:** S
 
@@ -1322,7 +1328,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 - `src/server/storycam/finalWorkService.ts`
 - `src/server/storycam/videoGenerationService.ts`
-- `docs/exec-plans/active/test-plan.md`
+- `docs/exec-plans/completed/phase-1-mvp-tests.md`
 
 **Estimated scope:** S
 
@@ -1356,7 +1362,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 - `tests/api/*.test.ts`
 - `src/**/*.test.ts`
-- `docs/exec-plans/active/test-plan.md`
+- `docs/exec-plans/completed/phase-1-mvp-tests.md`
 
 **Estimated scope:** M
 
@@ -1406,7 +1412,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 
 - `src/components/storycam/*.tsx`
 - `src/app/globals.css`
-- `docs/exec-plans/active/test-plan.md`
+- `docs/exec-plans/completed/phase-1-mvp-tests.md`
 
 **Estimated scope:** M
 
@@ -1433,7 +1439,7 @@ Verified on 2026-04-26 with Supabase CLI 2.90.0 local stack: `supabase db reset`
 - `docs/README.md`
 - `docs/references/local-dev.md`
 - `docs/generated/provider-contract.md`
-- `docs/exec-plans/active/test-plan.md`
+- `docs/exec-plans/completed/phase-1-mvp-tests.md`
 
 **Estimated scope:** S
 

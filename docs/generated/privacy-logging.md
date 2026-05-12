@@ -1,6 +1,6 @@
 # Privacy Logging Contract
 
-Status: implemented baseline, sourced from `src/lib/privacy/redact.ts` and `src/server/logging/storycamLogger.ts`.
+Status: implemented snapshot, sourced from `src/lib/privacy/redact.ts`, `src/server/logging/storycamLogger.ts`, and provider request repositories.
 
 ## Allowed Log Fields
 
@@ -76,3 +76,4 @@ It must not include:
 - Generate short-lived signed URLs only when needed.
 - Do not log signed URLs.
 - Do not store long-lived public URLs in metadata.
+- Provider reference URLs have a separate TTL and must not be returned to the client as UI preview URLs.

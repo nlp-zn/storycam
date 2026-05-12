@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-scripts/pr-ready.sh
+scripts/check-local.sh
 
 cat <<'MSG'
 
-Pre-push deterministic checks passed.
+Local pre-push checks passed.
 
-Before opening or merging the PR, ask Codex:
-
-Run the StoryCam PR gate on the current diff.
-
-Produce three independent reviewer reports:
-1. code-reviewer: docs/pr-reviewers/code-reviewer.md
-2. security-auditor: docs/pr-reviewers/security-auditor.md
-3. test-engineer: docs/pr-reviewers/test-engineer.md
-
-Merge them into GO/NO-GO with deterministic evidence, blockers,
-recommended fixes, accepted risks, coverage gaps, verification evidence,
-and rollback notes.
+PR CI will run build; dev/main CI will run the heavier browser and release gates.
+Ask Codex for the StoryCam PR Gate only when you want the three-reviewer AI review.
 MSG

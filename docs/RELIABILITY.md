@@ -2,7 +2,7 @@
 
 ## Job Rules
 
-Video generation and final work composition are async jobs.
+Image generation, video generation, and final work composition are async jobs.
 
 Jobs must support:
 
@@ -22,10 +22,11 @@ Expected failures:
 - quota exceeded,
 - policy refusal,
 - Seedance quality mismatch,
+- Inference.sh image task failure,
 - storage upload failure,
 - final work composer failure.
 
-First rescue path for unstable Seedance output: `重拍这一段`.
+First rescue path for unstable Seedance output: `重拍这个片段`.
 
 ## Observability
 

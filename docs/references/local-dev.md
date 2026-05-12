@@ -27,15 +27,21 @@ pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
 pnpm storycam:verify:mock
+scripts/check-local.sh
+scripts/check-pr.sh
+scripts/check-dev.sh
+scripts/check-release.sh
 STORYCAM_SEED_USER_ID=<auth.users.id> pnpm storycam:seed
 STORYCAM_RUN_SUPABASE_VERIFY=1 pnpm storycam:verify:supabase
 ```
 
-Planned but not implemented yet:
+Progressive gates:
 
-```bash
-pnpm storycam:reset
-```
+- `scripts/check-local.sh`: lint, typecheck, and unit tests. This is the local pre-push gate.
+- `scripts/check-pr.sh`: local gate plus production build. GitHub runs this for PRs.
+- `scripts/check-dev.sh`: PR gate plus Playwright E2E and visual QA. GitHub runs this after merge to `dev`.
+- `scripts/check-release.sh`: dev gate plus mock verification and dependency audit. GitHub runs this after promotion to `main`.
+- `scripts/pr-ready.sh`: compatibility alias for `check-pr.sh`; set `PR_READY_E2E=1` to run the dev gate.
 
 ## Required Environment Variables
 
@@ -261,13 +267,25 @@ Do not commit Google OAuth client secrets. Keep them in the Supabase dashboard f
      -> generate final work
    ```
 
-6. Before committing, run the same default checks used by agents.
+6. Before committing, run the fast local gate.
 
    ```bash
-   pnpm storycam:verify:mock
+   scripts/check-local.sh
    ```
 
-   This command runs lint, typecheck, unit tests, API tests, E2E, visual QA, and a production build with mock provider defaults.
+7. Before opening a PR, run the PR fast gate when practical.
+
+   ```bash
+   scripts/check-pr.sh
+   ```
+
+8. For browser/UI flow changes, run the dev gate or targeted Playwright commands.
+
+   ```bash
+   PORT=3000 scripts/check-dev.sh
+   ```
+
+   `pnpm storycam:verify:mock` remains the heavier mock verification command used by the release gate.
 
 ## Optional Seed Data
 
@@ -354,8 +372,9 @@ Successful smoke output is written to `.temp/storycam-smoke/`. The commands do n
 - Supabase Storage buckets are private.
 - No sharing links in Phase 1.
 
-## Active Plan
+## Planning References
 
-- `docs/exec-plans/active/storycam-web-mvp-implementation-plan.md`
+- `docs/ARCHITECTURE.md`
+- `docs/PR_REVIEW.md`
 - `docs/references/providers.md`
 - `docs/generated/provider-contract.md`

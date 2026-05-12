@@ -6,7 +6,7 @@ Status: active quality contract.
 
 Every StoryCam PR should have two kinds of evidence before merge:
 
-- deterministic checks from CI or `scripts/pr-ready.sh`,
+- progressive deterministic checks from local scripts or CI,
 - Codex review evidence from three independent perspectives.
 
 Deterministic checks block mechanically. Codex review catches product, architecture, security, reliability, and test gaps that raw commands miss.
@@ -36,34 +36,35 @@ Use Ship Gate when the user asks for:
 
 Ship Gate runs the same deterministic checks and three reviewer perspectives. Only a final `GO` authorizes commit, push, and PR creation. Any blocker stops the workflow before publish actions.
 
-## Deterministic Gate
+## Progressive Deterministic Gates
 
-Run the fast deterministic gate before opening a PR:
-
-```bash
-scripts/pr-ready.sh
-```
-
-For UI or browser-flow changes, run the full local browser gate:
+StoryCam uses four deterministic gate levels. Run the lowest gate that matches the moment:
 
 ```bash
-PR_READY_E2E=1 scripts/pr-ready.sh
+scripts/check-local.sh
 ```
 
-The script runs:
+Local pre-push gate. Runs lint, typecheck, and unit tests. It is intentionally fast and does not run build, E2E, or visual QA.
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
+scripts/check-pr.sh
 ```
 
-With `PR_READY_E2E=1`, it also runs:
+PR fast gate. Runs the local gate plus production build. GitHub runs this for pull requests into `dev` and `main`.
 
 ```bash
-pnpm test:e2e
+scripts/check-dev.sh
 ```
+
+Dev integration gate. Runs the PR fast gate plus Playwright E2E and visual QA. GitHub runs this after merges to `dev`.
+
+```bash
+scripts/check-release.sh
+```
+
+Main release gate. Runs the dev integration gate plus mock verification and dependency audit. GitHub runs this after promotion to `main`.
+
+`scripts/pr-ready.sh` remains as a compatibility alias for the PR fast gate. Set `PR_READY_E2E=1` to run the dev integration gate through that legacy entrypoint.
 
 If deterministic checks fail, stop the PR Gate or Ship Gate. Fix the hard failure first; do not spend AI review on a known broken diff.
 
@@ -124,15 +125,17 @@ Local hooks are optional because they only affect one machine. To opt in:
 git config core.hooksPath .githooks
 ```
 
-The pre-push hook runs `scripts/pr-ready.sh`. Keep the hook deterministic; do not make it call an AI model.
+The pre-push hook runs `scripts/check-local.sh`. Keep the hook deterministic, fast, and free of AI calls. Heavier checks belong in PR/dev/main CI.
 
 ## Codex Project Hook
 
-StoryCam includes a repo-local Codex hook in `.codex/hooks.json`. Codex hooks are enabled for this project in `.codex/config.toml`.
+StoryCam includes a repo-local Codex hook in `.codex/hooks.json`, but Codex hooks are disabled by default in `.codex/config.toml`.
+
+Prefer the Git pre-push hook for local enforcement because it triggers on the exact operation that matters instead of on every Codex shell tool call. To opt in to the Codex context reminder, set `codex_hooks = true` locally.
 
 When Codex itself runs a StoryCam `git push` and the push appears to succeed, the hook injects a reminder into Codex context: ask whether to run the StoryCam PR gate now. The hook does not run the AI review automatically.
 
-The hook uses a two-stage handshake: `PreToolUse` records the specific `git push` tool call, and `PostToolUse` only evaluates the result for that same call.
+The hook is intentionally quiet for normal tool use. `PostToolUse` checks the current tool command directly and only emits context after a successful `git push`. `PreToolUse` remains as a compatibility fallback for Codex clients that do not include the original tool input in post-tool payloads.
 
 The hook suppresses duplicate reminders for the same `HEAD` by writing a marker under the local `.git/` directory.
 
@@ -140,13 +143,13 @@ This is project-scoped Codex context, not a replacement for CI and not an automa
 
 ## GitHub CI Gate
 
-GitHub Actions runs on `main`, `dev`, and PRs into those branches:
+GitHub Actions runs progressive gates:
 
-- lint,
-- typecheck,
-- unit tests,
-- build,
-- Playwright E2E in mock provider mode.
+- Pull requests into `dev` or `main`: `scripts/check-pr.sh`.
+- Pushes to `dev`: `scripts/check-dev.sh`.
+- Pushes to `main`: `scripts/check-release.sh`.
+
+All CI gates run in mock provider mode. Real OpenRouter, Inference.sh, Seedance, or other provider smoke tests remain manual opt-in checks.
 
 Failed CI output should be fed back to Codex with the failing command and relevant log excerpt. Use `debugging-and-error-recovery`: reproduce, localize, reduce, fix root cause, add or update regression coverage, and rerun the failing gate.
 

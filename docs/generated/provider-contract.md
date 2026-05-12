@@ -1,13 +1,15 @@
 # Provider Contract
 
-Status: implemented baseline, sourced from `src/lib/providers/types.ts`.
+Status: implemented snapshot.
+
+Sources: `src/lib/providers/types.ts`, `src/server/config.ts`, provider factories in `src/server/storycam/`, and `docs/references/providers.md`.
 
 ## Provider Concepts
 
 ```ts
 type GenerationMode = "mock" | "real";
 type ProviderKind = "text" | "multimodal" | "image" | "video" | "stitch";
-type ProviderName = "mock" | "openrouter" | "seedance_2_0" | string;
+type ProviderName = "mock" | "deepseek" | "openrouter" | "inference_sh" | "seedance_2_0" | string;
 ```
 
 Provider identity must keep these concepts separate. Do not use a single enum that mixes stage, provider, and mode.
@@ -19,7 +21,7 @@ Provider identity must keep these concepts separate. Do not use a single enum th
 - Providers return normalized success/error shapes.
 - Provider errors are redacted before logging or client display.
 - Mock providers must be deterministic and must not call external services.
-- Real provider smoke tests are opt-in and secret-gated.
+- Real provider smoke tests are opt-in and secret-gated; default local and CI gates use mock providers.
 
 ## Base Result Shape
 
@@ -54,7 +56,7 @@ Used for:
 - expanded storyboard card text for the 9-image canvas,
 - stitch suggestion.
 
-Real path:
+Current real paths:
 
 - Story world: DeepSeek official Chat Completions strict function calling,
 - Core storyboard and other structured text: Vercel AI SDK with OpenRouter text model.
@@ -81,7 +83,7 @@ Used for:
 - uploaded photo understanding,
 - extracting stable visual descriptions for people, pets, places, and memory references.
 
-Real path:
+Current real path:
 
 - Vercel AI SDK
 - OpenRouter multimodal model
@@ -97,6 +99,7 @@ Requirements:
 
 Used for:
 
+- story-world character and scene asset boards,
 - core storyboard representative images,
 - expanded storyboard card images.
 
@@ -110,7 +113,7 @@ Requirements:
 - `INFERENCE_API_KEY` and `INFERENCE_IMAGE_APP=openai/gpt-image-2` for Inference.sh,
 - the Inference.sh app's required `OPENAI_KEY` secret must be configured in Inference.sh,
 - model name from `OPENROUTER_IMAGE_MODEL` for the legacy OpenRouter path,
-- output stored in `storycam-generated` bucket,
+- output stored in private StoryCam Storage,
 - representative images are stored as `thumbnail` media linked to the core storyboard group,
 - expanded storyboard images are stored as `thumbnail` media linked to their expanded card artifact,
 - storyboard images must use ready story-world character and scene asset images as Inference.sh `images[]` reference inputs plus the frame prompt; pure text fallback is not allowed for storyboard images,
