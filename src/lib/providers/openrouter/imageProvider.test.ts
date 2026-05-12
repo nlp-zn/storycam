@@ -8,6 +8,10 @@ vi.mock("server-only", () => ({}));
 
 describe("openrouter-image-provider", () => {
   it("generates a schema-safe image payload through the Vercel AI SDK boundary", async () => {
+    const referenceImages = [
+      "https://storycam.example/user-photo.png",
+      "https://storycam.example/handdrawn-style.png"
+    ];
     const generateImage = vi.fn().mockResolvedValue({
       image: {
         mediaType: "image/png",
@@ -18,6 +22,7 @@ describe("openrouter-image-provider", () => {
       apiKey: "openrouter-secret",
       buildPrompt: (input: { coreGroupTitle: string }) => ({
         aspectRatio: "16:9",
+        images: referenceImages,
         prompt: `Create a cinematic StoryCam storyboard representative image for: ${input.coreGroupTitle}`
       }),
       generateImage,
@@ -39,6 +44,7 @@ describe("openrouter-image-provider", () => {
     expect(generateImage).toHaveBeenCalledWith(
       expect.objectContaining({
         aspectRatio: "16:9",
+        images: referenceImages,
         prompt: expect.stringContaining("雨夜便利店窗边")
       })
     );

@@ -93,8 +93,13 @@ describe("clip-packet service", () => {
   });
 
   it("keeps handdrawn travel VLOG video prompts on real backgrounds with drawn characters", async () => {
+    const staleScript = scriptRow({}, { id: "script-artifact-1", updated_at: "2026-04-26T00:00:00.000Z", version: 1 });
+    const latestScript = scriptRow(
+      { id: "script-travel-2", storyModeId: "handdrawn-travel-vlog", version: 2 },
+      { id: "script-artifact-2", updated_at: "2026-04-27T00:00:00.000Z", version: 2 }
+    );
     const client = new FakeSupabaseClient({
-      artifactRows: [scriptRow({ storyModeId: "handdrawn-travel-vlog" }), coreGroupRow(), ...expandedCardRows()],
+      artifactRows: [staleScript, latestScript, coreGroupRow(), ...expandedCardRows()],
       mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()],
       sessionRow: storyCamSessionRow({ video_aspect_ratio: "9:16" })
     });
@@ -112,6 +117,10 @@ describe("clip-packet service", () => {
     expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("real travel-location backgrounds");
     expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("hand-drawn illustrated traveler character");
     expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("do not turn the character into a photorealistic person");
+    expect(result.value.clipPromptPacketPayload.inputArtifactVersions).toMatchObject({
+      "script-artifact-2": 2
+    });
+    expect(result.value.clipPromptPacketPayload.inputArtifactVersions["script-artifact-1"]).toBeUndefined();
   });
 
   it("rejects stale or unconfirmed core groups", async () => {
@@ -194,7 +203,7 @@ function expandedMediaRows() {
   return expandedCardRows().map((row, index) => mediaRow(`media-expanded-${index + 1}`, row.id));
 }
 
-function scriptRow(overrides: Record<string, unknown> = {}): StoryCamArtifactRow {
+function scriptRow(dataOverrides: Record<string, unknown> = {}, rowOverrides: Partial<StoryCamArtifactRow> = {}): StoryCamArtifactRow {
   return {
     ...baseArtifactRow(),
     data_json: {
@@ -208,10 +217,11 @@ function scriptRow(overrides: Record<string, unknown> = {}): StoryCamArtifactRow
       title: "手绘旅行 VLOG",
       version: 1,
       visualStyle: "手绘角色叠加真实旅行地摄影感背景",
-      ...overrides
+      ...dataOverrides
     },
     id: "script-artifact-1",
-    type: "script"
+    type: "script",
+    ...rowOverrides
   };
 }
 

@@ -71,7 +71,7 @@ export async function createClipPromptPacket(
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
   const storyboardScriptArtifact = findStoryboardScriptArtifact(rows, coreGroupArtifact.id);
   const storyboardScript = storyboardScriptArtifact ? storyboardScriptSchema.parse(storyboardScriptArtifact.data_json) : undefined;
-  const storyScriptArtifact = findStoryScriptArtifact(rows);
+  const storyScriptArtifact = findLatestStoryScriptArtifact(rows);
   const storyScript = storyScriptArtifact ? storyScriptSchema.parse(storyScriptArtifact.data_json) : undefined;
   const expandedCardArtifacts = rows.filter(
     (row) =>
@@ -163,13 +163,31 @@ function findStoryboardScriptArtifact(rows: StoryCamArtifactRow[], coreGroupArti
   );
 }
 
-function findStoryScriptArtifact(rows: StoryCamArtifactRow[]) {
-  return rows.find(
-    (row) =>
-      row.type === "script" &&
-      row.state === "ready" &&
-      storyScriptSchema.safeParse(row.data_json).success
-  );
+function findLatestStoryScriptArtifact(rows: StoryCamArtifactRow[]) {
+  return rows
+    .filter(
+      (row) =>
+        row.type === "script" &&
+        row.state === "ready" &&
+        storyScriptSchema.safeParse(row.data_json).success
+    )
+    .sort(compareArtifactsNewestFirst)[0];
+}
+
+function compareArtifactsNewestFirst(left: StoryCamArtifactRow, right: StoryCamArtifactRow) {
+  const versionDifference = right.version - left.version;
+
+  if (versionDifference !== 0) {
+    return versionDifference;
+  }
+
+  return timestampMs(right.updated_at) - timestampMs(left.updated_at) || timestampMs(right.created_at) - timestampMs(left.created_at);
+}
+
+function timestampMs(value: string) {
+  const parsed = Date.parse(value);
+
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 async function loadStoryboardFrameMedia(
