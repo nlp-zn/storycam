@@ -789,6 +789,8 @@ export function StoryCamWorkspace() {
         input: requestWithUploads.idea,
         lightweightChoices: requestWithUploads.selectedChoices,
         sessionId: requestWithUploads.sessionId,
+        storyModeId: requestWithUploads.storyModeId,
+        travelDestination: requestWithUploads.travelDestination,
         uploadedPhotoIds: requestWithUploads.uploadedPhotoIds,
         videoAspectRatio: requestWithUploads.videoAspectRatio
       });

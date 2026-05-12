@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardScript } from "@/features/storycam/domain/artifacts";
 import { defaultStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { ImageGenerationProvider, ProviderFailure } from "@/lib/providers/types";
-import { characterAssetSchema, sceneAssetSchema } from "@/features/storycam/domain/artifactSchemas";
+import { characterAssetSchema, sceneAssetSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import {
@@ -71,6 +71,7 @@ export type StoryWorldImageBasis = {
   characterAssetIds: string[];
   sceneAssetId: string;
   scriptArtifactId?: string;
+  storyModeId?: string;
 };
 
 export type StoryWorldVisualContext =
@@ -402,7 +403,8 @@ export async function loadStoryWorldVisualContext(
     storyWorldBasis: {
       characterAssetIds: characterRows.map((row) => row.id),
       sceneAssetId: sceneRow.id,
-      scriptArtifactId: scriptRow.id
+      scriptArtifactId: scriptRow.id,
+      storyModeId: storyScriptSchema.safeParse(scriptRow.data_json).data?.storyModeId
     }
   };
 }

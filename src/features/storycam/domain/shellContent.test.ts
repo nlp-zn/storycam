@@ -32,13 +32,31 @@ describe("StoryCam shell content", () => {
   });
 
   it("keeps playable story mode templates visible in a stable order", () => {
-    expect(storyModeEntries.map((entry) => entry.label)).toEqual(["私人记忆", "宠物小剧场", "小说角色", "情绪短片"]);
-    expect(storyModeEntries.map((entry) => entry.id)).toEqual(["personal-memory", "pet-theater", "novel-character", "emotion-short"]);
+    expect(storyModeEntries.map((entry) => entry.label)).toEqual(["私人记忆", "宠物小剧场", "小说角色", "情绪短片", "手绘旅行 VLOG"]);
+    expect(storyModeEntries.map((entry) => entry.id)).toEqual([
+      "personal-memory",
+      "pet-theater",
+      "novel-character",
+      "emotion-short",
+      "handdrawn-travel-vlog"
+    ]);
     expect(storyModeEntries.every((entry) => entry.sampleIdea.length > 0)).toBe(true);
     expect(storyModeEntries.every((entry) => entry.directorChoices.length === 4)).toBe(true);
     expect(storyModeEntries.map((entry) => `${entry.label} ${entry.text} ${entry.sampleIdea}`).join(" ")).not.toMatch(
       /prompt|packet|model|shot/i
     );
+  });
+
+  it("marks handdrawn travel VLOG as a photo and destination driven portrait mode", () => {
+    const travelMode = storyModeEntries.find((entry) => entry.id === "handdrawn-travel-vlog");
+
+    expect(travelMode).toMatchObject({
+      defaultChoices: ["手绘角色感"],
+      preferredAspectRatio: "9:16",
+      requiresPhoto: true,
+      requiresTravelDestination: true
+    });
+    expect(travelMode?.directorChoices).toEqual(["手绘角色感", "真实旅行地", "轻剧情 VLOG", "自然走拍"]);
   });
 
   it("prepares discovery presets for horizontal and vertical video slots", () => {

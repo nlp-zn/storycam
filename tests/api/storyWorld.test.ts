@@ -79,6 +79,41 @@ describe("POST /api/story-world", () => {
     });
   });
 
+  it("returns redacted validation errors when handdrawn travel VLOG is missing its required photo or destination", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const missingPhoto = await POST(
+      jsonRequest({
+        input: "我想做一个手绘旅行 VLOG",
+        storyModeId: "handdrawn-travel-vlog",
+        travelDestination: "里斯本"
+      })
+    );
+    const missingDestination = await POST(
+      jsonRequest({
+        input: "我想做一个手绘旅行 VLOG",
+        storyModeId: "handdrawn-travel-vlog",
+        uploadedPhotoIds: ["photo-1"]
+      })
+    );
+
+    expect(missingPhoto.status).toBe(400);
+    expect(missingDestination.status).toBe(400);
+    await expect(missingPhoto.json()).resolves.toMatchObject({
+      error: "invalid_photos",
+      redactedError: "Invalid story world request.",
+      redactionApplied: true
+    });
+    await expect(missingDestination.json()).resolves.toMatchObject({
+      error: "invalid_input",
+      redactedError: "Invalid story world request.",
+      redactionApplied: true
+    });
+  });
+
   it("returns artifact versions from mock mode", async () => {
     const { POST } = await import("@/app/api/story-world/route");
     const client = new FakeSupabaseClient();

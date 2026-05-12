@@ -56,6 +56,45 @@ describe("story-world asset image prompt", () => {
     expect(prompt.prompt).toContain("plain white or warm off-white studio background");
   });
 
+  it("uses uploaded photo and StoryCam handdrawn style references for handdrawn travel characters", () => {
+    const prompt = buildStoryWorldAssetImagePrompt({
+      asset: {
+        ...characterAsset(),
+        referenceMediaIds: ["photo-1"],
+        relationshipToUserStory: "由用户照片转译出的手绘旅行主角"
+      },
+      assetArtifactId: "character-1",
+      assetKind: "character",
+      referenceImages: [
+        {
+          kind: "uploaded_photo",
+          mediaId: "photo-1",
+          signedUrl: "https://storycam.example/uploads/photo.jpg"
+        },
+        {
+          kind: "style_reference",
+          mediaId: "storycam-handdrawn-travel-style",
+          signedUrl: "data:image/svg+xml;base64,c3R5bGU="
+        }
+      ],
+      script: {
+        ...storyScript(),
+        storyModeId: "handdrawn-travel-vlog",
+        visualStyle: "手绘角色叠加真实旅行地摄影感背景"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(prompt.images).toEqual([
+      "https://storycam.example/uploads/photo.jpg",
+      "data:image/svg+xml;base64,c3R5bGU="
+    ]);
+    expect(prompt.prompt).toContain("uploaded user photo");
+    expect(prompt.prompt).toContain("StoryCam hand-drawn travel style reference");
+    expect(prompt.prompt).toContain("Use the photo only for hair, glasses, clothing silhouette, posture, and travel mood");
+    expect(prompt.prompt).toContain("do not create a photorealistic likeness");
+  });
+
   it("asks scene generation for one multi-panel environment asset board from scene panels", () => {
     const prompt = buildStoryWorldAssetImagePrompt({
       asset: sceneAsset(),
@@ -78,6 +117,29 @@ describe("story-world asset image prompt", () => {
     expect(prompt.prompt).toContain("no reflections of people");
     expect(prompt.prompt).toContain("no body parts");
     expect(prompt.prompt).not.toContain("grounded realistic space");
+  });
+
+  it("turns handdrawn travel scenes into a real destination route board without people", () => {
+    const prompt = buildStoryWorldAssetImagePrompt({
+      asset: {
+        ...sceneAsset(),
+        location: "葡萄牙里斯本阿尔法玛",
+        name: "里斯本阿尔法玛旅行路线"
+      },
+      assetArtifactId: "scene-1",
+      assetKind: "scene",
+      script: {
+        ...storyScript(),
+        storyModeId: "handdrawn-travel-vlog",
+        visualStyle: "手绘角色叠加真实旅行地摄影感背景"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(prompt.prompt).toContain("real travel destination route board");
+    expect(prompt.prompt).toContain("photographic travel-location background reference");
+    expect(prompt.prompt).toContain("葡萄牙里斯本阿尔法玛");
+    expect(prompt.prompt).toContain("Environment-only rule: no people");
   });
 
   it("falls back to an inferred shared visual style for older scripts", () => {

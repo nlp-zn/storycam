@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { artifactStates, artifactTypes } from "./artifacts";
+import { storyModeIds } from "./storyModes";
 
 const idSchema = z.string().min(1);
 const isoDateSchema = z.string().datetime({ offset: true });
@@ -40,6 +41,7 @@ export const storyScriptSchema = artifactIdentitySchema.extend({
   title: z.string().min(1),
   logline: z.string().min(1),
   summary: z.string().min(1),
+  storyModeId: z.enum(storyModeIds).optional(),
   visualStyle: z.string().min(1).optional(),
   beats: z.array(z.string().min(1)).min(1).max(8),
   directorBrief: directorBriefSchema.optional(),

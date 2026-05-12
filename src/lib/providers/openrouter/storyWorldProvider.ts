@@ -15,6 +15,7 @@ import {
 } from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { normalizeStoryCamVisualStyle } from "@/lib/storycam/visualStylePolicy";
+import { handdrawnTravelVlogVisualStyle, isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
 import { type StoryCamGenerateObject } from "@/server/ai/vercelAiClient";
 import { createOpenRouterTextProvider, type OpenRouterStructuredPrompt } from "./textProvider";
 
@@ -138,6 +139,17 @@ export function createOpenRouterStoryWorldProvider(
 export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput): OpenRouterStructuredPrompt<StoryWorldProviderInput> {
   const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "留白多一点";
   const photoReferences = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
+  const handdrawnTravelRules = isHanddrawnTravelVlogMode(input.storyModeId)
+    ? [
+        "",
+        "手绘旅行 VLOG 模式额外要求：",
+        `A. 旅行地：${input.travelDestination ?? "用户指定旅行地"}`,
+        "B. 必须只生成 1 个可见主角人物资产：由用户上传照片转译出的手绘旅行者；其他人只能作为离屏声音、物件变化或空间反应，不得可见。",
+        "C. 人物稳定视觉描述要说明：参考用户照片的发型、眼镜、穿搭轮廓、站姿和气质，但必须是手绘小人/漫画角色，不是真人相似脸。",
+        "D. 场景资产是一个真实旅行地路线资产板，scenePanels 生成 4-6 个同一目的地内的真实地点小切图：入口、街道/建筑、地标/观景、光线、细节或转场。",
+        "E. 剧本是轻剧情 VLOG：一次走路、停下、回头、拍照、发现小细节或情绪停顿，不是纯打卡合集。"
+      ]
+    : [];
 
   return {
     prompt: [
@@ -147,6 +159,8 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       `拍法倾向：${choices}`,
       `上传照片引用数量：${photoReferences.length}`,
       photoReferences.length ? `照片媒体 ID：${photoReferences.join(", ")}` : "照片媒体 ID：无",
+      input.storyModeId ? `故事模式：${input.storyModeId}` : "故事模式：默认",
+      input.travelDestination ? `旅行地：${input.travelDestination}` : "",
       "",
       "输出要求：",
       "1. 把粗糙文本整理成一个 8-15 秒私人短片可承载的短剧本。",
@@ -166,7 +180,8 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       "10. scenePanels 只能描述无人环境、关键物件、光线、空间动线和可供角色后续入画的位置；不要写可见人物、人物倒影、人物剪影、手、身体局部或人群。",
       "11. 人物稳定视觉描述要包含外观、衣着、可重复道具或动作习惯。",
       "12. 地点资产要写清空间关系、光线、时间和关键物件。",
-      "13. 不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。"
+      "13. 不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。",
+      ...handdrawnTravelRules
     ].join("\n"),
     system: [
       "你是 StoryCam 的私人故事剧本整理器，把普通用户的一句话变成可拍摄的故事世界。",
@@ -187,11 +202,16 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
   const draftScript = draft.script ?? emptyDraftScript;
   const draftCharacterAssets = draft.characterAssets ?? [];
   const draftSceneAssets = draft.sceneAssets ?? [];
+  const isHanddrawnTravel = isHanddrawnTravelVlogMode(input.storyModeId);
   const title = nonEmptyText(draftScript.title, "私人短片");
   const logline = nonEmptyText(draftScript.logline, input.idea);
   const summary = nonEmptyText(draftScript.summary, logline);
   const beats = nonEmptyList(draftScript.beats, [summary]);
-  const visualStyle = normalizeStoryCamVisualStyle(nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title })));
+  const visualStyle = normalizeStoryCamVisualStyle(
+    isHanddrawnTravel
+      ? handdrawnTravelVlogVisualStyle
+      : nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title }))
+  );
   const directorBrief =
     draftScript.directorBrief ??
     defaultDirectorBrief({
@@ -200,7 +220,10 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       summary,
       title
     });
-  const characterDrafts = draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)];
+  const characterDrafts = (draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)]).slice(
+    0,
+    isHanddrawnTravel ? 1 : 3
+  );
   const sceneDrafts = draftSceneAssets.length ? [draftSceneAssets[0]] : [createFallbackSceneDraft(input, summary)];
   const script = storyScriptSchema.parse({
     beats,
@@ -216,6 +239,7 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
     }),
     sessionId: input.sessionId,
     state: "ready",
+    ...(input.storyModeId ? { storyModeId: input.storyModeId } : {}),
     summary,
     title,
     version: 1,
@@ -232,20 +256,28 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       relationshipToUserStory: nonEmptyText(asset.relationshipToUserStory, "承载用户故事里的核心情绪"),
       role: nonEmptyText(asset.role, index === 0 ? "主角" : "关系人物"),
       sessionId: input.sessionId,
-      stableVisualDescription: nonEmptyText(asset.stableVisualDescription, "虚构漫画角色外观，衣着朴素，动作克制，便于连续镜头保持一致"),
+      stableVisualDescription: nonEmptyText(
+        asset.stableVisualDescription,
+        isHanddrawnTravel
+          ? "由上传照片转译出的手绘旅行者，保留发型、眼镜、穿搭轮廓、站姿和气质，但不是写实真人相似脸"
+          : "虚构漫画角色外观，衣着朴素，动作克制，便于连续镜头保持一致"
+      ),
       state: "ready",
       version: 1,
       ...(asset.wardrobe ? { wardrobe: asset.wardrobe } : {})
     })
   );
-  const sceneAssets = sceneDrafts.map((asset, index) =>
-    sceneAssetSchema.parse({
+  const sceneAssets = sceneDrafts.map((asset, index) => {
+    const fallbackName = fallbackSceneAssetName(input, index, isHanddrawnTravel);
+    const location = sceneAssetLocation(input, asset, isHanddrawnTravel);
+
+    return sceneAssetSchema.parse({
       atmosphere: nonEmptyText(asset.atmosphere, "安静、私人、带一点未说出口的情绪"),
       id: `scene-${input.sessionId}-${index + 1}`,
       keyObjects: nonEmptyList(asset.keyObjects, ["灯光", "门口", "随身物件"]),
       light: nonEmptyText(asset.light, "自然环境光混合一处可见实用光源"),
-      location: nonEmptyText(asset.location, "与故事记忆相关的具体空间"),
-      name: nonEmptyText(asset.name, index === 0 ? "故事发生的地方" : `地点 ${index + 1}`),
+      location,
+      name: nonEmptyText(asset.name, fallbackName),
       referenceMediaIds,
       scenePanels: scenePanelsForDraft(asset, input, summary),
       sessionId: input.sessionId,
@@ -253,14 +285,38 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       state: "ready",
       timeOfDay: nonEmptyText(asset.timeOfDay, "day"),
       version: 1
-    })
-  );
+    });
+  });
 
   return storyWorldProviderOutputSchema.parse({
     characterAssets,
     sceneAssets,
     script
   });
+}
+
+function sceneAssetLocation(
+  input: StoryWorldProviderInput,
+  asset: OpenRouterStoryWorldSceneDraft,
+  isHanddrawnTravel: boolean
+): string {
+  if (isHanddrawnTravel) {
+    return nonEmptyText(input.travelDestination, nonEmptyText(asset.location, "用户指定旅行地"));
+  }
+
+  return nonEmptyText(asset.location, "与故事记忆相关的具体空间");
+}
+
+function fallbackSceneAssetName(input: StoryWorldProviderInput, index: number, isHanddrawnTravel: boolean): string {
+  if (isHanddrawnTravel) {
+    return `${input.travelDestination ?? "旅行地"}旅行路线`;
+  }
+
+  if (index === 0) {
+    return "故事发生的地方";
+  }
+
+  return `地点 ${index + 1}`;
 }
 
 function nonEmptyText(value: string | undefined, fallback: string) {

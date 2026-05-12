@@ -92,6 +92,28 @@ describe("clip-packet service", () => {
     expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("9:16 vertical portrait");
   });
 
+  it("keeps handdrawn travel VLOG video prompts on real backgrounds with drawn characters", async () => {
+    const client = new FakeSupabaseClient({
+      artifactRows: [scriptRow({ storyModeId: "handdrawn-travel-vlog" }), coreGroupRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()],
+      sessionRow: storyCamSessionRow({ video_aspect_ratio: "9:16" })
+    });
+
+    const result = await createClipPromptPacket(client.asSupabaseClient(), "user-1", {
+      confirmedArtifactVersions: {
+        "core-artifact-1": 1,
+        ...Object.fromEntries(expandedCardRows().map((row) => [row.id, row.version]))
+      },
+      coreStoryboardGroupId: "core-artifact-1",
+      providerSendConfirmed: true,
+      sessionId: "session-1"
+    });
+
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("real travel-location backgrounds");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("hand-drawn illustrated traveler character");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("do not turn the character into a photorealistic person");
+  });
+
   it("rejects stale or unconfirmed core groups", async () => {
     const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow({ version: 2 })] });
 
@@ -170,6 +192,27 @@ function expandedCardRow(index: number): StoryCamArtifactRow {
 
 function expandedMediaRows() {
   return expandedCardRows().map((row, index) => mediaRow(`media-expanded-${index + 1}`, row.id));
+}
+
+function scriptRow(overrides: Record<string, unknown> = {}): StoryCamArtifactRow {
+  return {
+    ...baseArtifactRow(),
+    data_json: {
+      beats: ["角色走进真实旅行地", "在街角停下拍照"],
+      id: "script-travel-1",
+      logline: "一个手绘旅行者在真实目的地里走出轻剧情 VLOG。",
+      qualityChecks: [],
+      sessionId: "session-1",
+      state: "ready",
+      summary: "真实旅行地和手绘角色一起组成一段轻剧情 VLOG。",
+      title: "手绘旅行 VLOG",
+      version: 1,
+      visualStyle: "手绘角色叠加真实旅行地摄影感背景",
+      ...overrides
+    },
+    id: "script-artifact-1",
+    type: "script"
+  };
 }
 
 function clipPacketRow(): StoryCamArtifactRow {

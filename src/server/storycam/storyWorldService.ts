@@ -7,6 +7,13 @@ import {
   type UploadedPhotoReference
 } from "@/lib/providers/storyWorld";
 import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
+import {
+  handdrawnTravelVlogPhotoReferenceNote,
+  handdrawnTravelVlogModeId,
+  handdrawnTravelVlogVisualStyle,
+  isHanddrawnTravelVlogMode,
+  parseStoryModeId
+} from "@/features/storycam/domain/storyModes";
 import { createMockStoryWorldProvider } from "@/lib/providers/mock/storyWorldProvider";
 import type { Database, MediaAssetRow, StoryCamArtifactRow, StoryCamSessionRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -21,6 +28,8 @@ export type StoryWorldRequestBody = {
   lightweightChoices?: unknown;
   plannedDurationSeconds?: unknown;
   sessionId?: unknown;
+  storyModeId?: unknown;
+  travelDestination?: unknown;
   uploadedPhotoIds?: unknown;
   videoAspectRatio?: unknown;
 };
@@ -64,13 +73,11 @@ export async function createStoryWorld(
   const sessions = new StoryCamSessionRepository(client);
   const artifacts = new StoryCamArtifactRepository(client);
   const mediaAssets = new StoryCamMediaAssetRepository(client);
-  const loadedSession = input.sessionId
-    ? await sessions.findById(userId, input.sessionId)
-      : await sessions.create(userId, {
-        generationMode: input.generationMode,
-        plannedDurationSeconds: input.plannedDurationSeconds,
-        videoAspectRatio: input.videoAspectRatio
-      });
+  const loadedSession = await loadOrCreateStoryWorldSession({
+    input,
+    sessions,
+    userId
+  });
 
   if (!loadedSession) {
     throw new StoryWorldRequestError("session_not_found");
@@ -88,6 +95,8 @@ export async function createStoryWorld(
     idea: input.input,
     lightweightChoices: input.lightweightChoices,
     sessionId: session.id,
+    storyModeId: input.storyModeId,
+    travelDestination: input.travelDestination,
     uploadedPhotoRefs
   });
 
@@ -95,7 +104,7 @@ export async function createStoryWorld(
     return providerResult;
   }
 
-  const storyWorld = storyWorldProviderOutputSchema.parse(providerResult.value);
+  const storyWorld = storyWorldProviderOutputSchema.parse(applyStoryModePolicy(providerResult.value, input));
   const script = requireArtifactRow(
     await artifacts.createVersion(userId, {
       dataJson: storyWorld.script,
@@ -192,16 +201,53 @@ export function toPublicStoryWorld(storyWorld: StoryWorldProviderOutput): Public
   };
 }
 
+async function loadOrCreateStoryWorldSession({
+  input,
+  sessions,
+  userId
+}: {
+  input: ReturnType<typeof parseStoryWorldRequest>;
+  sessions: StoryCamSessionRepository;
+  userId: string;
+}): Promise<StoryCamSessionRow | null> {
+  if (input.sessionId) {
+    return sessions.findById(userId, input.sessionId);
+  }
+
+  return sessions.create(userId, {
+    generationMode: input.generationMode,
+    plannedDurationSeconds: input.plannedDurationSeconds,
+    videoAspectRatio: input.videoAspectRatio
+  });
+}
+
 export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
   const input = typeof body.input === "string" ? body.input.trim() : "";
   const generationMode = body.generationMode ?? "mock";
+  const storyModeId = parseStoryModeId(body.storyModeId);
+  const uploadedPhotoIds = parseStringArray(body.uploadedPhotoIds);
+  const travelDestination = parseTravelDestination(body.travelDestination);
 
   if (generationMode !== "mock" && generationMode !== "real") {
     throw new StoryWorldRequestError("invalid_generation_mode");
   }
 
+  if (body.storyModeId !== undefined && !storyModeId) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
   if (!input || input.length > storyWorldInputMaxLength) {
     throw new StoryWorldRequestError("invalid_input");
+  }
+
+  if (isHanddrawnTravelVlogMode(storyModeId)) {
+    if (uploadedPhotoIds.length !== 1) {
+      throw new StoryWorldRequestError("invalid_photos");
+    }
+
+    if (!travelDestination) {
+      throw new StoryWorldRequestError("invalid_input");
+    }
   }
 
   return {
@@ -211,7 +257,9 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
     plannedDurationSeconds: parsePlannedDuration(body.plannedDurationSeconds),
     requestedVideoAspectRatio: parseRequestedVideoAspectRatio(body.videoAspectRatio),
     sessionId: typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined,
-    uploadedPhotoIds: parseStringArray(body.uploadedPhotoIds),
+    storyModeId,
+    travelDestination,
+    uploadedPhotoIds,
     videoAspectRatio: parseVideoAspectRatioWithDefault(body.videoAspectRatio)
   };
 }
@@ -232,6 +280,80 @@ function parseRequestedVideoAspectRatio(value: unknown): StoryCamVideoAspectRati
 
 function parseVideoAspectRatioWithDefault(value: unknown): StoryCamVideoAspectRatio {
   return parseRequestedVideoAspectRatio(value) ?? defaultStoryCamVideoAspectRatio;
+}
+
+function parseTravelDestination(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length > 120) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return trimmed || undefined;
+}
+
+function applyStoryModePolicy(
+  storyWorld: StoryWorldProviderOutput,
+  input: ReturnType<typeof parseStoryWorldRequest>
+): StoryWorldProviderOutput {
+  const storyWorldWithMode = {
+    ...storyWorld,
+    script: {
+      ...storyWorld.script,
+      ...(input.storyModeId ? { storyModeId: input.storyModeId } : {})
+    }
+  };
+
+  if (!isHanddrawnTravelVlogMode(input.storyModeId)) {
+    return storyWorldWithMode;
+  }
+
+  return applyHanddrawnTravelVlogPolicy(storyWorldWithMode, input);
+}
+
+function applyHanddrawnTravelVlogPolicy(
+  storyWorld: StoryWorldProviderOutput,
+  input: ReturnType<typeof parseStoryWorldRequest>
+): StoryWorldProviderOutput {
+  const referenceMediaIds = input.uploadedPhotoIds.slice(0, 1);
+  const firstCharacter = storyWorld.characterAssets[0];
+  const firstScene = storyWorld.sceneAssets[0];
+
+  return {
+    characterAssets: firstCharacter
+      ? [
+          {
+            ...firstCharacter,
+            consistencyNotes: [...firstCharacter.consistencyNotes, handdrawnTravelVlogPhotoReferenceNote],
+            referenceMediaIds,
+            relationshipToUserStory: firstCharacter.relationshipToUserStory || "由用户照片转译出的手绘旅行主角"
+          }
+        ]
+      : storyWorld.characterAssets,
+    sceneAssets: firstScene
+      ? [
+          {
+            ...firstScene,
+            location: input.travelDestination ?? firstScene.location,
+            name: firstScene.name || `${input.travelDestination ?? "旅行地"}路线资产板`,
+            referenceMediaIds: []
+          }
+        ]
+      : storyWorld.sceneAssets,
+    script: {
+      ...storyWorld.script,
+      storyModeId: handdrawnTravelVlogModeId,
+      visualStyle: handdrawnTravelVlogVisualStyle
+    }
+  };
 }
 
 async function resolveUploadedPhotoRefs(

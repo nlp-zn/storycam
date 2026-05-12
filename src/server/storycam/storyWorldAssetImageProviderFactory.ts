@@ -1,6 +1,7 @@
 import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imageProvider";
 import { createOpenRouterImageProvider } from "@/lib/providers/openrouter/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
+import { isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
 import { normalizeStoryCamVisualStyle, storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { StoryCamConfig } from "@/server/config";
 import type { StoryWorldAssetImageInput, StoryWorldAssetImageOutput } from "./storyWorldAssetImageService";
@@ -47,14 +48,25 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
     ? `Story title: ${input.script.title}. Logline: ${input.script.logline}. Summary: ${input.script.summary}.`
     : "Story context: private cinematic StoryCam memory.";
   const visualStyle = sharedVisualStyleForPrompt(input);
+  const referenceImages = referenceImageUrls(input);
+  const isHanddrawnTravel = isHanddrawnTravelVlogMode(input.script?.storyModeId);
 
   if (input.assetKind === "character") {
     return {
       aspectRatio: "16:9" as const,
+      ...(referenceImages.length ? { images: referenceImages } : {}),
       prompt: [
-        "Create a two-panel character design board for StoryCam, like a professional character production reference sheet.",
+        isHanddrawnTravel
+          ? "Create a hand-drawn traveler character asset board for StoryCam, using the uploaded user photo and the StoryCam hand-drawn travel style reference."
+          : "Create a two-panel character design board for StoryCam, like a professional character production reference sheet.",
         storyContext,
         `Use the shared StoryCam visual style: ${visualStyle}.`,
+        isHanddrawnTravel
+          ? "References: one uploaded user photo plus one StoryCam hand-drawn travel style reference. Use the photo only for hair, glasses, clothing silhouette, posture, and travel mood; do not create a photorealistic likeness, face match, identity replica, or celebrity-like person."
+          : "",
+        isHanddrawnTravel
+          ? "Style target: rough black pencil/marker line art, simple expressive hand-drawn character, light sketch texture, travel VLOG warmth, full-body readability."
+          : "",
         `Character name: ${input.asset.name}. Role: ${input.asset.role}.`,
         `Relationship to story: ${input.asset.relationshipToUserStory}.`,
         `Stable visual description: ${input.asset.stableVisualDescription}.`,
@@ -79,10 +91,16 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
 
   return {
     aspectRatio: "16:9" as const,
+    ...(referenceImages.length ? { images: referenceImages } : {}),
     prompt: [
-      "Create one polished multi-panel environment-only asset board for StoryCam, like a professional background/location production reference sheet.",
+      isHanddrawnTravel
+        ? "Create one real travel destination route board for StoryCam, like a photographic travel-location background reference sheet for a light VLOG."
+        : "Create one polished multi-panel environment-only asset board for StoryCam, like a professional background/location production reference sheet.",
       storyContext,
       `Use the shared StoryCam visual style: ${visualStyle}.`,
+      isHanddrawnTravel
+        ? "For this mode, keep the environment grounded in real travel-location photography: authentic streets, architecture, landmarks, light, local details, and natural perspective. The later character will be hand-drawn, but this scene board itself remains environment-only."
+        : "",
       `Scene name: ${input.asset.name}. Location: ${input.asset.location}. Time: ${input.asset.timeOfDay}.`,
       `Light: ${input.asset.light}. Atmosphere: ${input.asset.atmosphere}.`,
       `Key objects: ${input.asset.keyObjects.join(", ")}.`,
@@ -101,6 +119,10 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
       "No readable copyrighted logos, no UI, no watermarks, no large text blocks."
     ].join("\n")
   };
+}
+
+function referenceImageUrls(input: StoryWorldAssetImageInput): string[] {
+  return input.referenceImages?.map((image) => image.signedUrl) ?? [];
 }
 
 function sharedVisualStyleForPrompt(input: StoryWorldAssetImageInput) {

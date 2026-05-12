@@ -32,6 +32,87 @@ test.describe("StoryCam story input", () => {
     await expect(page.getByText("已切换方向，不会覆盖你的文字。")).toBeVisible();
   });
 
+  test("handdrawn travel VLOG requires a photo and destination before submitting", async ({ page }) => {
+    let storyWorldBody: {
+      input: string;
+      lightweightChoices: string[];
+      storyModeId?: string;
+      travelDestination?: string;
+      uploadedPhotoIds?: string[];
+      videoAspectRatio?: string;
+    } | null = null;
+
+    await mockAuthenticated(page);
+    await page.route("**/api/uploads", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          media: {
+            byteSize: 4,
+            id: "media-photo-1",
+            kind: "uploaded_photo",
+            mimeType: "image/png"
+          },
+          ok: true,
+          sessionId: "session-1",
+          uploadedPhotoIds: ["media-photo-1"],
+          uploadedPhotoRefs: [{ mediaAssetId: "media-photo-1" }]
+        })
+      });
+    });
+    await page.route("**/api/story-world", async (route) => {
+      storyWorldBody = route.request().postDataJSON();
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [],
+            sceneAssets: [],
+            script: {
+              id: "script-artifact-1",
+              state: "ready",
+              type: "script",
+              version: 1
+            }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /手绘旅行 VLOG/ }).click();
+    await expect(page.getByRole("button", { name: "生成故事雏形" })).toBeDisabled();
+    await expect(page.getByText("上传一张自己的照片，再写一个旅行地。")).toBeVisible();
+
+    await page.getByRole("textbox", { name: "旅行地" }).fill("葡萄牙里斯本阿尔法玛");
+    await expect(page.getByRole("button", { name: "生成故事雏形" })).toBeDisabled();
+
+    await page.getByTestId("story-photo-input").setInputFiles({
+      buffer: Buffer.from([137, 80, 78, 71]),
+      mimeType: "image/png",
+      name: "me.png"
+    });
+    const storyWorldRequestPromise = page.waitForRequest("**/api/story-world");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    const storyWorldRequest = await storyWorldRequestPromise;
+    storyWorldBody = storyWorldRequest.postDataJSON();
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    expect(storyWorldBody).toMatchObject({
+      lightweightChoices: expect.arrayContaining(["手绘角色感"]),
+      storyModeId: "handdrawn-travel-vlog",
+      travelDestination: "葡萄牙里斯本阿尔法玛",
+      uploadedPhotoIds: ["media-photo-1"],
+      videoAspectRatio: "9:16"
+    });
+  });
+
   test("rotates discovery samples without changing layout width", async ({ page }) => {
     await mockAuthenticated(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
