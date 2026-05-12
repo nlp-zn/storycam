@@ -34,6 +34,7 @@ describe("GET /api/storycam-sessions/current", () => {
     const response = await GET();
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       error: "authentication_required"
     });
@@ -51,6 +52,7 @@ describe("GET /api/storycam-sessions/current", () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       ok: true,
       restored: false
@@ -76,6 +78,7 @@ describe("GET /api/storycam-sessions/current", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(body).toMatchObject({
       coreGroupTargetCount: 1,
       currentStep: "story-world",
@@ -429,6 +432,43 @@ describe("GET /api/storycam-sessions/recent", () => {
     expect(serialized).not.toContain("storage_path");
     expect(serialized).not.toContain("storage_bucket");
   });
+
+  it("looks past many newer empty drafts when building recent project summaries", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/recent/route");
+    const emptySessions = Array.from({ length: 12 }, (_, index) =>
+      sessionRow({
+        id: `empty-session-${index + 1}`,
+        updated_at: `2026-04-28T12:${String(index).padStart(2, "0")}:00.000Z`
+      })
+    );
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "story-session": storyWorldArtifacts("story-session")
+      },
+      sessions: [
+        ...emptySessions,
+        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-sessions/recent?limit=1"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      projects: [
+        {
+          currentStep: "story-world",
+          sessionId: "story-session",
+          title: "雨夜未发送"
+        }
+      ]
+    });
+  });
 });
 
 describe("GET /api/storycam-sessions/[id]/restore", () => {
@@ -455,6 +495,7 @@ describe("GET /api/storycam-sessions/[id]/restore", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toMatchObject({
       currentStep: "story-world",
       restored: true,
@@ -481,6 +522,7 @@ describe("GET /api/storycam-sessions/[id]/restore", () => {
     });
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       error: "not_found",
       redactedError: "StoryCam project was not found.",

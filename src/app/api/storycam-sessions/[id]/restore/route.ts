@@ -7,16 +7,18 @@ type RestoreRouteContext = {
   params: Promise<{ id: string }> | { id: string };
 };
 
+export const dynamic = "force-dynamic";
+
 export async function GET(_request: Request, context: RestoreRouteContext) {
   try {
     const user = await requireUser();
     const params = await context.params;
     const result = await restoreStoryCamSessionById(createSupabaseAdminClient(), user.id, params.id);
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" }, status: 200 });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
-      return NextResponse.json({ error: "authentication_required" }, { status: 401 });
+      return NextResponse.json({ error: "authentication_required" }, { headers: { "Cache-Control": "no-store" }, status: 401 });
     }
 
     if (error instanceof StoryCamSessionRestoreError) {
@@ -26,7 +28,7 @@ export async function GET(_request: Request, context: RestoreRouteContext) {
           redactedError: "StoryCam project was not found.",
           redactionApplied: true
         },
-        { status: 404 }
+        { headers: { "Cache-Control": "no-store" }, status: 404 }
       );
     }
 
@@ -36,7 +38,7 @@ export async function GET(_request: Request, context: RestoreRouteContext) {
         redactedError: "Session restore failed.",
         redactionApplied: true
       },
-      { status: 500 }
+      { headers: { "Cache-Control": "no-store" }, status: 500 }
     );
   }
 }

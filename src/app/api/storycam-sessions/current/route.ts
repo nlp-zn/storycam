@@ -3,15 +3,17 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { restoreCurrentStoryCamSession } from "@/server/storycam/sessionRestoreService";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const user = await requireUser();
     const result = await restoreCurrentStoryCamSession(createSupabaseAdminClient(), user.id);
 
-    return NextResponse.json(result, { status: 200 });
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" }, status: 200 });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
-      return NextResponse.json({ error: "authentication_required" }, { status: 401 });
+      return NextResponse.json({ error: "authentication_required" }, { headers: { "Cache-Control": "no-store" }, status: 401 });
     }
 
     return NextResponse.json(
@@ -20,7 +22,7 @@ export async function GET() {
         redactedError: "Session restore failed.",
         redactionApplied: true
       },
-      { status: 500 }
+      { headers: { "Cache-Control": "no-store" }, status: 500 }
     );
   }
 }

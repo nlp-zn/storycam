@@ -3,6 +3,8 @@ import type { Page } from "@playwright/test";
 
 const imageDataUrl =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%2300f0ff'/%3E%3C/svg%3E";
+const refreshedImageDataUrl =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%23ff4b89'/%3E%3C/svg%3E";
 
 test.describe("StoryCam session restore", () => {
   test("does not auto-restore on the input homepage and restores a selected recent project", async ({ page }) => {
@@ -46,10 +48,199 @@ test.describe("StoryCam session restore", () => {
     const recentProjectsDialog = page.getByRole("dialog", { name: "最近项目" });
     await expect(recentProjectsDialog).toBeVisible();
     await expect(recentProjectsDialog.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
-    await page.getByRole("button", { name: "继续创作" }).click();
+    await recentProjectsDialog.getByRole("button", { name: "继续创作", exact: true }).click();
 
     await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
     await expect(page).toHaveURL(/\/storycam\/story-world$/);
+  });
+
+  test("restores a recent project directly from the inline preview card", async ({ page }) => {
+    let restoreCalls = 0;
+    await mockAuthenticated(page);
+    await mockRecentProjects(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, restored: false })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-1/restore", async (route) => {
+      restoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          coreGroupTargetCount: 1,
+          currentStep: "story-world",
+          ok: true,
+          restored: true,
+          sessionId: "session-restored-1",
+          storyboard: null,
+          storyWorld: restoredStoryWorld(),
+          storyWorldConfirmed: false
+        })
+      });
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "继续创作 雨夜未发送" })).toBeVisible();
+    await expect.poll(() => restoreCalls).toBe(1);
+    await page.getByRole("button", { name: "继续创作 雨夜未发送" }).click();
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
+    expect(restoreCalls).toBe(1);
+  });
+
+  test("recent project prefetch does not replace the verified current restore target", async ({ page }) => {
+    let currentRestoreCalls = 0;
+    let prefetchRestoreCalls = 0;
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          projects: [
+            recentProject({ sessionId: "session-restored-1", title: "第一项目" }),
+            recentProject({ sessionId: "session-restored-2", title: "第二项目" })
+          ]
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      currentRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          coreGroupTargetCount: 1,
+          currentStep: "story-world",
+          ok: true,
+          restored: true,
+          sessionId: "session-current",
+          storyboard: null,
+          storyWorld: restoredStoryWorld("session-current"),
+          storyWorldConfirmed: false
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-1/restore", async (route) => {
+      prefetchRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          coreGroupTargetCount: 1,
+          currentStep: "story-world",
+          ok: true,
+          restored: true,
+          sessionId: "session-restored-1",
+          storyboard: null,
+          storyWorld: restoredStoryWorld("session-restored-1"),
+          storyWorldConfirmed: false
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-2/restore", async (route) => {
+      prefetchRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          coreGroupTargetCount: 1,
+          currentStep: "story-world",
+          ok: true,
+          restored: true,
+          sessionId: "session-restored-2",
+          storyboard: null,
+          storyWorld: restoredStoryWorld("session-restored-2"),
+          storyWorldConfirmed: false
+        })
+      });
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "继续创作 第一项目" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "继续创作 第二项目" })).toBeVisible();
+    await expect.poll(() => prefetchRestoreCalls).toBe(2);
+
+    await page.goto("/storycam/story-world");
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    expect(currentRestoreCalls).toBe(1);
+  });
+
+  test("refreshes recent projects when the drawer opens from the input homepage", async ({ page }) => {
+    let recentProjects: unknown[] = [];
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, restored: false })
+      });
+    });
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          projects: recentProjects
+        })
+      });
+    });
+
+    await page.goto("/");
+    await expect(page.getByText("还没有可继续的项目。")).toBeVisible();
+
+    recentProjects = [recentProject()];
+    await page.getByRole("button", { name: "打开" }).click();
+
+    const recentProjectsDialog = page.getByRole("dialog", { name: "最近项目" });
+    await expect(recentProjectsDialog.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+  });
+
+  test("keeps recent project thumbnail URLs stable across drawer refreshes", async ({ page }) => {
+    let recentProjectCalls = 0;
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, restored: false })
+      });
+    });
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      recentProjectCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          projects: [
+            recentProject({
+              thumbnail: {
+                id: "media-character-1",
+                mimeType: "image/png",
+                signedUrl: recentProjectCalls === 1 ? imageDataUrl : refreshedImageDataUrl,
+                signedUrlExpiresIn: 300
+              }
+            })
+          ]
+        })
+      });
+    });
+
+    await page.goto("/");
+    await expect(page.getByRole("button", { name: "继续创作 雨夜未发送" })).toBeVisible();
+    await page.getByRole("button", { name: "打开" }).click();
+
+    const thumbnail = page.getByAltText("雨夜未发送 缩略图");
+    await expect(thumbnail).toHaveAttribute("src", imageDataUrl);
   });
 
   test("restores the latest story world on a direct downstream route without generating again", async ({ page }) => {
@@ -78,6 +269,186 @@ test.describe("StoryCam session restore", () => {
     await expect(page.getByAltText("她 资产图")).toBeVisible();
     await expect(page.getByRole("button", { name: "转到核心分镜" })).toBeDisabled();
     expect(storyWorldCalls).toBe(0);
+  });
+
+  test("keeps the current story world route when refreshing a completed project", async ({ page }) => {
+    await mockAuthenticated(page);
+    await mockRestore(page, restoredCompletedProject());
+
+    await page.goto("/storycam/story-world");
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
+  });
+
+  test("keeps the current core storyboard route when refreshing a completed project", async ({ page }) => {
+    await mockAuthenticated(page);
+    await mockRestore(page, restoredCompletedProject());
+
+    await page.goto("/storycam/core-storyboard");
+
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
+  });
+
+  test("keeps restored media signed URLs from session storage across a page reload", async ({ page }) => {
+    let currentRestoreCalls = 0;
+    let selectedRestoreCalls = 0;
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      currentRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          restoredCompletedProject({
+            storyboard: restoredStoryboard({ coreSignedUrl: imageDataUrl })
+          })
+        )
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-2/restore", async (route) => {
+      selectedRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          restoredCompletedProject({
+            storyboard: restoredStoryboard({ coreSignedUrl: refreshedImageDataUrl })
+          })
+        )
+      });
+    });
+
+    await page.goto("/storycam/core-storyboard");
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+
+    await page.reload();
+
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+    expect(currentRestoreCalls).toBe(1);
+    expect(selectedRestoreCalls).toBe(1);
+  });
+
+  test("does not extend reused signed URL cache expiry across a network restore", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          restoredCompletedProject({
+            storyboard: restoredStoryboard({ coreSignedUrl: imageDataUrl, coreSignedUrlExpiresIn: 35 })
+          })
+        )
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-2/restore", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          restoredCompletedProject({
+            storyboard: restoredStoryboard({ coreSignedUrl: refreshedImageDataUrl, coreSignedUrlExpiresIn: 35 })
+          })
+        )
+      });
+    });
+
+    await page.goto("/storycam/core-storyboard");
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+    const originalExpiresAt = await restoreCacheExpiresAt(page, "session-restored-2");
+
+    await page.waitForTimeout(1_500);
+    await page.reload();
+
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+    const refreshedExpiresAt = await restoreCacheExpiresAt(page, "session-restored-2");
+    expect(refreshedExpiresAt).toBeLessThanOrEqual(originalExpiresAt);
+  });
+
+  test("refreshes restored media signed URLs after the session storage cache expires", async ({ page }) => {
+    let currentRestoreCalls = 0;
+    let selectedRestoreCalls = 0;
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      currentRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          restoredCompletedProject({
+            storyboard: restoredStoryboard({ coreSignedUrl: imageDataUrl })
+          })
+        )
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-2/restore", async (route) => {
+      selectedRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          restoredCompletedProject({
+            storyboard: restoredStoryboard({ coreSignedUrl: refreshedImageDataUrl })
+          })
+        )
+      });
+    });
+
+    await page.goto("/storycam/core-storyboard");
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+    await expireRestoreCache(page);
+    await page.reload();
+
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", refreshedImageDataUrl);
+    expect(currentRestoreCalls).toBe(1);
+    expect(selectedRestoreCalls).toBe(1);
+  });
+
+  test("does not hydrate cached private restore data after the user becomes anonymous", async ({ page }) => {
+    let isAuthenticated = true;
+    let currentRestoreCalls = 0;
+    let selectedRestoreCalls = 0;
+    await page.route("**/api/auth/me", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(
+          isAuthenticated
+            ? { authenticated: true, user: { email: "user@example.com", id: "user-1" } }
+            : { authenticated: false, user: null }
+        )
+      });
+    });
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      currentRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(restoredCompletedProject())
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-2/restore", async (route) => {
+      selectedRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(restoredCompletedProject())
+      });
+    });
+
+    await page.goto("/storycam/core-storyboard");
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toBeVisible();
+
+    isAuthenticated = false;
+    await page.reload();
+
+    await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveCount(0);
+    expect(currentRestoreCalls).toBe(1);
+    expect(selectedRestoreCalls).toBe(0);
   });
 
   test("restores existing core storyboard groups and thumbnails", async ({ page }) => {
@@ -165,28 +536,93 @@ async function mockRecentProjects(page: Page) {
       status: 200,
       body: JSON.stringify({
         ok: true,
-        projects: [
-          {
-            coreGroupTargetCount: 1,
-            currentStep: "story-world",
-            sessionId: "session-restored-1",
-            summary: "冷白灯、雨水和玻璃反光让两个人短暂同框。",
-            thumbnail: {
-              id: "media-character-1",
-              mimeType: "image/png",
-              signedUrl: imageDataUrl,
-              signedUrlExpiresIn: 300
-            },
-            title: "雨夜未发送",
-            updatedAt: "2026-04-28T10:00:00.000Z"
-          }
-        ]
+        projects: [recentProject()]
       })
     });
   });
 }
 
-function restoredStoryWorld() {
+function recentProject(overrides: Partial<ReturnType<typeof recentProjectShape>> = {}) {
+  return {
+    ...recentProjectShape(),
+    ...overrides
+  };
+}
+
+function recentProjectShape() {
+  return {
+    coreGroupTargetCount: 1,
+    currentStep: "story-world",
+    sessionId: "session-restored-1",
+    summary: "冷白灯、雨水和玻璃反光让两个人短暂同框。",
+    thumbnail: {
+      id: "media-character-1",
+      mimeType: "image/png",
+      signedUrl: imageDataUrl,
+      signedUrlExpiresIn: 300
+    },
+    title: "雨夜未发送",
+    updatedAt: "2026-04-28T10:00:00.000Z"
+  };
+}
+
+async function expireRestoreCache(page: Page) {
+  await page.evaluate(() => {
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = window.sessionStorage.key(index);
+
+      if (!key?.startsWith("storycam:restore:v1:session:")) {
+        continue;
+      }
+
+      const raw = window.sessionStorage.getItem(key);
+
+      if (!raw) {
+        continue;
+      }
+
+      const entry = JSON.parse(raw) as { expiresAtMs: number };
+      entry.expiresAtMs = Date.now() - 1000;
+      window.sessionStorage.setItem(key, JSON.stringify(entry));
+    }
+  });
+}
+
+async function restoreCacheExpiresAt(page: Page, sessionId: string) {
+  return page.evaluate((targetSessionId) => {
+    const raw = window.sessionStorage.getItem(`storycam:restore:v1:session:${targetSessionId}`);
+
+    if (!raw) {
+      throw new Error("restore_cache_missing");
+    }
+
+    return (JSON.parse(raw) as { expiresAtMs: number }).expiresAtMs;
+  }, sessionId);
+}
+
+function restoredCompletedProject(overrides: Partial<ReturnType<typeof restoredCompletedProjectShape>> = {}) {
+  return {
+    ...restoredCompletedProjectShape(),
+    ...overrides
+  };
+}
+
+function restoredCompletedProjectShape() {
+  return {
+    clipJob: restoredClipJob(),
+    coreGroupTargetCount: 1,
+    currentStep: "export",
+    finalWork: restoredFinalWork(),
+    ok: true,
+    restored: true,
+    sessionId: "session-restored-2",
+    storyboard: restoredStoryboard(),
+    storyWorld: restoredStoryWorld("session-restored-2"),
+    storyWorldConfirmed: true
+  };
+}
+
+function restoredStoryWorld(sessionId = "session-restored-1") {
   return {
     assetImagesByArtifactId: {
       "character-artifact-1": {
@@ -202,7 +638,7 @@ function restoredStoryWorld() {
       script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
     },
     ok: true,
-    sessionId: "session-restored-1",
+    sessionId,
     storyWorld: {
       characterAssets: [
         {
@@ -237,7 +673,7 @@ function restoredStoryWorld() {
   };
 }
 
-function restoredStoryboard() {
+function restoredStoryboard(options: { coreSignedUrl?: string; coreSignedUrlExpiresIn?: number } = {}) {
   return {
     artifacts: {
       coreStoryboardGroups: [
@@ -276,8 +712,8 @@ function restoredStoryboard() {
             mediaId: "media-core-1",
             mimeType: "image/png",
             placeholder: false,
-            signedUrl: imageDataUrl,
-            signedUrlExpiresIn: 300,
+            signedUrl: options.coreSignedUrl ?? imageDataUrl,
+            signedUrlExpiresIn: options.coreSignedUrlExpiresIn ?? 300,
             status: "ready"
           },
           scriptArtifact: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },

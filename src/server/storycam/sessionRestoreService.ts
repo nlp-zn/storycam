@@ -158,7 +158,7 @@ export async function restoreCurrentStoryCamSession(
   client: SupabaseClient<Database>,
   userId: string
 ): Promise<RestoreStoryCamSessionOutput> {
-  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, 10)) ?? [];
+  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, 50)) ?? [];
 
   for (const session of sessions) {
     const restored = await restoreSession(client, userId, session);
@@ -200,7 +200,8 @@ export async function listRecentStoryCamProjects(
   limit = 5
 ): Promise<ListRecentStoryCamProjectsOutput> {
   const projectLimit = Math.min(5, Math.max(1, Math.floor(limit)));
-  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, Math.max(projectLimit * 2, 10))) ?? [];
+  const candidateLimit = Math.max(projectLimit * 10, 50);
+  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, candidateLimit)) ?? [];
   const projects: RecentStoryCamProject[] = [];
 
   for (const session of sessions) {
