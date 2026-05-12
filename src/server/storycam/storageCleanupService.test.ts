@@ -41,10 +41,10 @@ describe("StoryCamStorageCleanupService", () => {
 
     await service.removeSessionMedia("user-1", "session-1");
 
-    expect(repository.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+    expect(repository.calls).toEqual([{ cleanupCandidates: true, sessionId: "session-1", userId: "user-1" }]);
   });
 
-  it("does nothing when the session has no active media rows", async () => {
+  it("does nothing when the session has no cleanup media rows", async () => {
     const repository = new FakeMediaRepository([]);
     const storage = new FakeStorageClient();
     const service = new StoryCamStorageCleanupService(storage, repository);
@@ -96,9 +96,45 @@ describe("StoryCamStorageCleanupService", () => {
     await expect(service.removeSessionMedia("user-1", "session-1")).rejects.not.toThrow("signed url");
   });
 
-  it("deletes storage objects before soft-deleting session metadata", async () => {
+  it("soft-deletes session metadata before removing storage objects", async () => {
+    const events: string[] = [];
     const repository = new FakeMediaRepository([
       media({ id: "media-1", storageBucket: "storycam-generated", storagePath: "generated/clip-1.mp4" })
+    ]);
+    const storage = new FakeStorageClient(undefined, events);
+    const cleanup = new StoryCamStorageCleanupService(storage, repository);
+    const sessions = new FakeSessionRepository(events);
+    const service = new StoryCamSessionDeletionService(cleanup, sessions);
+
+    const summary = await service.deleteSession("user-1", "session-1");
+
+    expect(summary.removedObjectCount).toBe(1);
+    expect(events).toEqual(["soft-delete:session-1", "remove:storycam-generated"]);
+    expect(storage.removals).toEqual([{ bucket: "storycam-generated", paths: ["generated/clip-1.mp4"] }]);
+    expect(sessions.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+  });
+
+  it("does not remove storage when session metadata soft delete fails", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "storycam-generated", storagePath: "generated/clip-1.mp4" })
+    ]);
+    const storage = new FakeStorageClient();
+    const cleanup = new StoryCamStorageCleanupService(storage, repository);
+    const sessions = new FakeSessionRepository([], new Error("database unavailable"));
+    const service = new StoryCamSessionDeletionService(cleanup, sessions);
+
+    await expect(service.deleteSession("user-1", "session-1")).rejects.toThrow("database unavailable");
+    expect(storage.removals).toEqual([]);
+  });
+
+  it("can retry storage cleanup after session metadata is already soft-deleted", async () => {
+    const repository = new FakeMediaRepository([
+      media({
+        deletedAt: "2026-05-12T00:00:00.000Z",
+        id: "media-1",
+        storageBucket: "storycam-generated",
+        storagePath: "generated/clip-1.mp4"
+      })
     ]);
     const storage = new FakeStorageClient();
     const cleanup = new StoryCamStorageCleanupService(storage, repository);
@@ -109,11 +145,12 @@ describe("StoryCamStorageCleanupService", () => {
 
     expect(summary.removedObjectCount).toBe(1);
     expect(storage.removals).toEqual([{ bucket: "storycam-generated", paths: ["generated/clip-1.mp4"] }]);
-    expect(sessions.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+    expect(repository.calls).toEqual([{ cleanupCandidates: true, sessionId: "session-1", userId: "user-1" }]);
   });
 });
 
 type MediaOverrides = {
+  deletedAt?: string | null;
   id: string;
   storageBucket: string;
   storagePath: string;
@@ -123,7 +160,7 @@ function media(overrides: MediaOverrides): MediaAssetRow {
   return {
     byte_size: 1024,
     created_at: "2026-04-26T00:00:00.000Z",
-    deleted_at: null,
+    deleted_at: overrides.deletedAt ?? null,
     id: overrides.id,
     kind: "generated_clip",
     linked_artifact_id: null,
@@ -137,7 +174,7 @@ function media(overrides: MediaOverrides): MediaAssetRow {
 }
 
 class FakeMediaRepository implements StorageCleanupRepository {
-  readonly calls: Array<{ sessionId: string; userId: string }> = [];
+  readonly calls: Array<{ cleanupCandidates?: boolean; sessionId: string; userId: string }> = [];
 
   constructor(private readonly rows: MediaAssetRow[]) {}
 
@@ -145,16 +182,25 @@ class FakeMediaRepository implements StorageCleanupRepository {
     this.calls.push({ sessionId, userId });
     return Promise.resolve(this.rows);
   }
+
+  listStorageCleanupCandidates(userId: string, sessionId: string) {
+    this.calls.push({ cleanupCandidates: true, sessionId, userId });
+    return Promise.resolve(this.rows);
+  }
 }
 
 class FakeStorageClient {
   readonly removals: Array<{ bucket: StoryCamPrivateBucket; paths: string[] }> = [];
 
-  constructor(private readonly errors: Partial<Record<StoryCamPrivateBucket, { message?: string }>> = {}) {}
+  constructor(
+    private readonly errors: Partial<Record<StoryCamPrivateBucket, { message?: string }>> = {},
+    private readonly events: string[] = []
+  ) {}
 
   storage = {
     from: (bucket: StoryCamPrivateBucket) => ({
       remove: (paths: string[]) => {
+        this.events.push(`remove:${bucket}`);
         this.removals.push({ bucket, paths });
         return Promise.resolve({
           data: null,
@@ -168,7 +214,17 @@ class FakeStorageClient {
 class FakeSessionRepository implements StorageCleanupSessionRepository {
   readonly calls: Array<{ sessionId: string; userId: string }> = [];
 
+  constructor(
+    private readonly events: string[] = [],
+    private readonly error?: Error
+  ) {}
+
   softDelete(userId: string, sessionId: string) {
+    if (this.error) {
+      throw this.error;
+    }
+
+    this.events.push(`soft-delete:${sessionId}`);
     this.calls.push({ sessionId, userId });
     return Promise.resolve();
   }

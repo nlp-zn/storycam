@@ -10,8 +10,14 @@ export type StorageCleanupSummary = {
   skippedObjectCount: number;
 };
 
+export type PreparedStorageCleanup = {
+  pathsByBucket: Map<StoryCamPrivateBucket, string[]>;
+  skippedObjectCount: number;
+};
+
 export type StorageCleanupRepository = {
   listBySession(userId: string, sessionId: string): Promise<MediaAssetRow[] | null>;
+  listStorageCleanupCandidates(userId: string, sessionId: string): Promise<MediaAssetRow[] | null>;
 };
 
 export type StorageCleanupSessionRepository = {
@@ -47,9 +53,16 @@ export class StoryCamStorageCleanupService {
   }
 
   async removeSessionMedia(userId: string, sessionId: string): Promise<StorageCleanupSummary> {
-    const mediaRows = (await this.mediaRepository.listBySession(userId, sessionId)) ?? [];
-    const { pathsByBucket, skippedObjectCount } = groupPrivateStoragePaths(mediaRows);
+    const mediaRows = (await this.mediaRepository.listStorageCleanupCandidates(userId, sessionId)) ?? [];
+    return this.removePreparedSessionMedia(groupPrivateStoragePaths(mediaRows));
+  }
 
+  async prepareSessionMediaRemoval(userId: string, sessionId: string): Promise<PreparedStorageCleanup> {
+    const mediaRows = (await this.mediaRepository.listStorageCleanupCandidates(userId, sessionId)) ?? [];
+    return groupPrivateStoragePaths(mediaRows);
+  }
+
+  async removePreparedSessionMedia({ pathsByBucket, skippedObjectCount }: PreparedStorageCleanup): Promise<StorageCleanupSummary> {
     let removedObjectCount = 0;
     const bucketsTouched: StoryCamPrivateBucket[] = [];
 
@@ -90,11 +103,11 @@ export class StoryCamSessionDeletionService {
   }
 
   async deleteSession(userId: string, sessionId: string) {
-    const cleanupSummary = await this.storageCleanup.removeSessionMedia(userId, sessionId);
+    const cleanupPlan = await this.storageCleanup.prepareSessionMediaRemoval(userId, sessionId);
 
     await this.sessions.softDelete(userId, sessionId);
 
-    return cleanupSummary;
+    return this.storageCleanup.removePreparedSessionMedia(cleanupPlan);
   }
 }
 

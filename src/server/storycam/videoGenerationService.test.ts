@@ -28,7 +28,10 @@ describe("storeProviderGeneratedClip", () => {
       videoUrl: "https://ark-content.example/clip.mp4"
     });
 
-    expect(fetch).toHaveBeenCalledWith("https://ark-content.example/clip.mp4");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://ark-content.example/clip.mp4",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
     expect(result).toMatchObject({
       ok: true,
       providerKind: "video",
@@ -106,6 +109,78 @@ describe("storeProviderGeneratedClip", () => {
     expect(client.queries).toHaveLength(1);
     expect(client.queries[0]?.table).toBe("generation_jobs");
     expect(JSON.stringify(result)).not.toContain("signed-secret");
+  });
+
+  it("rejects provider videos that exceed the generated media limit before storage writes", async () => {
+    const client = new FakeSupabaseClient();
+    const fetch = vi.fn().mockResolvedValue(
+      videoResponse(seedanceClipBytes, 200, {
+        "content-length": String(501 * 1024 * 1024)
+      })
+    );
+
+    const result = await storeProviderGeneratedClip(client.asSupabaseClient(), {
+      clipPromptPacketId: "packet-1",
+      coreGroupId: "core-group-1",
+      durationSeconds: 5,
+      fetch,
+      jobId: "job-1",
+      providerName: "seedance_2_0",
+      providerRequestId: "cgt-2026-storycam",
+      sessionId: "session-1",
+      userId: "user-1",
+      videoUrl: "https://ark-content.example/oversized.mp4"
+    });
+
+    expect(result).toMatchObject({
+      errorCode: "SEEDANCE_CLIP_STORE_FAILED",
+      ok: false,
+      redactionApplied: true,
+      retryable: true
+    });
+    expect(client.uploads).toEqual([]);
+    expect(client.queries).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("oversized.mp4");
+  });
+
+  it("cancels streaming provider downloads when the body exceeds the generated media limit", async () => {
+    const client = new FakeSupabaseClient();
+    const reader = {
+      cancel: vi.fn().mockResolvedValue(undefined),
+      read: vi.fn().mockResolvedValueOnce({
+        done: false,
+        value: { byteLength: 501 * 1024 * 1024 }
+      })
+    };
+    const fetch = vi.fn().mockResolvedValue({
+      body: { getReader: () => reader },
+      headers: new Headers({ "content-type": "video/mp4" }),
+      ok: true
+    } as unknown as Response);
+
+    const result = await storeProviderGeneratedClip(client.asSupabaseClient(), {
+      clipPromptPacketId: "packet-1",
+      coreGroupId: "core-group-1",
+      durationSeconds: 5,
+      fetch,
+      jobId: "job-1",
+      providerName: "seedance_2_0",
+      providerRequestId: "cgt-2026-storycam",
+      sessionId: "session-1",
+      userId: "user-1",
+      videoUrl: "https://ark-content.example/streaming-oversized.mp4"
+    });
+
+    expect(result).toMatchObject({
+      errorCode: "SEEDANCE_CLIP_STORE_FAILED",
+      ok: false,
+      redactionApplied: true,
+      retryable: true
+    });
+    expect(reader.cancel).toHaveBeenCalled();
+    expect(client.uploads).toEqual([]);
+    expect(client.queries).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("streaming-oversized.mp4");
   });
 
   it("discards late Seedance results for tombstoned jobs before download or storage writes", async () => {
@@ -220,10 +295,11 @@ function successComposer(): FinalWorkComposer<FfmpegComposerInput, FfmpegCompose
   };
 }
 
-function videoResponse(bytes: Uint8Array, status = 200) {
+function videoResponse(bytes: Uint8Array, status = 200, headers: Record<string, string> = {}) {
   return new Response(new Blob([bytes as BlobPart]), {
     headers: {
-      "content-type": "video/mp4"
+      "content-type": "video/mp4",
+      ...headers
     },
     status
   });

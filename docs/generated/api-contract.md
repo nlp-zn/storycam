@@ -77,6 +77,7 @@ Validation:
 - Accept image MIME types only.
 - Enforce max file size from config.
 - Reject executable, unknown, or empty files.
+- If `sessionId` is provided, it must belong to the authenticated user and not be deleted; otherwise the route returns `session_not_found` before any Storage write.
 
 Success:
 

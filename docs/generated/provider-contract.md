@@ -143,6 +143,7 @@ Requirements:
 - create tasks with `POST /contents/generations/tasks`,
 - poll or normalize webhook payloads from `GET /contents/generations/tasks/{id}`,
 - terminal success returns `content.video_url`, which must be downloaded before the provider URL expires,
+- provider video downloads must enforce timeout, MIME, and generated-media size limits before writing to Storage,
 - output stored in Supabase Storage.
 
 ## Final Work Composer
