@@ -435,11 +435,19 @@ export async function restoreCurrentStoryCamSession() {
   const currentSessionId = readCurrentRestoredSessionId(authStatus.user.id);
 
   if (currentSessionId) {
-    return restoreStoryCamSessionValue(currentSessionId, {
-      forceNetwork: true,
-      markCurrent: true,
-      persist: true
-    });
+    try {
+      return await restoreStoryCamSessionValue(currentSessionId, {
+        forceNetwork: true,
+        markCurrent: true,
+        persist: true
+      });
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "not_found") {
+        throw error;
+      }
+
+      deleteCurrentRestoredSessionId(currentSessionId, authStatus.user.id);
+    }
   }
 
   const response = await fetch("/api/storycam-sessions/current", { cache: "no-store" });
@@ -751,6 +759,28 @@ function writeCurrentRestoredSessionId(sessionId: string) {
     );
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function deleteCurrentRestoredSessionId(sessionId: string, userId: string) {
+  try {
+    const raw = window.sessionStorage.getItem(restoreSessionCurrentKey);
+
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw) as { sessionId?: unknown; userId?: unknown };
+
+    if (parsed.sessionId === sessionId && parsed.userId === userId) {
+      window.sessionStorage.removeItem(restoreSessionCurrentKey);
+    }
+  } catch {
+    try {
+      window.sessionStorage.removeItem(restoreSessionCurrentKey);
+    } catch {
+      // Storage can be unavailable in private or restricted browser contexts.
+    }
   }
 }
 

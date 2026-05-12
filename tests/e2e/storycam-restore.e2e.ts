@@ -451,6 +451,53 @@ test.describe("StoryCam session restore", () => {
     expect(selectedRestoreCalls).toBe(0);
   });
 
+  test("falls back to the current session when the stored restore target is stale", async ({ page }) => {
+    let staleRestoreCalls = 0;
+    let currentRestoreCalls = 0;
+    await mockAuthenticated(page);
+    await page.addInitScript(() => {
+      window.sessionStorage.setItem(
+        "storycam:restore:v1:current-session-id",
+        JSON.stringify({ sessionId: "session-deleted", userId: "user-1" })
+      );
+    });
+    await page.route("**/api/storycam-sessions/session-deleted/restore", async (route) => {
+      staleRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 404,
+        body: JSON.stringify({
+          error: "not_found",
+          redactedError: "StoryCam project was not found.",
+          redactionApplied: true
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      currentRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(restoredCompletedProject())
+      });
+    });
+
+    await page.goto("/storycam/core-storyboard");
+
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toBeVisible();
+    expect(staleRestoreCalls).toBe(1);
+    expect(currentRestoreCalls).toBe(1);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const raw = window.sessionStorage.getItem("storycam:restore:v1:current-session-id");
+          return raw ? (JSON.parse(raw) as { sessionId?: string }).sessionId : null;
+        })
+      )
+      .toBe("session-restored-2");
+  });
+
   test("restores existing core storyboard groups and thumbnails", async ({ page }) => {
     let storyboardCalls = 0;
     await mockAuthenticated(page);
