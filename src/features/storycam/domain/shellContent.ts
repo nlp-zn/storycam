@@ -1,9 +1,14 @@
+import { handdrawnTravelVlogModeId } from "./storyModes";
+
 export const directorChoices = ["留白多一点", "像旧照片", "雨夜韩剧感", "靠小动作推进"] as const;
 
 export const storyModeEntries = [
   {
     id: "personal-memory",
     label: "私人记忆",
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
     sampleIdea: "我想把暗恋拍成韩剧雨夜",
     text: "把一句真实念头拍成 10-15 秒私人短片。",
     directorChoices,
@@ -12,6 +17,9 @@ export const storyModeEntries = [
   {
     id: "pet-theater",
     label: "宠物小剧场",
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
     sampleIdea: "我想拍一只小狗等主人回家的十秒小剧场",
     text: "让宠物变成这一幕里的主角。",
     directorChoices: ["低机位跟随", "日常观察感", "温暖回家感", "轻喜剧反应"],
@@ -20,6 +28,9 @@ export const storyModeEntries = [
   {
     id: "novel-character",
     label: "小说角色",
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
     sampleIdea: "我想让我的小说女主第一次走进雨夜城市",
     text: "把角色出场拍成短短一段预告。",
     directorChoices: ["初登场感", "世界观更强", "预告片节奏", "英雄式剪影"],
@@ -28,10 +39,24 @@ export const storyModeEntries = [
   {
     id: "emotion-short",
     label: "情绪短片",
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
     sampleIdea: "我想把一种说不出口的难过拍成风里的短片",
     text: "把一种情绪变成可看见的画面。",
     directorChoices: ["空镜多一点", "像一阵风", "声音先走", "情绪慢慢压上来"],
     defaultChoices: ["空镜多一点"]
+  },
+  {
+    id: handdrawnTravelVlogModeId,
+    label: "手绘旅行 VLOG",
+    preferredAspectRatio: "9:16",
+    requiresPhoto: true,
+    requiresTravelDestination: true,
+    sampleIdea: "我想把自己画成手绘角色，放进一段旅行 VLOG",
+    text: "用一张照片生成手绘角色，放进真实旅行地。",
+    directorChoices: ["手绘角色感", "真实旅行地", "轻剧情 VLOG", "自然走拍"],
+    defaultChoices: ["手绘角色感"]
   }
 ] as const;
 

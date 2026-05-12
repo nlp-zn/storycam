@@ -9,6 +9,7 @@ import {
 
 export type OpenRouterImagePrompt = {
   aspectRatio?: `${number}:${number}`;
+  images?: string[];
   prompt: string;
   seed?: number;
   size?: `${number}x${number}`;
@@ -75,6 +76,7 @@ async function generateValidatedImage(input: {
     try {
       const result = await input.generate({
         aspectRatio: input.prompt.aspectRatio,
+        images: input.prompt.images,
         model: input.model,
         prompt: input.prompt.prompt,
         seed: input.prompt.seed,

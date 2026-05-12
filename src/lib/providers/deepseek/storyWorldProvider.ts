@@ -15,6 +15,11 @@ import {
 } from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { normalizeStoryCamVisualStyle } from "@/lib/storycam/visualStylePolicy";
+import {
+  handdrawnTravelVlogPhotoReferenceNote,
+  handdrawnTravelVlogVisualStyle,
+  isHanddrawnTravelVlogMode
+} from "@/features/storycam/domain/storyModes";
 import { createOpenRouterFetch } from "@/server/ai/openrouterProxyFetch";
 
 export type DeepSeekStoryWorldProviderOptions = {
@@ -125,6 +130,14 @@ export function createDeepSeekStoryWorldProvider(
 export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWorldRequestInput) {
   const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "留白多一点";
   const photoReferences = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
+  const handdrawnTravelSystemRules = isHanddrawnTravelVlogMode(input.storyModeId)
+    ? [
+        "手绘旅行 VLOG 模式：必须只生成 1 个可见主角人物资产，由用户上传照片转译成手绘旅行者；其他人只能离屏表达。",
+        "手绘旅行 VLOG 模式：人物描述参考照片里的发型、眼镜、穿搭轮廓、站姿和气质，但必须是手绘小人/漫画角色，不是真人相似脸。",
+        "手绘旅行 VLOG 模式：场景资产是用户指定真实旅行地的路线资产板，scenePanels 必须是同一目的地内 4-6 个真实旅行地小切图。",
+        "手绘旅行 VLOG 模式：剧本是轻剧情 VLOG，围绕走路、停下、拍照、发现细节或情绪停顿推进，不是纯打卡合集。"
+      ]
+    : [];
 
   return {
     max_tokens: 4096,
@@ -147,7 +160,8 @@ export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWo
           "场景资产必须且只能输出 1 个。这个唯一场景要用 scenePanels 覆盖剧本需要的 4-6 个小切图：主场景、关键物件、光线、动作空间或转场角度。",
           "scenePanels 只能描述无人环境、关键物件、光线、空间动线和可供角色后续入画的位置；不要写可见人物、人物倒影、人物剪影、手、身体局部或人群。",
           "不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。",
-          "产品主线是私人漫画电影，不生成写实真人短剧，不做真实人物或名人相似脸。"
+          "产品主线是私人漫画电影，不生成写实真人短剧，不做真实人物或名人相似脸。",
+          ...handdrawnTravelSystemRules
         ].join("\n"),
         role: "system" as const
       },
@@ -158,6 +172,8 @@ export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWo
           `拍法倾向：${choices}`,
           `上传照片引用数量：${photoReferences.length}`,
           photoReferences.length ? `照片媒体 ID：${photoReferences.join(", ")}` : "照片媒体 ID：无",
+          input.storyModeId ? `故事模式：${input.storyModeId}` : "故事模式：默认",
+          input.travelDestination ? `旅行地：${input.travelDestination}` : "",
           "只通过 submit_story_world 的 arguments 返回结构化内容。"
         ].join("\n"),
         role: "user" as const
@@ -273,6 +289,7 @@ function parseToolArguments(toolArguments: string) {
 
 function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: DeepSeekStoryWorldDraft): StoryWorldProviderOutput {
   const referenceMediaIds = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
+  const isHanddrawnTravel = isHanddrawnTravelVlogMode(input.storyModeId);
   const script = storyScriptSchema.parse({
     beats: draft.script.beats,
     directorBrief: draft.script.directorBrief,
@@ -287,13 +304,21 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: DeepSee
     }),
     sessionId: input.sessionId,
     state: "ready",
+    ...(input.storyModeId ? { storyModeId: input.storyModeId } : {}),
     summary: draft.script.summary,
     title: draft.script.title,
     version: 1,
-    visualStyle: normalizeStoryCamVisualStyle(draft.script.visualStyle)
+    visualStyle: normalizeStoryCamVisualStyle(
+      isHanddrawnTravel ? handdrawnTravelVlogVisualStyle : draft.script.visualStyle
+    )
   });
-  const characterAssets = draft.characterAssets.map((asset, index) => normalizeCharacterAsset(input, asset, index, referenceMediaIds));
-  const sceneAssets = draft.sceneAssets.map((asset, index) => normalizeSceneAsset(input, asset, index, referenceMediaIds));
+  const characterAssets = draft.characterAssets
+    .slice(0, isHanddrawnTravel ? 1 : 3)
+    .map((asset, index) => normalizeCharacterAsset(input, asset, index, referenceMediaIds, isHanddrawnTravel));
+  const sceneReferenceMediaIds = isHanddrawnTravel ? [] : referenceMediaIds;
+  const sceneAssets = draft.sceneAssets.map((asset, index) =>
+    normalizeSceneAsset(input, asset, index, sceneReferenceMediaIds, isHanddrawnTravel)
+  );
 
   return storyWorldProviderOutputSchema.parse({
     characterAssets,
@@ -306,10 +331,13 @@ function normalizeCharacterAsset(
   input: StoryWorldProviderInput,
   asset: DeepSeekStoryWorldCharacterDraft,
   index: number,
-  referenceMediaIds: string[]
+  referenceMediaIds: string[],
+  isHanddrawnTravel = false
 ) {
   return characterAssetSchema.parse({
-    consistencyNotes: asset.consistencyNotes,
+    consistencyNotes: isHanddrawnTravel
+      ? [...asset.consistencyNotes, handdrawnTravelVlogPhotoReferenceNote]
+      : asset.consistencyNotes,
     emotionalBaseline: asset.emotionalBaseline,
     id: `character-${input.sessionId}-${index + 1}`,
     name: asset.name,
@@ -318,7 +346,9 @@ function normalizeCharacterAsset(
     relationshipToUserStory: asset.relationshipToUserStory,
     role: asset.role,
     sessionId: input.sessionId,
-    stableVisualDescription: asset.stableVisualDescription,
+    stableVisualDescription: isHanddrawnTravel
+      ? `${asset.stableVisualDescription}；由上传照片转译出的手绘旅行者，只保留发型、眼镜、穿搭轮廓、站姿和气质，不生成写实真人相似脸。`
+      : asset.stableVisualDescription,
     state: "ready",
     version: 1,
     wardrobe: asset.wardrobe
@@ -329,14 +359,15 @@ function normalizeSceneAsset(
   input: StoryWorldProviderInput,
   asset: DeepSeekStoryWorldSceneDraft,
   index: number,
-  referenceMediaIds: string[]
+  referenceMediaIds: string[],
+  isHanddrawnTravel = false
 ) {
   return sceneAssetSchema.parse({
     atmosphere: asset.atmosphere,
     id: `scene-${input.sessionId}-${index + 1}`,
     keyObjects: asset.keyObjects,
     light: asset.light,
-    location: asset.location,
+    location: isHanddrawnTravel ? input.travelDestination ?? asset.location : asset.location,
     name: asset.name,
     referenceMediaIds,
     scenePanels: asset.scenePanels,

@@ -79,6 +79,24 @@ describe("storyboard image provider factory", () => {
     expect(prompt).toContain("Only render the visible character assets listed for this frame");
     expect(prompt).toContain("Do not add unlisted people, humans, pets, faces, silhouettes, backs, hands, or body parts");
   });
+
+  it("uses real travel backgrounds with handdrawn characters for handdrawn travel storyboard images", () => {
+    createConfiguredStoryboardImageProvider(inferenceShConfig());
+    const options = createInferenceShImageProviderMock.mock.calls[0]?.[0] as
+      | {
+          buildPrompt(input: ReturnType<typeof storyboardInput>): { prompt: string };
+        }
+      | undefined;
+    const prompt = options?.buildPrompt(
+      storyboardInput({
+        storyModeId: "handdrawn-travel-vlog"
+      })
+    ).prompt ?? "";
+
+    expect(prompt).toContain("real travel-location photography background");
+    expect(prompt).toContain("hand-drawn illustrated traveler character");
+    expect(prompt).toContain("preserve the uploaded-photo-derived drawn character design");
+  });
 });
 
 function inferenceShConfig(): StoryCamConfig {
@@ -106,7 +124,7 @@ function inferenceShConfig(): StoryCamConfig {
   };
 }
 
-function storyboardInput(overrides: Partial<{ aspectRatio: "16:9" | "9:16" }> = {}) {
+function storyboardInput(overrides: Partial<{ aspectRatio: "16:9" | "9:16"; storyModeId: string }> = {}) {
   return {
     aspectRatio: overrides.aspectRatio ?? "16:9",
     characterAssetIds: ["character-1"],
@@ -142,6 +160,13 @@ function storyboardInput(overrides: Partial<{ aspectRatio: "16:9" | "9:16" }> = 
     sceneAssetId: "scene-1",
     sessionId: "session-1",
     storyPurpose: "建立雨夜未发送短信的私人情绪",
+    storyWorldBasis: overrides.storyModeId
+      ? {
+          characterAssetIds: ["character-1"],
+          sceneAssetId: "scene-1",
+          storyModeId: overrides.storyModeId
+        }
+      : undefined,
     title: "未发送的短信"
   };
 }

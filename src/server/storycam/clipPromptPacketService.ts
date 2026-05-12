@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
+import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import { assertClipPromptPacketCanCreateVideoJob, buildClipPromptPacketPayload } from "@/features/storycam/domain/clipPromptPacket";
 import type { ClipPromptPacket, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
 import {
   defaultStoryCamVideoAspectRatio,
   parseStoryCamVideoAspectRatio,
@@ -70,6 +71,8 @@ export async function createClipPromptPacket(
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
   const storyboardScriptArtifact = findStoryboardScriptArtifact(rows, coreGroupArtifact.id);
   const storyboardScript = storyboardScriptArtifact ? storyboardScriptSchema.parse(storyboardScriptArtifact.data_json) : undefined;
+  const storyScriptArtifact = findLatestStoryScriptArtifact(rows);
+  const storyScript = storyScriptArtifact ? storyScriptSchema.parse(storyScriptArtifact.data_json) : undefined;
   const expandedCardArtifacts = rows.filter(
     (row) =>
       row.type === "expanded_storyboard_card" &&
@@ -87,6 +90,7 @@ export async function createClipPromptPacket(
   const inputArtifactVersions = {
     [coreGroupArtifact.id]: coreGroupArtifact.version,
     ...(storyboardScriptArtifact ? { [storyboardScriptArtifact.id]: storyboardScriptArtifact.version } : {}),
+    ...(storyScriptArtifact ? { [storyScriptArtifact.id]: storyScriptArtifact.version } : {}),
     ...Object.fromEntries(expandedCardArtifacts.map((row) => [row.id, row.version]))
   };
   const packet = buildClipPromptPacketPayload({
@@ -106,6 +110,7 @@ export async function createClipPromptPacket(
         frameNumber: item.frameNumber,
         kind: item.kind
       })),
+      storyModeId: storyScript?.storyModeId,
       storyboardScript
     }),
     referenceImageMedia: storyboardMedia.map((item) => ({
@@ -156,6 +161,33 @@ function findStoryboardScriptArtifact(rows: StoryCamArtifactRow[], coreGroupArti
       row.state === "ready" &&
       storyboardScriptSchema.safeParse(row.data_json).success
   );
+}
+
+function findLatestStoryScriptArtifact(rows: StoryCamArtifactRow[]) {
+  return rows
+    .filter(
+      (row) =>
+        row.type === "script" &&
+        row.state === "ready" &&
+        storyScriptSchema.safeParse(row.data_json).success
+    )
+    .sort(compareArtifactsNewestFirst)[0];
+}
+
+function compareArtifactsNewestFirst(left: StoryCamArtifactRow, right: StoryCamArtifactRow) {
+  const versionDifference = right.version - left.version;
+
+  if (versionDifference !== 0) {
+    return versionDifference;
+  }
+
+  return timestampMs(right.updated_at) - timestampMs(left.updated_at) || timestampMs(right.created_at) - timestampMs(left.created_at);
+}
+
+function timestampMs(value: string) {
+  const parsed = Date.parse(value);
+
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 async function loadStoryboardFrameMedia(
@@ -223,6 +255,7 @@ function buildVideoProviderPrompt(input: {
     frameNumber: number;
     kind: "core" | "expanded";
   }>;
+  storyModeId?: string;
   storyboardScript?: StoryboardScript;
 }) {
   const referenceImagePlan = input.referenceFrames?.length
@@ -243,6 +276,9 @@ function buildVideoProviderPrompt(input: {
     "No subtitles, no readable UI text, no new characters or locations.",
     referenceImagePlan ? `Reference order: ${referenceImagePlan}.` : "",
     "Use each 图片n reference image as a comic storyboard anchor for its matching frame; preserve character design, wardrobe, location, lighting, rain, and screen direction.",
+    isHanddrawnTravelVlogMode(input.storyModeId)
+      ? "Handdrawn travel VLOG mode: keep real travel-location backgrounds from the storyboard references while animating one hand-drawn illustrated traveler character; do not turn the character into a photorealistic person or add visible unlisted people."
+      : "",
     rhythmPlan,
     frames ? `Director nine-frame plan:\n${frames}` : "",
     audioPlan,

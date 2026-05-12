@@ -115,6 +115,7 @@ export type CreateStoryWorldResponse = {
       beats: string[];
       logline: string;
       qualityChecks?: string[];
+      storyModeId?: string;
       summary: string;
       title: string;
       version: number;
@@ -1214,6 +1215,8 @@ export async function createStoryWorld(input: {
   lightweightChoices: string[];
   plannedDurationSeconds?: number;
   sessionId?: string;
+  storyModeId?: string;
+  travelDestination?: string;
   uploadedPhotoIds?: string[];
   videoAspectRatio?: "16:9" | "9:16";
 }) {
@@ -1223,6 +1226,8 @@ export async function createStoryWorld(input: {
       lightweightChoices: input.lightweightChoices,
       plannedDurationSeconds: input.plannedDurationSeconds ?? 12,
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.storyModeId ? { storyModeId: input.storyModeId } : {}),
+      ...(input.travelDestination ? { travelDestination: input.travelDestination } : {}),
       ...(input.uploadedPhotoIds?.length ? { uploadedPhotoIds: input.uploadedPhotoIds } : {}),
       ...(input.videoAspectRatio ? { videoAspectRatio: input.videoAspectRatio } : {})
     }),

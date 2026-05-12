@@ -26,7 +26,7 @@
 
 ## Expected Main Surfaces
 
-- Idea input + lightweight director choices + photo upload.
+- Idea input + five creation modes + lightweight director choices + photo upload. `手绘旅行 VLOG` additionally shows a compact travel-destination input, defaults to `9:16`, and disables submit until one photo and one destination are present.
 - Recent projects entry above the creation-entry list; homepage stays on input and lets users choose a project instead of auto-jumping.
 - Story world confirmation, including local generating and failed states after the input CTA immediately navigates to `/storycam/story-world`.
 - Core storyboard confirmation, including local generating and failed states after story-world confirmation immediately navigates to `/storycam/core-storyboard`; when the 9-frame script returns before the first representative image job, show the script immediately and keep only the image area in a waiting state.

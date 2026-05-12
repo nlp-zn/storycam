@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, Clapperboard, Heart, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clapperboard, Heart, MapPin, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getAuthStatus,
@@ -48,6 +48,8 @@ export type StoryWorldDraft = {
   idea: string;
   photo: File | null;
   selectedChoices: string[];
+  storyModeId: StoryModeId;
+  travelDestination?: string;
   videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
@@ -80,6 +82,7 @@ export function IdeaInputPanel({
   const [selectedChoices, setSelectedChoices] = useState<string[]>(initialChoices);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [travelDestination, setTravelDestination] = useState("");
   const previewUrlRef = useRef<string | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
   const [authStatus, setAuthStatus] = useState<AuthStatus>("checking");
@@ -97,8 +100,11 @@ export function IdeaInputPanel({
   const recentProjectsLastRefreshMsRef = useRef(0);
   const recentProjectsRequestIdRef = useRef(0);
   const recentProjectThumbnailCacheRef = useRef<Record<string, CachedRecentProjectThumbnail>>({});
-  const canSubmit = idea.trim().length > 0 && authStatus === "authenticated";
   const selectedStoryMode = storyModeEntries.find((entry) => entry.id === selectedStoryModeId) ?? storyModeEntries[0];
+  const trimmedTravelDestination = travelDestination.trim();
+  const missingRequiredPhoto = selectedStoryMode.requiresPhoto && !photo;
+  const missingTravelDestination = selectedStoryMode.requiresTravelDestination && !trimmedTravelDestination;
+  const canSubmit = idea.trim().length > 0 && authStatus === "authenticated" && !missingRequiredPhoto && !missingTravelDestination;
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
   const displayedRecentProjects = useMemo(
     () => (authStatus === "authenticated" ? recentProjects : []),
@@ -285,6 +291,11 @@ export function IdeaInputPanel({
     if (!canSubmit) {
       if (authStatus !== "authenticated") {
         setSubmitState({ kind: "error", message: authGateMessage(authStatus) });
+        return;
+      }
+
+      if (missingRequiredPhoto || missingTravelDestination) {
+        setSubmitState({ kind: "error", message: travelModeRequirementMessage(missingRequiredPhoto, missingTravelDestination) });
       }
 
       return;
@@ -295,6 +306,8 @@ export function IdeaInputPanel({
       idea: idea.trim(),
       photo,
       selectedChoices,
+      storyModeId: selectedStoryMode.id,
+      ...(selectedStoryMode.requiresTravelDestination ? { travelDestination: trimmedTravelDestination } : {}),
       videoAspectRatio
     });
   }
@@ -309,6 +322,11 @@ export function IdeaInputPanel({
 
     setSelectedStoryModeId(entry.id);
     setSelectedChoices([...entry.defaultChoices]);
+    setVideoAspectRatio(entry.preferredAspectRatio);
+
+    if (!entry.requiresTravelDestination) {
+      setTravelDestination("");
+    }
 
     if (canReplaceIdea) {
       setIdea(entry.sampleIdea);
@@ -403,6 +421,23 @@ export function IdeaInputPanel({
               placeholder="描述电影般的瞬间..."
               value={idea}
             />
+            {selectedStoryMode.requiresTravelDestination ? (
+              <div className="relative mt-5 grid gap-2 border-t border-white/[0.08] pt-4 sm:grid-cols-[96px_minmax(0,1fr)] sm:items-center">
+                <label className="text-[13px] font-black leading-none text-[#dbfcff]" htmlFor="story-travel-destination">
+                  旅行地
+                </label>
+                <div className="relative">
+                  <MapPin aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#00f0ff]" strokeWidth={2.4} />
+                  <input
+                    className="h-11 w-full rounded-full border border-white/[0.12] bg-white/[0.045] pl-10 pr-4 text-sm font-bold text-[#e2e2e2] outline-none transition placeholder:text-[#849495]/55 focus:border-[#00f0ff]/70 focus:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-[#00f0ff]/35"
+                    id="story-travel-destination"
+                    onChange={(event) => setTravelDestination(event.target.value)}
+                    placeholder="例如：葡萄牙里斯本阿尔法玛"
+                    value={travelDestination}
+                  />
+                </div>
+              </div>
+            ) : null}
             <div className="relative mt-5 flex flex-col gap-3 border-t border-white/[0.08] pt-3 md:flex-row md:items-center md:justify-between">
               <div className="storycam-input-tools flex flex-1 flex-wrap items-center gap-1.5" data-testid="story-idea-params">
                 <label className="storycam-input-photo-button inline-flex cursor-pointer items-center justify-center rounded-full border border-white/[0.14] bg-white/[0.04] text-[#aebcbd] transition hover:border-[#00f0ff]/55 hover:text-white">
@@ -501,6 +536,11 @@ export function IdeaInputPanel({
           {storyModeNotice ? (
             <p className="mt-3 text-center text-xs font-bold leading-5 text-[#9eadae]" role="status">
               {storyModeNotice}
+            </p>
+          ) : null}
+          {selectedStoryMode.requiresPhoto || selectedStoryMode.requiresTravelDestination ? (
+            <p className="mt-3 text-center text-xs font-bold leading-5 text-[#9eadae]" role="status">
+              {travelModeRequirementMessage(missingRequiredPhoto, missingTravelDestination)}
             </p>
           ) : null}
         </div>
@@ -712,7 +752,25 @@ function StoryModeIcon({ id }: { id: StoryModeId }) {
       return <UserRound aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
     case "emotion-short":
       return <Clapperboard aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
+    case "handdrawn-travel-vlog":
+      return <MapPin aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
   }
+}
+
+function travelModeRequirementMessage(missingPhoto: boolean, missingDestination: boolean) {
+  if (missingPhoto && missingDestination) {
+    return "上传一张自己的照片，再写一个旅行地。";
+  }
+
+  if (missingPhoto) {
+    return "上传一张自己的照片，系统会把你转成手绘旅行角色。";
+  }
+
+  if (missingDestination) {
+    return "写一个旅行地，系统会生成真实地点感的场景资产。";
+  }
+
+  return "会用你的照片生成手绘角色，再放进这个真实旅行地。";
 }
 
 function recentProjectsSummary(status: RecentProjectsStatus, totalCount: number): string {

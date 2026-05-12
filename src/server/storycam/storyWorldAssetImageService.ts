@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { characterAssetSchema, sceneAssetSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { CharacterAsset, SceneAsset, StoryScript } from "@/features/storycam/domain/artifacts";
 import type { ImageGenerationProvider, ProviderFailure } from "@/lib/providers/types";
+import { isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
 import type { Database, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { writeGeneratedStoryCamMedia } from "./generatedMediaService";
@@ -10,10 +11,24 @@ import {
   type AsyncImageProviderOutput,
   type ImageJobState
 } from "./imageGenerationJobService";
-import { createStoryCamSignedUrl, storyCamGeneratedBucket, storyCamSignedUrlTtlSeconds } from "./mediaStore";
+import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import {
+  createStoryCamProviderReferenceSignedUrl,
+  createStoryCamSignedUrl,
+  storyCamGeneratedBucket,
+  storyCamProviderReferenceSignedUrlTtlSeconds,
+  storyCamSignedUrlTtlSeconds,
+  type StoryCamPrivateBucket
+} from "./mediaStore";
 import { StoryCamSessionRepository } from "./sessionRepository";
 
 export type StoryWorldAssetKind = "character" | "scene";
+
+export type StoryWorldAssetReferenceImage = {
+  kind: "style_reference" | "uploaded_photo";
+  mediaId: string;
+  signedUrl: string;
+};
 
 export type StoryWorldAssetImageInput =
   | {
@@ -21,6 +36,7 @@ export type StoryWorldAssetImageInput =
       assetArtifactId: string;
       assetKind: "character";
       characterAssets?: CharacterAsset[];
+      referenceImages?: StoryWorldAssetReferenceImage[];
       script?: StoryScript;
       sessionId: string;
     }
@@ -29,6 +45,7 @@ export type StoryWorldAssetImageInput =
       assetArtifactId: string;
       assetKind: "scene";
       characterAssets?: CharacterAsset[];
+      referenceImages?: StoryWorldAssetReferenceImage[];
       script?: StoryScript;
       sessionId: string;
     };
@@ -105,7 +122,7 @@ export async function generateStoryWorldAssetImage(
     throw new StoryWorldAssetImageRequestError("asset_not_found");
   }
 
-  const providerInput = buildStoryWorldAssetImageProviderInput(input, target, artifactRows);
+  const providerInput = await buildStoryWorldAssetImageProviderInput(client, userId, input, target, artifactRows);
   const providerResult = await provider.generateImage(providerInput);
 
   if (!providerResult.ok) {
@@ -173,7 +190,7 @@ export async function submitStoryWorldAssetImageJob(
   }
 
   const imageJob = await submitImageGenerationJob(client, userId, {
-    imageInput: buildStoryWorldAssetImageProviderInput(input, target, artifactRows),
+    imageInput: await buildStoryWorldAssetImageProviderInput(client, userId, input, target, artifactRows),
     inputArtifactVersionsJson: { [target.id]: target.version },
     linkedArtifactId: target.id,
     provider,
@@ -220,7 +237,9 @@ export async function submitStoryWorldAssetImageJobs(
       const assetKind = target.type === "character_asset" ? "character" : "scene";
       try {
         const imageJob = await submitImageGenerationJob(client, userId, {
-          imageInput: buildStoryWorldAssetImageProviderInput(
+          imageInput: await buildStoryWorldAssetImageProviderInput(
+            client,
+            userId,
             {
               assetArtifactId: target.id,
               assetKind,
@@ -332,20 +351,25 @@ function storyWorldAssetImagePlaceholderOutput(
   };
 }
 
-export function buildStoryWorldAssetImageProviderInput(
+export async function buildStoryWorldAssetImageProviderInput(
+  client: SupabaseClient<Database>,
+  userId: string,
   input: ReturnType<typeof parseStoryWorldAssetImageRequest>,
   target: StoryCamArtifactRow,
   artifactRows: StoryCamArtifactRow[]
-): StoryWorldAssetImageInput {
+): Promise<StoryWorldAssetImageInput> {
   const script = parseLatestScript(artifactRows);
   const characterAssets = parseCharacterAssets(artifactRows);
 
   if (input.assetKind === "character") {
+    const asset = characterAssetSchema.parse(target.data_json);
+
     return {
-      asset: characterAssetSchema.parse(target.data_json),
+      asset,
       assetArtifactId: target.id,
       assetKind: "character",
       characterAssets,
+      referenceImages: await loadStoryWorldAssetReferenceImages(client, userId, input.sessionId, asset, script),
       script,
       sessionId: input.sessionId
     };
@@ -360,6 +384,47 @@ export function buildStoryWorldAssetImageProviderInput(
     sessionId: input.sessionId
   };
 }
+
+async function loadStoryWorldAssetReferenceImages(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessionId: string,
+  asset: CharacterAsset,
+  script: StoryScript | undefined
+): Promise<StoryWorldAssetReferenceImage[] | undefined> {
+  if (!isHanddrawnTravelVlogMode(script?.storyModeId)) {
+    return undefined;
+  }
+
+  const mediaAssetId = asset.referenceMediaIds[0];
+  const mediaAssets = (await new StoryCamMediaAssetRepository(client).listBySession(userId, sessionId)) ?? [];
+  const uploadedPhoto = mediaAssets.find((row) => row.id === mediaAssetId && row.kind === "uploaded_photo");
+  const references: StoryWorldAssetReferenceImage[] = [];
+
+  if (uploadedPhoto) {
+    references.push({
+      kind: "uploaded_photo",
+      mediaId: uploadedPhoto.id,
+      signedUrl: await createStoryCamProviderReferenceSignedUrl(
+        client,
+        uploadedPhoto.storage_bucket as StoryCamPrivateBucket,
+        uploadedPhoto.storage_path,
+        storyCamProviderReferenceSignedUrlTtlSeconds
+      )
+    });
+  }
+
+  references.push(storyCamHanddrawnTravelStyleReferenceImage);
+
+  return references;
+}
+
+const storyCamHanddrawnTravelStyleReferenceImage: StoryWorldAssetReferenceImage = {
+  kind: "style_reference",
+  mediaId: "storycam-handdrawn-travel-style",
+  signedUrl:
+    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><rect width='240' height='240' fill='white'/><path d='M92 58c18-20 60-11 61 21 1 20-13 31-31 31-21 0-41-12-30-52z' fill='none' stroke='black' stroke-width='7' stroke-linecap='round'/><path d='M76 197c10-45 24-72 46-72 24 0 38 29 45 72' fill='none' stroke='black' stroke-width='8' stroke-linecap='round'/><path d='M83 139c23 18 55 18 79 0M106 84h36M77 198h88' fill='none' stroke='black' stroke-width='6' stroke-linecap='round'/><circle cx='111' cy='88' r='4' fill='black'/><circle cx='136' cy='88' r='4' fill='black'/></svg>"
+};
 
 function parseLatestScript(artifactRows: StoryCamArtifactRow[]) {
   const script = artifactRows.find((row) => row.type === "script" && row.state === "ready");

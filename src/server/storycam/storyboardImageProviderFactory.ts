@@ -1,6 +1,7 @@
 import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import { storyCamComicImagePromptLine, storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
+import { isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
 import type { StoryCamConfig } from "@/server/config";
 import type {
   ExpandedStoryboardImageInput,
@@ -51,6 +52,7 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
       input.imagePrompt ? `Specific image prompt: ${input.imagePrompt}.` : "",
       referenceImagePrompt(input.referenceImages),
       visibleCharacterAssetPrompt(input),
+      handdrawnTravelStoryboardPrompt(input),
       baseStoryboardImagePrompt(input.aspectRatio)
     ]
       .filter(Boolean)
@@ -65,10 +67,25 @@ export function buildStoryboardImagePrompt(input: StoryboardImageInput) {
     `Approximate clip duration: ${input.estimatedClipDurationSeconds} seconds.`,
     referenceImagePrompt(input.referenceImages),
     visibleCharacterAssetPrompt(input),
+    handdrawnTravelStoryboardPrompt(input),
     baseStoryboardImagePrompt(input.aspectRatio)
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function handdrawnTravelStoryboardPrompt(input: StoryboardImageInput) {
+  const storyModeId = "coreGroup" in input ? input.coreGroup.storyWorldBasis?.storyModeId : input.storyWorldBasis?.storyModeId;
+
+  if (!isHanddrawnTravelVlogMode(storyModeId)) {
+    return "";
+  }
+
+  return [
+    "Handdrawn travel VLOG mode: combine real travel-location photography background with a hand-drawn illustrated traveler character.",
+    "preserve the uploaded-photo-derived drawn character design from the character asset references, but do not make the character photorealistic.",
+    "Keep the background grounded in real streets, architecture, landmarks, natural light, and travel-documentary perspective."
+  ].join("\n");
 }
 
 function visibleCharacterAssetPrompt(input: StoryboardImageInput) {
