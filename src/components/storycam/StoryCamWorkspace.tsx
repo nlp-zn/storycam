@@ -20,6 +20,7 @@ import {
 } from "@/features/storycam/client/storycamState";
 import {
   cancelGenerationJob,
+  clearStoryCamRestoreCache,
   createFinalWork,
   createStitchSuggestion,
   createStoryWorld,
@@ -30,6 +31,7 @@ import {
   generateStoryWorldAssetImages,
   getGenerationJob,
   regenerateStoryboardFrameImage,
+  refreshStoryCamSessionRestore,
   restoreCurrentStoryCamSession,
   restoreStoryCamSession,
   uploadStoryCamPhoto,
@@ -276,12 +278,23 @@ export function StoryCamWorkspace() {
     });
   }
 
-  function hydrateRestoredProject(restored: Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>) {
+  function hydrateRestoredProject(
+    restored: Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>,
+    options: { preserveCurrentPath?: boolean } = {}
+  ) {
+    const restoredStepIndex = stepIndexForRestoredCurrentStep(restored.currentStep);
+    const currentPathStepIndex = typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname);
+    const targetStepIndex = restoreTargetStepIndex({
+      currentPathStepIndex,
+      preserveCurrentPath: options.preserveCurrentPath === true,
+      restoredStepIndex
+    });
+
     setStoryWorld(restored.storyWorld);
     setStoryWorldAssetImageJobs({});
     setStoryWorldConfirmed(restored.storyWorldConfirmed);
     setStoryboard(restored.storyboard);
-    setCoreGroupTargetCount(1);
+    setCoreGroupTargetCount(restored.coreGroupTargetCount);
     setSelectedCoreGroupIndex(restored.storyboard ? 0 : null);
     setExpansion(null);
     setClipConfirmationSummary(null);
@@ -291,7 +304,7 @@ export function StoryCamWorkspace() {
     setStoryWorldGeneration({ kind: "idle" });
     setStoryboardGeneration({ kind: "idle" });
     setClipGeneration({ kind: "idle" });
-    setSelectedStepIndex(null);
+    setSelectedStepIndex(targetStepIndex === restoredStepIndex ? null : targetStepIndex);
     setWorkspaceNotice(null);
     setStoryboardStatus(restored.storyboard ? "ready" : "idle");
     setStoryboardMessage(
@@ -299,7 +312,9 @@ export function StoryCamWorkspace() {
         ? "已恢复核心分镜：1 个 15 秒内核心分镜组。"
         : "已恢复上次生成的故事世界，请确认后继续。"
     );
-    syncStepPath(stepIndexForRestoredCurrentStep(restored.currentStep));
+    if (currentPathStepIndex !== targetStepIndex) {
+      syncStepPath(targetStepIndex);
+    }
 
     if (restored.storyboard && shouldSubmitInitialStoryboardImage(restored.storyboard)) {
       const requestId = storyboardRequestIdRef.current + 1;
@@ -325,7 +340,7 @@ export function StoryCamWorkspace() {
     mediaRefreshInFlightRef.current = true;
 
     try {
-      const restored = await restoreStoryCamSession(sessionId);
+      const restored = await refreshStoryCamSessionRestore(sessionId);
 
       if (!restored.restored) {
         return;
@@ -379,15 +394,11 @@ export function StoryCamWorkspace() {
       return;
     }
 
-    const initialRefresh = window.setTimeout(() => {
-      void refreshSessionMediaUrls(storyWorld.sessionId);
-    }, 0);
     const interval = window.setInterval(() => {
       void refreshSessionMediaUrls(storyWorld.sessionId);
     }, 4 * 60 * 1000);
 
     return () => {
-      window.clearTimeout(initialRefresh);
       window.clearInterval(interval);
     };
   }, [refreshSessionMediaUrls, storyWorld?.sessionId]);
@@ -412,7 +423,7 @@ export function StoryCamWorkspace() {
           return;
         }
 
-        hydrateRestoredProject(restored);
+        hydrateRestoredProject(restored, { preserveCurrentPath: true });
       } catch {
         if (!isCanceled) {
           setWorkspaceNotice("恢复失败，可以重新开始或稍后刷新。");
@@ -2102,6 +2113,22 @@ function stepIndexForRestoredCurrentStep(step: RestoredCurrentStep) {
   }
 }
 
+function restoreTargetStepIndex(input: {
+  currentPathStepIndex: number | null;
+  preserveCurrentPath: boolean;
+  restoredStepIndex: number;
+}) {
+  if (!input.preserveCurrentPath || input.currentPathStepIndex === null) {
+    return input.restoredStepIndex;
+  }
+
+  if (input.currentPathStepIndex > input.restoredStepIndex) {
+    return input.restoredStepIndex;
+  }
+
+  return input.currentPathStepIndex;
+}
+
 function shouldAutoRestoreFromPath(pathname: string) {
   return pathname !== "/" && pathname !== "/storycam" && pathname !== "/storycam/input";
 }
@@ -2270,6 +2297,7 @@ function StoryCamAccountButton() {
     setAuthStatus("anonymous");
     setEmail(undefined);
     setIsSubmitting(false);
+    clearStoryCamRestoreCache();
     window.location.reload();
   }
 

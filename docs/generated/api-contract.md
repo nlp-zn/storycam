@@ -199,6 +199,8 @@ type RecentProjectsResponse = {
 
 Restore a specific current-user project selected from recent projects. Returns the same restored shape as `/api/storycam-sessions/current`; missing, deleted, unauthorized, or non-restorable sessions return `404 not_found`.
 
+Restore responses include short-lived signed preview URLs and must be served with `Cache-Control: no-store`. Client-side restore caches are per browser tab, user-bound, and keyed by session id; they cache only JSON payloads and signed URLs, never media blobs. Prefetch may warm an in-memory selected-session cache, but it must not persist full restore payloads or change the verified current-session pointer. Signed URL reuse must preserve each media URL's absolute expiry and must not extend an old URL by recomputing a fresh TTL.
+
 Storyboard image state:
 
 ```ts

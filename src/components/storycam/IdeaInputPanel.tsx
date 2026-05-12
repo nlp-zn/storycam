@@ -2,10 +2,10 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Clapperboard, Heart, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getAuthStatus, listRecentStoryCamProjects } from "@/features/storycam/client/storycamApi";
+import { getAuthStatus, listRecentStoryCamProjects, prefetchStoryCamSessionRestore } from "@/features/storycam/client/storycamApi";
 import type { RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
 import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
 
@@ -17,6 +17,10 @@ type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 type RecentProjectsStatus = "idle" | "loading" | "ready" | "error";
 type StoryModeEntry = (typeof storyModeEntries)[number];
 type StoryModeId = StoryModeEntry["id"];
+type RecentProjectThumbnail = NonNullable<RecentStoryCamProject["thumbnail"]>;
+type CachedRecentProjectThumbnail = RecentProjectThumbnail & {
+  expiresAtMs: number;
+};
 
 const storyModeSampleIdeas = new Set<string>(storyModeEntries.map((entry) => entry.sampleIdea));
 
@@ -34,8 +38,10 @@ export type StoryWorldDraft = {
 };
 
 type RecentProjectsInlineProps = {
+  onContinue: (project: RecentStoryCamProject) => void;
   onOpen: () => void;
   projects: RecentStoryCamProject[];
+  restoringProjectId: string | null;
   status: RecentProjectsStatus;
   totalCount: number;
 };
@@ -69,10 +75,18 @@ export function IdeaInputPanel({
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
   const [selectedStoryModeId, setSelectedStoryModeId] = useState<StoryModeId>(storyModeEntries[0].id);
   const [storyModeNotice, setStoryModeNotice] = useState<string | null>(null);
+  const recentProjectsAbortRef = useRef<AbortController | null>(null);
+  const recentProjectsRequestIdRef = useRef(0);
+  const recentProjectThumbnailCacheRef = useRef<Record<string, CachedRecentProjectThumbnail>>({});
   const canSubmit = idea.trim().length > 0 && authStatus === "authenticated";
   const selectedStoryMode = storyModeEntries.find((entry) => entry.id === selectedStoryModeId) ?? storyModeEntries[0];
   const selectedChoiceSet = useMemo(() => new Set(selectedChoices), [selectedChoices]);
-  const recentPreviewProjects = recentProjects.slice(0, 2);
+  const displayedRecentProjects = useMemo(
+    () => (authStatus === "authenticated" ? recentProjects : []),
+    [authStatus, recentProjects]
+  );
+  const displayedRecentProjectsStatus = authStatus === "authenticated" ? recentProjectsStatus : "idle";
+  const recentPreviewProjects = displayedRecentProjects.slice(0, 2);
   const ideaLength = idea.trim().length;
 
   useEffect(() => {
@@ -82,9 +96,6 @@ export function IdeaInputPanel({
       .then((response) => {
         if (isMounted) {
           setAuthStatus(response.authenticated ? "authenticated" : "anonymous");
-          if (response.authenticated) {
-            setRecentProjectsStatus("loading");
-          }
         }
       })
       .catch(() => {
@@ -103,30 +114,97 @@ export function IdeaInputPanel({
     };
   }, []);
 
+  const refreshRecentProjects = useCallback(async (options: { showLoading?: boolean } = {}) => {
+    if (authStatus !== "authenticated") {
+      return;
+    }
+
+    const requestId = recentProjectsRequestIdRef.current + 1;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+
+    recentProjectsRequestIdRef.current = requestId;
+    recentProjectsAbortRef.current?.abort();
+    recentProjectsAbortRef.current = controller;
+
+    if (options.showLoading ?? true) {
+      setRecentProjectsStatus("loading");
+    }
+
+    try {
+      const response = await listRecentStoryCamProjects(5, { signal: controller.signal });
+
+      if (recentProjectsRequestIdRef.current === requestId) {
+        setRecentProjects(cacheRecentProjectThumbnails(response.projects, recentProjectThumbnailCacheRef.current));
+        setRecentProjectsStatus("ready");
+      }
+    } catch {
+      if (recentProjectsRequestIdRef.current === requestId) {
+        setRecentProjectsStatus("error");
+      }
+    } finally {
+      window.clearTimeout(timeout);
+
+      if (recentProjectsAbortRef.current === controller) {
+        recentProjectsAbortRef.current = null;
+      }
+    }
+  }, [authStatus]);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated") {
+      recentProjectsRequestIdRef.current += 1;
+      recentProjectsAbortRef.current?.abort();
+      recentProjectsAbortRef.current = null;
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void refreshRecentProjects({ showLoading: true });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      recentProjectsRequestIdRef.current += 1;
+      recentProjectsAbortRef.current?.abort();
+      recentProjectsAbortRef.current = null;
+    };
+  }, [authStatus, refreshRecentProjects]);
+
   useEffect(() => {
     if (authStatus !== "authenticated") {
       return;
     }
 
-    let isMounted = true;
+    const refreshVisibleRecentProjects = () => {
+      if (document.visibilityState === "visible") {
+        void refreshRecentProjects({ showLoading: false });
+      }
+    };
+    const refreshFocusedRecentProjects = () => {
+      void refreshRecentProjects({ showLoading: false });
+    };
 
-    void listRecentStoryCamProjects(5)
-      .then((response) => {
-        if (isMounted) {
-          setRecentProjects(response.projects);
-          setRecentProjectsStatus("ready");
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setRecentProjectsStatus("error");
-        }
-      });
+    document.addEventListener("visibilitychange", refreshVisibleRecentProjects);
+    window.addEventListener("focus", refreshFocusedRecentProjects);
+    window.addEventListener("pageshow", refreshFocusedRecentProjects);
 
     return () => {
-      isMounted = false;
+      document.removeEventListener("visibilitychange", refreshVisibleRecentProjects);
+      window.removeEventListener("focus", refreshFocusedRecentProjects);
+      window.removeEventListener("pageshow", refreshFocusedRecentProjects);
     };
-  }, [authStatus]);
+  }, [authStatus, refreshRecentProjects]);
+
+  useEffect(() => {
+    if (displayedRecentProjectsStatus !== "ready") {
+      return;
+    }
+
+    displayedRecentProjects.slice(0, 5).forEach((project) => {
+      prefetchStoryCamSessionRestore(project.sessionId);
+    });
+  }, [displayedRecentProjects, displayedRecentProjectsStatus]);
 
   function submitStoryWorld() {
     if (!canSubmit) {
@@ -204,6 +282,14 @@ export function IdeaInputPanel({
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
+    }
+  }
+
+  function openRecentProjects() {
+    setIsRecentProjectsOpen(true);
+
+    if (authStatus === "authenticated") {
+      void refreshRecentProjects({ showLoading: recentProjects.length === 0 });
     }
   }
 
@@ -336,10 +422,12 @@ export function IdeaInputPanel({
       ) : null}
 
       <RecentProjectsInline
-        onOpen={() => setIsRecentProjectsOpen(true)}
+        onContinue={continueProject}
+        onOpen={openRecentProjects}
         projects={recentPreviewProjects}
-        status={recentProjectsStatus}
-        totalCount={recentProjects.length}
+        restoringProjectId={restoringProjectId}
+        status={displayedRecentProjectsStatus}
+        totalCount={displayedRecentProjects.length}
       />
 
       <DiscoveryWall />
@@ -348,9 +436,9 @@ export function IdeaInputPanel({
         <RecentProjectsDrawer
           onClose={() => setIsRecentProjectsOpen(false)}
           onContinue={continueProject}
-          projects={recentProjects}
+          projects={displayedRecentProjects}
           restoringProjectId={restoringProjectId}
-          status={recentProjectsStatus}
+          status={displayedRecentProjectsStatus}
         />
       ) : null}
     </section>
@@ -358,8 +446,10 @@ export function IdeaInputPanel({
 }
 
 function RecentProjectsInline({
+  onContinue,
   onOpen,
   projects,
+  restoringProjectId,
   status,
   totalCount
 }: RecentProjectsInlineProps) {
@@ -391,17 +481,24 @@ function RecentProjectsInline({
       {hasProjects ? (
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {projects.map((project) => (
-            <article className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-4 rounded-[1rem] border border-white/10 bg-white/[0.04] p-4" key={project.sessionId}>
+            <button
+              aria-label={`继续创作 ${project.title}`}
+              className="group grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-4 rounded-[1rem] border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-[#00f0ff]/55 hover:bg-white/[0.07] focus:outline-none focus-visible:border-[#00f0ff] focus-visible:ring-2 focus-visible:ring-[#00f0ff]/35 disabled:cursor-wait disabled:opacity-70"
+              disabled={Boolean(restoringProjectId)}
+              key={project.sessionId}
+              onClick={() => onContinue(project)}
+              type="button"
+            >
               <div className="flex size-12 items-center justify-center rounded-xl border border-[#ff4b89]/40 bg-[#ff4b89]/20 text-xl font-black text-[#ff4b89]">
                 <Clapperboard aria-hidden="true" className="size-5" strokeWidth={2.2} />
               </div>
               <div className="min-w-0">
                 <h3 className="truncate text-[14px] font-black leading-tight text-[#e2e2e2]">{project.title}</h3>
                 <p className="mt-1 truncate text-[12px] font-bold leading-tight text-[#849495]">
-                  最后编辑：{formatProjectDate(project.updatedAt)}
+                  {restoringProjectId === project.sessionId ? "恢复中" : `最后编辑：${formatProjectDate(project.updatedAt)}`}
                 </p>
               </div>
-            </article>
+            </button>
           ))}
         </div>
       ) : (
@@ -592,7 +689,7 @@ function renderRecentProjectsDrawerContent({
         <article className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/25 p-3 sm:grid-cols-[160px_1fr]" key={project.sessionId}>
           <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#0e1111]">
             {project.thumbnail ? (
-              <img alt={`${project.title} 缩略图`} className="size-full object-cover" src={project.thumbnail.signedUrl} />
+              <RecentProjectThumbnailImage project={project} />
             ) : (
               <div className="storycam-cinematic-frame size-full rounded-none" />
             )}
@@ -627,6 +724,33 @@ function renderRecentProjectsDrawerContent({
   );
 }
 
+function RecentProjectThumbnailImage({ project }: { project: RecentStoryCamProject }) {
+  const [imageState, setImageState] = useState<{ src: string | undefined; status: "loading" | "ready" | "failed" }>({
+    src: undefined,
+    status: "loading"
+  });
+  const thumbnail = project.thumbnail;
+  const src = thumbnail?.signedUrl;
+  const status = imageState.src === src ? imageState.status : "loading";
+
+  return (
+    <div className="relative size-full">
+      <div className={`storycam-cinematic-frame absolute inset-0 rounded-none transition-opacity ${status === "ready" ? "opacity-0" : "opacity-100"}`} />
+      {thumbnail && status !== "failed" ? (
+        <img
+          alt={`${project.title} 缩略图`}
+          className={`absolute inset-0 size-full object-cover transition-opacity duration-300 ${status === "ready" ? "opacity-100" : "opacity-0"}`}
+          decoding="async"
+          loading="lazy"
+          onError={() => setImageState({ src, status: "failed" })}
+          onLoad={() => setImageState({ src, status: "ready" })}
+          src={thumbnail.signedUrl}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function formatProjectDate(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
     day: "2-digit",
@@ -648,6 +772,42 @@ function projectStepLabel(step: RecentStoryCamProject["currentStep"]) {
     case "story-world":
       return "故事世界";
   }
+}
+
+function cacheRecentProjectThumbnails(
+  projects: RecentStoryCamProject[],
+  cache: Record<string, CachedRecentProjectThumbnail>,
+  nowMs = Date.now()
+) {
+  return projects.map((project) => {
+    const thumbnail = project.thumbnail;
+
+    if (!thumbnail) {
+      return project;
+    }
+
+    const cached = cache[thumbnail.id];
+    const minimumFreshMs = 30_000;
+
+    if (cached && cached.expiresAtMs > nowMs + minimumFreshMs) {
+      return {
+        ...project,
+        thumbnail: {
+          id: cached.id,
+          mimeType: cached.mimeType,
+          signedUrl: cached.signedUrl,
+          signedUrlExpiresIn: Math.max(1, Math.floor((cached.expiresAtMs - nowMs) / 1000))
+        }
+      };
+    }
+
+    cache[thumbnail.id] = {
+      ...thumbnail,
+      expiresAtMs: nowMs + thumbnail.signedUrlExpiresIn * 1000
+    };
+
+    return project;
+  });
 }
 
 function authGateMessage(authStatus: AuthStatus) {
