@@ -1,4 +1,5 @@
 import type { ExpandStoryboardGroupResponse } from "@/features/storycam/client/storycamApi";
+import { Hourglass } from "lucide-react";
 
 type ExpandedStoryboardCardProps = {
   card?: ExpandStoryboardGroupResponse["expansionCards"][number];
@@ -14,7 +15,7 @@ export function ExpandedStoryboardCard({ card, index, slotLabel = `向量 ${inde
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#00f0ff] to-transparent opacity-60" />
         <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] font-bold uppercase text-[#b9cacb]">{slotLabel}</span>
-          <span className="text-xl text-[#00f0ff]/70">⌛</span>
+          <Hourglass aria-hidden="true" className="size-5 text-[#00f0ff]/70" strokeWidth={2.2} />
         </div>
         <div className="space-y-3">
           <div className="h-2 rounded-full bg-white/10" />

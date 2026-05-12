@@ -5,6 +5,7 @@
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
+- shadcn/ui Base UI primitives copied into `src/components/ui`
 - Supabase Auth client for Google login
 
 ## UI Rules
@@ -12,6 +13,9 @@
 - First screen should be the usable StoryCam creation surface.
 - No mobile-only first version.
 - Keep controls compact and task-oriented.
+- Prefer local shadcn-style primitives from `src/components/ui` for reusable controls, then apply StoryCam variants/wrappers instead of ad hoc repeated button or badge styling.
+- Keep StoryCam-specific composition wrappers in `src/components/storycam/StoryCamPrimitives.tsx` when a pattern repeats across flow surfaces, such as bottom docks, cinematic panels, status badges, and skeleton lines.
+- Use lucide icons for UI actions. Icons inside shadcn buttons should use `data-icon` placement attributes so sizing and spacing stay consistent.
 - Loading, error, empty, retry, cancel, stale, and success states must be visible.
 - Do not show sharing UI in Phase 1.
 - Do not show raw provider payloads, prompt packets, or Shanyin-style internals. User-facing output specs such as `720p` are allowed when shown as plain product status.

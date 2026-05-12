@@ -1,4 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, RefreshCcw, X } from "lucide-react";
+import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
+import { Button } from "@/components/ui/button";
 import type {
   CreateStoryboardResponse,
   ExpandStoryboardGroupResponse,
@@ -224,26 +227,26 @@ export function CoreFramesStage({
       {generationPanel ? <div className="mt-8">{generationPanel}</div> : null}
 
       {!generationPanel ? (
-        <div className="storycam-bottom-dock storycam-core-dock">
+        <StoryCamBottomDock className="storycam-core-dock">
           <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
             1 组 · 约 {formatDuration(selectedGroup.estimatedClipDurationSeconds)}内
           </div>
-          <button className="storycam-secondary-button" onClick={onBackToStoryWorld} type="button">
+          <Button onClick={onBackToStoryWorld} type="button" variant="secondaryGlass">
             返回故事世界
-          </button>
-          <button
-            className="storycam-primary-button"
+          </Button>
+          <Button
             disabled={isBusy || !canGenerateClip}
             onClick={() => onGenerateClip(activeIndex)}
             type="button"
+            variant="primaryNeon"
           >
             {canGenerateClip ? "用这一组生成片段" : "等待分镜完成"}
-          </button>
+          </Button>
           <div className="storycam-core-dock-progress">
             <span />
             {readyExpandedCount} / 8 已完成
           </div>
-        </div>
+        </StoryCamBottomDock>
       ) : null}
 
       {previewFrame ? (
@@ -327,6 +330,7 @@ function CoreSlot({
           onClick={onRegenerate}
           type="button"
         >
+          <RefreshCcw aria-hidden="true" className="size-3.5" strokeWidth={2.4} />
           {isRegenerating ? "生成中" : "重生成"}
         </button>
       ) : null}
@@ -395,6 +399,7 @@ function ExpansionSlot({
           onClick={onRegenerate}
           type="button"
         >
+          <RefreshCcw aria-hidden="true" className="size-3.5" strokeWidth={2.4} />
           {isRegenerating ? "生成中" : "重生成"}
         </button>
       ) : null}
@@ -427,9 +432,10 @@ function FramePreviewModal({
             </p>
             <h3>{frame.title}</h3>
           </div>
-          <button aria-label="关闭大图" className="storycam-secondary-button px-4 py-2 text-xs" onClick={onClose} type="button">
+          <Button aria-label="关闭大图" className="px-4 py-2 text-xs" onClick={onClose} size="sm" type="button" variant="secondaryGlass">
+            <X aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
             关闭
-          </button>
+          </Button>
         </div>
         <div className="storycam-frame-preview-image">
           <StoryboardImage
@@ -442,12 +448,14 @@ function FramePreviewModal({
         <div className="storycam-frame-preview-footer">
           <p>{frame.description}</p>
           <div className="flex gap-2">
-            <button className="storycam-secondary-button px-4 py-2 text-xs" disabled={!canStep} onClick={onPrevious} type="button">
+            <Button className="px-4 py-2 text-xs" disabled={!canStep} onClick={onPrevious} size="sm" type="button" variant="secondaryGlass">
+              <ChevronLeft aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
               上一张
-            </button>
-            <button className="storycam-secondary-button px-4 py-2 text-xs" disabled={!canStep} onClick={onNext} type="button">
+            </Button>
+            <Button className="px-4 py-2 text-xs" disabled={!canStep} onClick={onNext} size="sm" type="button" variant="secondaryGlass">
               下一张
-            </button>
+              <ChevronRight aria-hidden="true" data-icon="inline-end" strokeWidth={2.4} />
+            </Button>
           </div>
         </div>
       </div>

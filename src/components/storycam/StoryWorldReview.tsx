@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+import { Info, X } from "lucide-react";
 import { AssetCard } from "@/components/storycam/AssetCard";
+import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   generateStoryWorldAssetImage,
   generateStoryWorldAssetImages,
@@ -291,13 +295,9 @@ export function StoryWorldReview({
         </div>
         <h1 className="storycam-heading-lg">确认故事世界</h1>
         <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
-        <span
-          className={`rounded-full border px-4 py-2 text-sm font-bold ${
-            isConfirmed ? "border-[#00f0ff] text-[#00f0ff]" : "border-[#ffcfbe]/80 text-[#ffcfbe]"
-          }`}
-        >
+        <Badge className="px-4 py-2 text-sm" variant={isConfirmed ? "neon" : "pink"}>
           {isConfirmed ? "已确认" : "待确认"}
-        </span>
+        </Badge>
       </div>
 
       <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">
@@ -316,13 +316,15 @@ export function StoryWorldReview({
                   </p>
                 </div>
               </div>
-              <button
-                className="storycam-secondary-button px-4 py-2 text-xs"
+              <Button
+                className="px-4 py-2 text-xs"
                 onClick={() => setIsEditingScript((current) => !current)}
+                size="sm"
                 type="button"
+                variant="secondaryGlass"
               >
                 改剧本
-              </button>
+              </Button>
             </div>
 
             <div className="storycam-logline-box">
@@ -341,13 +343,14 @@ export function StoryWorldReview({
                   onChange={(event) => setScriptSummary(event.target.value)}
                   value={scriptSummary}
                 />
-                <button
-                  className="storycam-primary-button mt-3"
+                <Button
+                  className="mt-3"
                   onClick={saveScriptEdit}
                   type="button"
+                  variant="primaryNeon"
                 >
                   保存修改
-                </button>
+                </Button>
               </div>
             ) : (
               <article className="storycam-script-body">
@@ -384,17 +387,21 @@ export function StoryWorldReview({
         <div className="storycam-assets-column">
           <div className="storycam-asset-generate-banner">
             <p>
-              <span aria-hidden="true">i</span>
+              <span aria-hidden="true">
+                <Info className="size-3.5" strokeWidth={2.4} />
+              </span>
               资产图会并发提交，完成后逐张出现。
             </p>
-            <button
-              className="storycam-secondary-button px-4 py-2 text-xs"
+            <Button
+              className="px-4 py-2 text-xs"
               disabled={isBatchSubmitting || Object.keys(assetImageJobs).length > 0}
               onClick={generateAllAssetImages}
+              size="sm"
               type="button"
+              variant="secondaryGlass"
             >
               {isBatchSubmitting || Object.keys(assetImageJobs).length > 0 ? "资产图生成中" : "生成全部资产图"}
-            </button>
+            </Button>
           </div>
           <section>
             <div className="storycam-asset-section-header">
@@ -511,19 +518,19 @@ export function StoryWorldReview({
         />
       ) : null}
 
-      <div className="storycam-bottom-dock">
+      <StoryCamBottomDock>
         <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
           1 组 · 约 15 秒内
         </div>
-        <button
-          className="storycam-primary-button"
+        <Button
           disabled={isGeneratingStoryboard}
           onClick={() => onConfirm(1)}
           type="button"
+          variant="primaryNeon"
         >
           {isGeneratingStoryboard ? "正在生成核心分镜" : "对，生成核心分镜"}
-        </button>
-      </div>
+        </Button>
+      </StoryCamBottomDock>
     </section>
   );
 }
@@ -548,9 +555,9 @@ function AssetImageModal({
   return (
     <div className="storycam-asset-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${asset.title} 资产生成`}>
       <div className={`storycam-asset-modal ${isScene ? "storycam-asset-modal--scene" : "storycam-asset-modal--character"}`}>
-        <button className="storycam-asset-modal-close" onClick={onClose} type="button" aria-label="关闭资产生成窗口">
-          ×
-        </button>
+        <Button aria-label="关闭资产生成窗口" className="storycam-asset-modal-close" onClick={onClose} size="icon-lg" type="button" variant="iconGlass">
+          <X aria-hidden="true" data-icon="icon" strokeWidth={2.4} />
+        </Button>
         <div className="storycam-asset-modal-copy">
           <div className="storycam-asset-modal-copy-body">
             <p className="storycam-eyebrow">{isScene ? "场景资产" : "角色资产"}</p>
@@ -574,9 +581,9 @@ function AssetImageModal({
             {error ? <p className="storycam-asset-modal-error">{error}</p> : null}
           </div>
           <div className="storycam-asset-modal-actions">
-            <button className="storycam-primary-button" disabled={isGenerating} onClick={onGenerate} type="button">
+            <Button disabled={isGenerating} onClick={onGenerate} type="button" variant="primaryNeon">
               {isGenerating ? "正在生成资产图" : imageUrl ? "重新生成资产图" : "生成资产图"}
-            </button>
+            </Button>
           </div>
         </div>
         <div className="storycam-asset-modal-visual">
