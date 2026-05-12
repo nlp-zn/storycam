@@ -2,11 +2,15 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Info } from "lucide-react";
 import { ClipGenerationWorkspace } from "@/components/storycam/ClipGenerationWorkspace";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import type { StoryWorldDraft } from "@/components/storycam/IdeaInputPanel";
+import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import {
   confirmedArtifactVersionsForClip,
@@ -1624,9 +1628,9 @@ function StoryWorldPendingHero({ isPending }: { isPending: boolean }) {
       </div>
       <h1 className="storycam-heading-lg">确认故事世界</h1>
       <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
-      <span className="rounded-full border border-[#ffcfbe]/80 px-4 py-2 text-sm font-bold text-[#ffcfbe]">
+      <Badge className="px-4 py-2 text-sm" variant="pink">
         {isPending ? "生成中" : "需要重试"}
-      </span>
+      </Badge>
     </div>
   );
 }
@@ -1660,9 +1664,9 @@ function StoryWorldPendingScriptCard({
             </p>
           </div>
         </div>
-        <button className="storycam-secondary-button px-4 py-2 text-xs" disabled type="button">
+        <Button className="px-4 py-2 text-xs" disabled size="sm" type="button" variant="secondaryGlass">
           改剧本
-        </button>
+        </Button>
       </div>
 
       <div className="storycam-logline-box">
@@ -1743,12 +1747,14 @@ function StoryWorldPendingAssetsColumn() {
     <div className="storycam-assets-column">
       <div className="storycam-asset-generate-banner">
         <p>
-          <span aria-hidden="true">i</span>
+          <span aria-hidden="true">
+            <Info className="size-3.5" strokeWidth={2.4} />
+          </span>
           资产图会在剧本生成后出现。
         </p>
-        <button className="storycam-secondary-button px-4 py-2 text-xs" disabled type="button">
+        <Button className="px-4 py-2 text-xs" disabled size="sm" type="button" variant="secondaryGlass">
           等待剧本生成
-        </button>
+        </Button>
       </div>
       <StoryWorldPendingAssetSection heading="角色资产" title="人物生成后出现" variant="characters" />
       <StoryWorldPendingAssetSection heading="场景资产" title="地点生成后出现" variant="scenes" />
@@ -1801,25 +1807,25 @@ function StoryWorldPendingDock({
   onRetry: () => void;
 }) {
   return (
-    <div className="storycam-bottom-dock">
+    <StoryCamBottomDock>
       <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
         1 组 · 约 15 秒内
       </div>
       {isPending ? (
-        <button className="storycam-primary-button" disabled type="button">
+        <Button disabled type="button" variant="primaryNeon">
           剧本生成中
-        </button>
+        </Button>
       ) : (
         <div className="flex flex-wrap justify-end gap-3">
-          <button className="storycam-secondary-button" onClick={onBackToInput} type="button">
+          <Button onClick={onBackToInput} type="button" variant="secondaryGlass">
             返回修改
-          </button>
-          <button className="storycam-primary-button" onClick={onRetry} type="button">
+          </Button>
+          <Button onClick={onRetry} type="button" variant="primaryNeon">
             重试生成
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </StoryCamBottomDock>
   );
 }
 
@@ -1894,27 +1900,27 @@ function CoreStoryboardPendingShell({
         </aside>
       </div>
 
-      <div className="storycam-bottom-dock storycam-core-dock">
+      <StoryCamBottomDock className="storycam-core-dock">
         <div className="rounded-full border border-white/10 bg-black/40 px-5 py-3 text-sm font-black text-[#dbfcff]">
           1 组 · 约 15 秒内
         </div>
-        <button className="storycam-secondary-button" onClick={onBackToStoryWorld} type="button">
+        <Button onClick={onBackToStoryWorld} type="button" variant="secondaryGlass">
           返回故事世界
-        </button>
+        </Button>
         {isPending ? (
-          <button className="storycam-primary-button" disabled type="button">
+          <Button disabled type="button" variant="primaryNeon">
             核心分镜生成中
-          </button>
+          </Button>
         ) : (
-          <button className="storycam-primary-button" onClick={onRetry} type="button">
+          <Button onClick={onRetry} type="button" variant="primaryNeon">
             重试生成
-          </button>
+          </Button>
         )}
         <div className="storycam-core-dock-progress">
           <span />
           0 / 8 已完成
         </div>
-      </div>
+      </StoryCamBottomDock>
     </section>
   );
 }
@@ -2378,7 +2384,9 @@ function StoryCamProgress({
                 onClick={() => onSelectStep(stepIndex)}
                 type="button"
               >
-                <span className="storycam-step-dot">{stepIndex < activeIndex ? "✓" : stepIndex}</span>
+                <span className="storycam-step-dot">
+                  {stepIndex < activeIndex ? <Check aria-hidden="true" className="size-3.5" strokeWidth={3} /> : stepIndex}
+                </span>
                 <span className="storycam-step-label">{stage}</span>
               </button>
             </li>

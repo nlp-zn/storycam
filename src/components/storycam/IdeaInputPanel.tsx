@@ -3,6 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, Clapperboard, Heart, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getAuthStatus, listRecentStoryCamProjects } from "@/features/storycam/client/storycamApi";
 import type { RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
 import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
@@ -238,7 +240,7 @@ export function IdeaInputPanel({
               <div className="storycam-input-tools flex flex-1 flex-wrap items-center gap-1.5" data-testid="story-idea-params">
                 <label className="storycam-input-photo-button inline-flex cursor-pointer items-center justify-center rounded-full border border-white/[0.14] bg-white/[0.04] text-[#aebcbd] transition hover:border-[#00f0ff]/55 hover:text-white">
                   <span className="sr-only">上传一张参考照片</span>
-                  <span aria-hidden="true">+</span>
+                  <Plus aria-hidden="true" className="size-4" strokeWidth={2.4} />
                   <input
                     accept="image/jpeg,image/png,image/webp"
                     className="sr-only"
@@ -261,22 +263,23 @@ export function IdeaInputPanel({
                       type="button"
                     >
                       {choice}
-                      {isSelected ? <span className="ml-2" aria-hidden="true">×</span> : null}
                     </button>
                   );
                 })}
               </div>
               <div className="flex shrink-0 items-center justify-end gap-4">
                 <span className="storycam-eyebrow text-[12px] text-[#00f0ff]">{ideaLength} / 120</span>
-                <button
+                <Button
                   aria-label="生成故事雏形"
-                  className="flex size-12 items-center justify-center rounded-full border border-[#ff4b89]/70 bg-[#ff4b89] text-2xl font-black text-black shadow-[0_0_28px_rgba(255,75,137,0.48)] transition hover:scale-105 hover:brightness-110 disabled:scale-100 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
+                  className="size-12 border-[#ff4b89]/70 bg-[#ff4b89] text-black shadow-[0_0_28px_rgba(255,75,137,0.48)] hover:scale-105 hover:brightness-110 disabled:scale-100 disabled:border-[#353535] disabled:bg-[#353535] disabled:text-[#849495] disabled:shadow-none"
                   disabled={!canSubmit}
                   onClick={submitStoryWorld}
+                  size="icon-lg"
                   type="button"
+                  variant="iconGlass"
                 >
-                  <span aria-hidden="true">↑</span>
-                </button>
+                  <ArrowUp aria-hidden="true" data-icon="icon" strokeWidth={2.8} />
+                </Button>
               </div>
             </div>
           </div>
@@ -285,17 +288,19 @@ export function IdeaInputPanel({
         <div className="mt-7 px-1">
           <div className="flex flex-wrap justify-center gap-3">
             {storyModeEntries.map((entry) => (
-              <button
+              <Button
                 aria-label={`${entry.label}：${entry.text}`}
                 aria-pressed={selectedStoryModeId === entry.id}
-                className={storyModeButtonClassName(selectedStoryModeId === entry.id)}
+                data-pressed={selectedStoryModeId === entry.id ? "" : undefined}
                 key={entry.label}
                 onClick={() => selectStoryMode(entry)}
+                size="pill"
                 type="button"
+                variant="storyMode"
               >
-                <span aria-hidden="true" className="mr-2 text-[#dbfcff]">✧</span>
+                <StoryModeIcon id={entry.id} />
                 {entry.label}
-              </button>
+              </Button>
             ))}
           </div>
           {storyModeNotice ? (
@@ -372,13 +377,15 @@ function RecentProjectsInline({
             {recentProjectsSummary(status, totalCount)}
           </p>
         </div>
-        <button
-          className="self-start rounded-full border border-white/[0.12] bg-black/20 px-6 py-3 text-[14px] font-black leading-none text-[#00f0ff] transition hover:border-[#00f0ff] hover:bg-[#00f0ff] hover:text-black md:self-center"
+        <Button
+          className="self-start text-[#00f0ff] md:self-center"
           onClick={onOpen}
+          size="pill"
           type="button"
+          variant="secondaryGlass"
         >
           打开
-        </button>
+        </Button>
       </div>
 
       {hasProjects ? (
@@ -386,7 +393,7 @@ function RecentProjectsInline({
           {projects.map((project) => (
             <article className="grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-center gap-4 rounded-[1rem] border border-white/10 bg-white/[0.04] p-4" key={project.sessionId}>
               <div className="flex size-12 items-center justify-center rounded-xl border border-[#ff4b89]/40 bg-[#ff4b89]/20 text-xl font-black text-[#ff4b89]">
-                ▣
+                <Clapperboard aria-hidden="true" className="size-5" strokeWidth={2.2} />
               </div>
               <div className="min-w-0">
                 <h3 className="truncate text-[14px] font-black leading-tight text-[#e2e2e2]">{project.title}</h3>
@@ -407,78 +414,70 @@ function RecentProjectsInline({
 }
 
 function DiscoveryWall() {
+  const [featuredOffset, setFeaturedOffset] = useState(0);
+  const featuredEntries = Array.from({ length: Math.min(6, discoveryEntries.length) }, (_, index) => {
+    const entryIndex = (featuredOffset + index) % discoveryEntries.length;
+
+    return discoveryEntries[entryIndex];
+  }).filter(Boolean);
+
+  function rotateDiscoveryEntries() {
+    setFeaturedOffset((current) => (current + 3) % discoveryEntries.length);
+  }
+
   return (
-    <section className="storycam-discovery-section mx-auto mt-14 w-full max-w-[1360px]" aria-label="发现更多">
-      <div className="mx-auto mb-8 max-w-2xl text-center">
-        <span className="storycam-eyebrow text-[11px] tracking-[0.2em] text-[#00f0ff]">STORYCAM PRESETS</span>
-        <h2 className="mt-3 text-[34px] font-black leading-tight text-[#f4ffff] md:text-[48px]">发现更多</h2>
-        <p className="mx-auto mt-3 max-w-xl text-[14px] font-bold leading-6 text-[#849495]">
-          预置横版 16:9 与竖版 9:16 样片槽位，后续可直接替换为自有生成视频。
-        </p>
-        <div className="mt-5 flex justify-center gap-2">
-          <span className="storycam-discovery-format-pill">16:9 横版</span>
-          <span className="storycam-discovery-format-pill">9:16 竖版</span>
+    <section className="storycam-discovery-section mx-auto mt-14 w-full max-w-[1180px]" aria-label="发现更多">
+      <div className="storycam-discovery-header">
+        <div className="storycam-discovery-title-row">
+          <Sparkles aria-hidden="true" className="storycam-discovery-title-icon" strokeWidth={2.2} />
+          <h2>发现更多</h2>
+          <p>灵感样片，仅用于启发你的私人创作</p>
         </div>
+        <Button
+          aria-label="换一批发现样片"
+          className="storycam-discovery-refresh"
+          onClick={rotateDiscoveryEntries}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          换一批
+          <RefreshCw aria-hidden="true" data-icon="inline-end" strokeWidth={2.2} />
+        </Button>
       </div>
 
       <div className="storycam-discovery-grid">
-        {discoveryEntries.map((entry) => {
-          const formatLabel = entry.format === "portrait" ? "9:16" : "16:9";
+        {featuredEntries.map((entry, index) => {
           const formatDescription = entry.format === "portrait" ? "竖版 9:16" : "横版 16:9";
-          const mediaStateLabel = entry.videoSrc ? "可播放样片" : "视频槽位待替换";
 
           return (
             <article
               aria-label={`${entry.title}，${formatDescription} 样片`}
-              className={`group storycam-discovery-card storycam-discovery-card--${entry.format}`}
+              className={`group storycam-discovery-card storycam-discovery-card--slot-${index + 1}`}
               key={entry.title}
             >
-              {entry.videoSrc ? (
-                <video
-                  aria-label={`${entry.title} 预设视频`}
-                  autoPlay
-                  className="size-full object-cover"
-                  loop
-                  muted
-                  playsInline
-                  poster={entry.imageSrc}
-                  preload="metadata"
-                  src={entry.videoSrc}
-                />
-              ) : (
-                <img alt={`${entry.title} 样片画面`} className="size-full object-cover" src={entry.imageSrc} />
-              )}
+              <img alt={`${entry.title} 样片画面`} className="size-full object-cover" src={entry.imageSrc} />
               <div className="absolute inset-0 bg-gradient-to-t from-black/[0.82] via-black/[0.12] to-transparent" />
-              <div className="absolute left-3 top-3 flex items-center gap-2">
-                <span className="storycam-discovery-card-badge">{formatLabel}</span>
-                <span className="storycam-discovery-card-badge storycam-discovery-card-badge--muted">{entry.category}</span>
-              </div>
               <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 md:p-4">
                 <div className="min-w-0">
                   <h3 className="truncate text-[15px] font-black leading-tight text-white md:text-[17px]">{entry.title}</h3>
-                  <p className="mt-1 truncate text-[11px] font-bold leading-none text-[#b9cacb]">{mediaStateLabel}</p>
                 </div>
                 <span className="shrink-0 text-[12px] font-bold leading-none text-[#e2e2e2]">{entry.duration}</span>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-                <span className="flex size-12 items-center justify-center rounded-full bg-black/50 text-base font-black text-white backdrop-blur-md">
-                  ▶
-                </span>
               </div>
             </article>
           );
         })}
       </div>
 
-      <p className="mt-8 text-center text-sm leading-6 text-[#6f7d7e]">
-        当前展示为 StoryCam 自有占位海报；竞品素材仅作布局参考，不下载或复用到产品中。
+      <p className="storycam-discovery-footnote">
+        所有内容由 AI 生成，仅供个人创作参考，请勿用于任何公开传播或商业用途。
       </p>
     </section>
   );
 }
 
 function inputToolChipClassName(isSelected: boolean): string {
-  const baseClassName = "storycam-input-tool-chip rounded-full border transition";
+  const baseClassName = "storycam-input-tool-chip inline-flex items-center justify-center whitespace-nowrap rounded-full border transition";
 
   if (isSelected) {
     return `${baseClassName} border-[#00f0ff]/70 bg-[#00dbe9] text-black shadow-[0_0_8px_rgba(0,240,255,0.18)]`;
@@ -487,15 +486,19 @@ function inputToolChipClassName(isSelected: boolean): string {
   return `${baseClassName} border-white/[0.12] bg-white/[0.035] text-[#9eadae] hover:border-[#00f0ff]/45 hover:bg-white/[0.07] hover:text-white`;
 }
 
-function storyModeButtonClassName(isActive: boolean): string {
-  const baseClassName =
-    "rounded-full border px-5 py-3 text-left text-[15px] font-black leading-none transition duration-200";
+function StoryModeIcon({ id }: { id: StoryModeId }) {
+  const strokeWidth = 2.2;
 
-  if (isActive) {
-    return `${baseClassName} scale-[1.03] border-[#ff4b89] bg-[#ff4b89]/[0.24] text-[#ffe4ee] shadow-[0_0_24px_rgba(255,75,137,0.34),inset_0_0_18px_rgba(255,75,137,0.1)]`;
+  switch (id) {
+    case "personal-memory":
+      return <Heart aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
+    case "pet-theater":
+      return <PawPrint aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
+    case "novel-character":
+      return <UserRound aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
+    case "emotion-short":
+      return <Clapperboard aria-hidden="true" data-icon="inline-start" strokeWidth={strokeWidth} />;
   }
-
-  return `${baseClassName} border-white/[0.12] bg-white/[0.055] text-[#d5e0e1] hover:border-[#00f0ff]/65 hover:bg-white/10 hover:text-white hover:shadow-[0_0_18px_rgba(0,240,255,0.16)]`;
 }
 
 function recentProjectsSummary(status: RecentProjectsStatus, totalCount: number): string {
@@ -548,14 +551,15 @@ function RecentProjectsDrawer({
             <p className="storycam-eyebrow">StoryCam</p>
             <h2 className="mt-1 text-2xl font-black text-[#e2e2e2]">最近项目</h2>
           </div>
-          <button
+          <Button
             aria-label="关闭最近项目"
-            className="flex size-10 items-center justify-center rounded-full border border-[#3b494b] text-xl font-black text-[#e2e2e2] transition hover:border-[#00f0ff]"
             onClick={onClose}
+            size="icon-lg"
             type="button"
+            variant="iconGlass"
           >
-            ×
-          </button>
+            <X aria-hidden="true" data-icon="icon" strokeWidth={2.4} />
+          </Button>
         </div>
 
         {content}
@@ -605,14 +609,16 @@ function renderRecentProjectsDrawerContent({
               <span className="text-xs font-bold text-[#849495]">
                 1 组 · 约 15 秒 · {formatProjectDate(project.updatedAt)}
               </span>
-              <button
-                className="storycam-primary-button px-4 py-2 text-xs"
+              <Button
+                className="px-4 py-2 text-xs"
                 disabled={Boolean(restoringProjectId)}
                 onClick={() => onContinue(project)}
+                size="sm"
                 type="button"
+                variant="primaryNeon"
               >
                 {restoringProjectId === project.sessionId ? "恢复中" : "继续创作"}
-              </button>
+              </Button>
             </div>
           </div>
         </article>

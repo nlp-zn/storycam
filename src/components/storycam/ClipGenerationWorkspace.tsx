@@ -1,7 +1,11 @@
 import { useState } from "react";
+import { ArrowLeft, Download, ExternalLink, RotateCcw, Save, Trash2, XCircle } from "lucide-react";
+import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { FinalWorkResponse, GenerationJobStatus, GenerationJobSummary } from "@/features/storycam/client/storycamApi";
 import { isTerminalGenerationJobStatus } from "@/features/storycam/client/jobPolling";
 import { storyCamSeedanceOutputResolutionLabel } from "@/features/storycam/domain/videoSettings";
+import { cn } from "@/lib/utils";
 
 type ClipGenerationState =
   | { kind: "idle" }
@@ -50,6 +54,7 @@ export function ClipGenerationWorkspace({
   const canRetry = clipJob?.status === "failed" || clipJob?.status === "canceled" || clipJob?.status === "expired";
   const isClipReady = clipJob?.status === "succeeded";
   const canExport = !isCreatingClip && !isClipCreationError && Boolean(finalWorkSignedUrl || (isClipReady && clipJob?.outputArtifactId));
+  const canCreateFinalWork = isClipReady && !finalWork;
   const durationLabel = formatDuration(durationSeconds);
   const progress = progressNumberForStatus(clipJob?.status);
   const statusLabel = clipGenerationStatusLabel(clipGenerationState, clipJob?.status, Boolean(finalWork));
@@ -154,66 +159,90 @@ export function ClipGenerationWorkspace({
       {clipJob?.redactedError ? <p className="storycam-clip-error">{clipJob.redactedError}</p> : null}
       {clipJob?.providerErrorCategory ? <p className="storycam-clip-error">失败类型：{clipJob.providerErrorCategory}</p> : null}
 
-      <div className="storycam-clip-footer-actions">
+      <div className="storycam-clip-footer-actions" aria-label="片段工具">
         {clipJob && !isTerminalGenerationJobStatus(clipJob.status) ? (
-          <button className="storycam-secondary-button storycam-danger-button" disabled={!canCancel} onClick={onCancelClip} type="button">
+          <Button disabled={!canCancel} onClick={onCancelClip} size="dock" type="button" variant="dangerGlass">
+            <XCircle aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
             取消生成
-          </button>
+          </Button>
         ) : null}
         {onDeleteStory && clipJob ? (
-          <button
-            className="storycam-secondary-button storycam-danger-button"
+          <Button
             disabled={isDeletingStory}
             onClick={onDeleteStory}
+            size="dock"
             type="button"
+            variant="dangerGlass"
           >
+            <Trash2 aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
             {isDeletingStory ? "正在删除" : "删除这个故事"}
-          </button>
+          </Button>
         ) : null}
-        {!isCreatingClip && !isClipCreationError && (canRetry || isClipReady) ? (
-          <button className="storycam-secondary-button" disabled={!canRetry && !isClipReady} onClick={onRetake} type="button">
-            {canRetry ? "重试" : "重拍这个片段"}
-          </button>
+        {!isCreatingClip && !isClipCreationError && isClipReady ? (
+          <Button onClick={onRetake} size="dock" type="button" variant="secondaryGlass">
+            <RotateCcw aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
+            重拍这个片段
+          </Button>
         ) : null}
         {activePreview ? (
-          <a className="storycam-secondary-button" href={activePreview.signedUrl} rel="noreferrer" target="_blank">
+          <a
+            className={cn(buttonVariants({ variant: "secondaryGlass", size: "dock" }), "storycam-clip-link-button")}
+            href={activePreview.signedUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
             查看
           </a>
         ) : null}
-        {isClipReady ? (
-          <button className="storycam-secondary-button" disabled={isFinalWorkSubmitting || Boolean(finalWork)} onClick={onCreateFinalWork} type="button">
-            {finalWork ? "最终作品已生成" : isFinalWorkSubmitting ? "正在生成最终作品" : "生成最终作品"}
-          </button>
-        ) : null}
         {finalWork?.preview ? (
-          <a className="storycam-secondary-button" href={finalWork.preview.signedUrl} rel="noreferrer" target="_blank">
+          <a
+            className={cn(buttonVariants({ variant: "secondaryGlass", size: "dock" }), "storycam-clip-link-button")}
+            href={finalWork.preview.signedUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
             打开最终作品
           </a>
         ) : null}
       </div>
 
-      <div className="storycam-bottom-dock storycam-clip-dock">
+      <StoryCamBottomDock className="storycam-clip-dock">
         <div className="storycam-clip-dock-meta">1 个片段 · {durationLabel}</div>
         <div className="storycam-clip-dock-status">
           <span /> 视频 {isClipReady ? "READY" : statusLabel} · 音频 {isClipReady ? "READY" : "待生成"} · {finalWork ? "已保存" : "待保存"}
         </div>
-        <button className="storycam-secondary-button" onClick={onBackToCoreStoryboard} type="button">
+        <Button onClick={onBackToCoreStoryboard} type="button" variant="secondaryGlass">
+          <ArrowLeft aria-hidden="true" data-icon="inline-start" strokeWidth={2.3} />
           返回核心分镜
-        </button>
+        </Button>
         {isCreatingClip ? (
-          <button className="storycam-primary-button" disabled type="button">
+          <Button disabled type="button" variant="primaryNeon">
             片段生成中
-          </button>
+          </Button>
         ) : isClipCreationError ? (
-          <button className="storycam-primary-button" onClick={onRetake} type="button">
+          <Button onClick={onRetake} type="button" variant="primaryNeon">
+            <RotateCcw aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
             重试生成
-          </button>
+          </Button>
+        ) : canRetry ? (
+          <Button onClick={onRetake} type="button" variant="primaryNeon">
+            <RotateCcw aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
+            重试
+          </Button>
+        ) : canCreateFinalWork ? (
+          <Button disabled={isFinalWorkSubmitting} onClick={onCreateFinalWork} type="button" variant="primaryNeon">
+            <Save aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
+            {isFinalWorkSubmitting ? "正在生成最终作品" : "生成最终作品"}
+          </Button>
         ) : (
-          <button className="storycam-primary-button" disabled={!canExport || isExporting || isFinalWorkSubmitting} onClick={exportMp4} type="button">
+          <Button disabled={!canExport || isExporting || isFinalWorkSubmitting} onClick={exportMp4} type="button" variant="primaryNeon">
+            <Download aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
             导出 MP4
-          </button>
+          </Button>
         )}
-      </div>
+      </StoryCamBottomDock>
     </section>
   );
 }

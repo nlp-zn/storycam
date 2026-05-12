@@ -32,6 +32,24 @@ test.describe("StoryCam story input", () => {
     await expect(page.getByText("已切换方向，不会覆盖你的文字。")).toBeVisible();
   });
 
+  test("rotates discovery samples without changing layout width", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+
+    const discovery = page.getByRole("region", { name: "发现更多" });
+    const initialTitle = await discovery.locator(".storycam-discovery-card h3").first().innerText();
+
+    await expect(discovery.locator(".storycam-discovery-card")).toHaveCount(6);
+    await page.getByRole("button", { name: "换一批发现样片" }).click();
+
+    await expect(discovery.locator(".storycam-discovery-card")).toHaveCount(6);
+    await expect(discovery.locator(".storycam-discovery-card h3").first()).not.toHaveText(initialTitle);
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+
   test("story input uploads a photo preview and calls story-world", async ({ page }) => {
     let uploadCalled = false;
     let storyWorldCalled = false;
