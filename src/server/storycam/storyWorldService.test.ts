@@ -121,6 +121,28 @@ describe("story world service", () => {
     expect(artifactWrites.some((call) => JSON.stringify(call).includes("photo-1"))).toBe(true);
   });
 
+  it("preserves an existing draft session aspect ratio when the request omits videoAspectRatio", async () => {
+    const client = new FakeSupabaseClient({ sessionAspectRatio: "9:16" });
+
+    const result = await createStoryWorld(client.asSupabaseClient(), "user-1", {
+      input: "继续生成这个竖版故事",
+      sessionId: "session-1"
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        videoAspectRatio: "9:16"
+      }
+    });
+    expect(
+      client.queries
+        .filter((query) => query.table === "storycam_sessions")
+        .flatMap((query) => query.calls)
+        .some((call) => call[0] === "update")
+    ).toBe(false);
+  });
+
   it("keeps uploaded photo refs as media ids and does not pass storage paths to the provider output", async () => {
     const client = new FakeSupabaseClient({
       mediaRows: [
@@ -348,6 +370,7 @@ describe("story world service", () => {
 
 type FakeSupabaseClientOptions = {
   mediaRows?: unknown[];
+  sessionAspectRatio?: "16:9" | "9:16";
 };
 
 class FakeSupabaseClient {
@@ -429,7 +452,7 @@ class FakeQuery {
               status: "draft",
               updated_at: "2026-04-26T00:00:00.000Z",
               user_id: "user-1",
-              video_aspect_ratio: "16:9"
+              video_aspect_ratio: this.options.sessionAspectRatio ?? "16:9"
             }
           : null,
       error: null
@@ -455,7 +478,7 @@ class FakeQuery {
         status: this.updated?.status ?? this.inserted?.status ?? "draft",
         updated_at: "2026-04-26T00:00:00.000Z",
         user_id: this.inserted?.user_id ?? "user-1",
-        video_aspect_ratio: this.updated?.video_aspect_ratio ?? this.inserted?.video_aspect_ratio ?? "16:9"
+        video_aspect_ratio: this.updated?.video_aspect_ratio ?? this.inserted?.video_aspect_ratio ?? this.options.sessionAspectRatio ?? "16:9"
       };
     }
 

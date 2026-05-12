@@ -78,7 +78,7 @@ export async function createStoryWorld(
 
   const session = await applyInitialVideoAspectRatio({
     artifacts,
-    requestedAspectRatio: input.videoAspectRatio,
+    requestedAspectRatio: input.requestedVideoAspectRatio,
     session: loadedSession,
     sessions,
     userId
@@ -151,11 +151,15 @@ async function applyInitialVideoAspectRatio({
   userId
 }: {
   artifacts: StoryCamArtifactRepository;
-  requestedAspectRatio: StoryCamVideoAspectRatio;
+  requestedAspectRatio: StoryCamVideoAspectRatio | undefined;
   session: StoryCamSessionRow;
   sessions: StoryCamSessionRepository;
   userId: string;
 }): Promise<StoryCamSessionRow> {
+  if (requestedAspectRatio === undefined) {
+    return session;
+  }
+
   const currentAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 
   if (currentAspectRatio === requestedAspectRatio) {
@@ -205,15 +209,16 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
     input,
     lightweightChoices: parseStringArray(body.lightweightChoices),
     plannedDurationSeconds: parsePlannedDuration(body.plannedDurationSeconds),
+    requestedVideoAspectRatio: parseRequestedVideoAspectRatio(body.videoAspectRatio),
     sessionId: typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined,
     uploadedPhotoIds: parseStringArray(body.uploadedPhotoIds),
-    videoAspectRatio: parseOptionalVideoAspectRatio(body.videoAspectRatio)
+    videoAspectRatio: parseVideoAspectRatioWithDefault(body.videoAspectRatio)
   };
 }
 
-function parseOptionalVideoAspectRatio(value: unknown) {
+function parseRequestedVideoAspectRatio(value: unknown): StoryCamVideoAspectRatio | undefined {
   if (value === undefined) {
-    return defaultStoryCamVideoAspectRatio;
+    return undefined;
   }
 
   const aspectRatio = parseStoryCamVideoAspectRatio(value);
@@ -223,6 +228,10 @@ function parseOptionalVideoAspectRatio(value: unknown) {
   }
 
   return aspectRatio;
+}
+
+function parseVideoAspectRatioWithDefault(value: unknown): StoryCamVideoAspectRatio {
+  return parseRequestedVideoAspectRatio(value) ?? defaultStoryCamVideoAspectRatio;
 }
 
 async function resolveUploadedPhotoRefs(
