@@ -118,6 +118,7 @@ function storyScript(): StoryScript {
     beats: ["雨夜便利店屋檐下，主角停住脚步。"],
     id: "script-1",
     logline: "雨夜里，一个没说出口的暗恋故事。",
+    qualityChecks: [],
     sessionId: "session-1",
     state: "ready",
     summary: "主角在雨夜便利店屋檐下看见街对面的人，握紧透明伞。",

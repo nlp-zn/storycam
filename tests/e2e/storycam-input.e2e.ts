@@ -13,15 +13,15 @@ test.describe("StoryCam story input", () => {
 
     await expect(memoryMode).toHaveAttribute("aria-pressed", "true");
     await expect(ideaInput).toHaveValue("我想把暗恋拍成韩剧雨夜");
-    await expect(page.getByRole("button", { name: "移除 像私人回忆" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "移除 留白多一点" })).toHaveAttribute("aria-pressed", "true");
 
     await ideaInput.fill("");
     await petMode.click();
 
     await expect(petMode).toHaveAttribute("aria-pressed", "true");
     await expect(ideaInput).toHaveValue("我想拍一只小狗等主人回家的十秒小剧场");
-    await expect(page.getByRole("button", { name: "移除 等它回头" })).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { exact: true, name: "像私人回忆" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "移除 低机位跟随" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { exact: true, name: "留白多一点" })).toHaveCount(0);
 
     await ideaInput.fill("这是我自己写的一段，不要被模板覆盖");
     await novelMode.click();
@@ -84,7 +84,7 @@ test.describe("StoryCam story input", () => {
       };
 
       expect(body.input).toContain("雨夜");
-      expect(body.lightweightChoices).toContain("像私人回忆");
+      expect(body.lightweightChoices).toContain("留白多一点");
       expect(body.sessionId).toBe("session-1");
       expect(body.uploadedPhotoIds).toEqual(["media-photo-1"]);
 

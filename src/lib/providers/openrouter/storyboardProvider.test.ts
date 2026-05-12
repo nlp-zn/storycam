@@ -97,6 +97,10 @@ describe("openrouter storyboard provider", () => {
     expect(prompt.prompt).toContain("每组时长：约 15 秒");
     expect(prompt.prompt).toContain("总计划时长：约 15 秒");
     expect(prompt.prompt).toContain("frames 必须正好 9 帧");
+    expect(prompt.prompt).toContain("导演简报");
+    expect(prompt.prompt).toContain("0-3秒");
+    expect(prompt.prompt).toContain("micro rhythm");
+    expect(prompt.prompt).toContain("visualMotifs");
     expect(prompt.prompt).toContain("visibleCharacterAssetIds");
     expect(prompt.prompt).toContain("每帧只能引用上方人物资产的 id");
     expect(prompt.system).toContain("山隐导演九列分镜");

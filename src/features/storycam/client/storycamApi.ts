@@ -113,6 +113,7 @@ export type CreateStoryWorldResponse = {
     script: {
       beats: string[];
       logline: string;
+      qualityChecks?: string[];
       summary: string;
       title: string;
       version: number;

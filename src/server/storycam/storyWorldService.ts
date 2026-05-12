@@ -37,7 +37,11 @@ export type StoryWorldServiceOutput = {
     script: StoryWorldArtifactRef;
   };
   sessionId: string;
-  storyWorld: StoryWorldProviderOutput;
+  storyWorld: PublicStoryWorldProviderOutput;
+};
+
+export type PublicStoryWorldProviderOutput = Omit<StoryWorldProviderOutput, "script"> & {
+  script: Omit<StoryWorldProviderOutput["script"], "directorBrief">;
 };
 
 export class StoryWorldRequestError extends Error {
@@ -122,8 +126,17 @@ export async function createStoryWorld(
         script: toArtifactRef(script)
       },
       sessionId: session.id,
-      storyWorld
+      storyWorld: toPublicStoryWorld(storyWorld)
     }
+  };
+}
+
+export function toPublicStoryWorld(storyWorld: StoryWorldProviderOutput): PublicStoryWorldProviderOutput {
+  const { directorBrief: _directorBrief, ...script } = storyWorld.script;
+
+  return {
+    ...storyWorld,
+    script
   };
 }
 

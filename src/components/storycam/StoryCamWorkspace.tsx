@@ -127,7 +127,7 @@ export function StoryCamWorkspace() {
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(() =>
     typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname)
   );
-  const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["像私人回忆"] });
+  const [inputDraft, setInputDraft] = useState({ idea: "我想把暗恋拍成韩剧雨夜", selectedChoices: ["留白多一点"] });
   const [storyWorldGeneration, setStoryWorldGeneration] = useState<StoryWorldGenerationState>({ kind: "idle" });
   const [storyboardGeneration, setStoryboardGeneration] = useState<StoryboardGenerationState>({ kind: "idle" });
   const [clipGeneration, setClipGeneration] = useState<ClipGenerationState>({ kind: "idle" });

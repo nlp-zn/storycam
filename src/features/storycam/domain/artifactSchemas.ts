@@ -24,12 +24,26 @@ export const versionedArtifactSchema = artifactIdentitySchema.extend({
   updatedAt: isoDateSchema
 });
 
+export const directorBriefSchema = z.object({
+  dialogueStrategy: z.string().min(1),
+  microRhythm: z.string().min(1),
+  shotDensity: z.string().min(1),
+  shotSizeFocus: z.string().min(1),
+  soundStrategy: z.string().min(1),
+  tone: z.string().min(1),
+  transitionStrategy: z.string().min(1),
+  userFacingSummary: z.string().min(1),
+  visualMotifs: z.array(z.string().min(1)).min(1).max(6)
+});
+
 export const storyScriptSchema = artifactIdentitySchema.extend({
   title: z.string().min(1),
   logline: z.string().min(1),
   summary: z.string().min(1),
   visualStyle: z.string().min(1).optional(),
-  beats: z.array(z.string().min(1)).min(1).max(8)
+  beats: z.array(z.string().min(1)).min(1).max(8),
+  directorBrief: directorBriefSchema.optional(),
+  qualityChecks: z.array(z.string().min(1)).default([])
 });
 
 export const characterAssetSchema = artifactIdentitySchema.extend({

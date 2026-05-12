@@ -60,9 +60,10 @@ describe("POST /api/story-world", () => {
 
   it("returns artifact versions from mock mode", async () => {
     const { POST } = await import("@/app/api/story-world/route");
+    const client = new FakeSupabaseClient();
 
     requireUserMock.mockResolvedValue({ id: "user-1" });
-    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
 
     const response = await POST(
       jsonRequest({
@@ -74,7 +75,9 @@ describe("POST /api/story-world", () => {
 
     expect(response.status).toBe(201);
     expect(response.headers.get("x-storycam-text-provider")).toBe("mock");
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+
+    expect(body).toMatchObject({
       artifacts: {
         characterAssets: expect.arrayContaining([
           expect.objectContaining({ id: "character-rainy-crush-lead-artifact", type: "character_asset", version: 1 }),
@@ -102,6 +105,9 @@ describe("POST /api/story-world", () => {
         script: expect.objectContaining({ title: "雨夜未发送" })
       }
     });
+    expect(body.storyWorld.script.qualityChecks).toEqual(expect.arrayContaining([expect.stringContaining("可见")]));
+    expect(body.storyWorld.script).not.toHaveProperty("directorBrief");
+    expect(JSON.stringify(body)).not.toContain("shotDensity");
   });
 
   it("uses the OpenRouter story-world provider when text provider is configured for mixed mode", async () => {
@@ -133,7 +139,7 @@ describe("POST /api/story-world", () => {
     const response = await POST(
       jsonRequest({
         input: "我想把毕业告别拍成一个旧照片短片",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
 
@@ -166,7 +172,7 @@ describe("POST /api/story-world", () => {
     expect(provider.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         idea: "我想把毕业告别拍成一个旧照片短片",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
   });
@@ -202,7 +208,7 @@ describe("POST /api/story-world", () => {
     const response = await POST(
       jsonRequest({
         input: "我想把暗恋拍成韩剧雨夜",
-        lightweightChoices: ["像私人回忆"]
+        lightweightChoices: ["留白多一点"]
       })
     );
 
@@ -270,7 +276,7 @@ describe("POST /api/story-world", () => {
     const response = await POST(
       jsonRequest({
         input: "这是非常私密的一句话，不应该出现在错误响应里",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
     const body = await response.json();
