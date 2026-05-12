@@ -9,7 +9,6 @@ import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
 import type { StoryWorldDraft } from "@/components/storycam/IdeaInputPanel";
 import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
 import { StoryWorldReview } from "@/components/storycam/StoryWorldReview";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -32,6 +31,7 @@ import {
   getGenerationJob,
   regenerateStoryboardFrameImage,
   refreshStoryCamSessionRestore,
+  restoreCachedCurrentStoryCamSession,
   restoreCurrentStoryCamSession,
   restoreStoryCamSession,
   uploadStoryCamPhoto,
@@ -346,6 +346,47 @@ export function StoryCamWorkspace() {
     }
   }
 
+  function clearRestoredWorkspaceState() {
+    storyWorldRequestIdRef.current += 1;
+    storyboardRequestIdRef.current += 1;
+    clipRequestIdRef.current += 1;
+    imagePollAttemptsRef.current = {};
+    storyWorldAssetImagePollAttemptsRef.current = {};
+    videoPollAttemptsRef.current = {};
+    storyWorldAssetImagesInFlightRef.current.clear();
+    finalWorkCreationInFlightRef.current.clear();
+    finalWorkAutoSubmittedKeyRef.current = null;
+    finalWorkSaveFailedKeyRef.current = null;
+    finalWorkActiveSaveKeyRef.current = null;
+
+    setStoryWorld(null);
+    setStoryWorldAssetImageJobs({});
+    setStoryWorldConfirmed(false);
+    setStoryboard(null);
+    setSelectedCoreGroupIndex(null);
+    setExpansion(null);
+    setIsExpansionLoading(false);
+    setRegeneratingFrameKey(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
+    setIsClipSubmitting(false);
+    setFinalWork(null);
+    setIsFinalWorkSubmitting(false);
+    resetFinalWorkSaveState();
+    setIsStoryWorldEditorOpen(false);
+    setStoryWorldGeneration({ kind: "idle" });
+    setStoryboardGeneration({ kind: "idle" });
+    setClipGeneration({ kind: "idle" });
+    setCoreGroupTargetCount(1);
+    setVideoAspectRatio(defaultStoryCamVideoAspectRatio);
+    setVideoModel(defaultStoryCamVideoModel);
+    setSelectedStepIndex(0);
+    setWorkspaceNotice("上次项目已不可用，可以重新开始。");
+    setStoryboardStatus("idle");
+    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
+    syncStepPath(0);
+  }
+
   const refreshSessionMediaUrls = useCallback(async (sessionId: string) => {
     const hasPendingImageJobs = collectStoryboardImageJobIds(storyboardRef.current, expansionRef.current).length > 0;
 
@@ -433,6 +474,17 @@ export function StoryCamWorkspace() {
       }
 
       try {
+        const cachedRestore = await restoreCachedCurrentStoryCamSession();
+
+        if (isCanceled) {
+          return;
+        }
+
+        if (cachedRestore.restored) {
+          hydrateRestoredProject(cachedRestore, { preserveCurrentPath: true });
+          setIsRestoringSession(false);
+        }
+
         const restored = await restoreCurrentStoryCamSession();
 
         if (isCanceled) {
@@ -440,6 +492,11 @@ export function StoryCamWorkspace() {
         }
 
         if (!restored.restored) {
+          if (cachedRestore.restored) {
+            clearRestoredWorkspaceState();
+          } else {
+            setIsRestoringSession(false);
+          }
           return;
         }
 
@@ -1733,7 +1790,7 @@ function StoryWorldPendingReviewShell({
 
   return (
     <section className="storycam-story-world relative" data-testid="story-world-generating">
-      <StoryWorldPendingHero isPending={isPending} />
+      <StoryWorldPendingHero />
 
       <div className="storycam-story-world-grid" data-testid="story-world-layout-grid">
         <div className="storycam-script-column">
@@ -1747,7 +1804,7 @@ function StoryWorldPendingReviewShell({
   );
 }
 
-function StoryWorldPendingHero({ isPending }: { isPending: boolean }) {
+function StoryWorldPendingHero() {
   return (
     <div className="storycam-story-world-hero">
       <div className="storycam-section-kicker">
@@ -1757,9 +1814,6 @@ function StoryWorldPendingHero({ isPending }: { isPending: boolean }) {
       </div>
       <h1 className="storycam-heading-lg">确认故事世界</h1>
       <p>审查剧本、人物与场景资产，确认后进入核心分镜。</p>
-      <Badge className="px-4 py-2 text-sm" variant="pink">
-        {isPending ? "生成中" : "需要重试"}
-      </Badge>
     </div>
   );
 }
@@ -1982,7 +2036,6 @@ function CoreStoryboardPendingShell({
         </div>
         <h1 className="storycam-heading-xl">核心分镜</h1>
         <p>把已确认的故事世界整理成一组可生成片段的核心分镜。</p>
-        <span className="storycam-core-status-pill">{isPending ? "生成中" : "需要重试"}</span>
       </header>
 
       <div className="storycam-core-workbench">

@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, RefreshCcw, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, RefreshCcw, X } from "lucide-react";
 import { StoryCamBottomDock } from "@/components/storycam/StoryCamPrimitives";
 import { Button } from "@/components/ui/button";
 import type {
@@ -80,6 +80,8 @@ export function CoreFramesStage({
   videoModel
 }: CoreFramesStageProps) {
   const [previewFrameNumber, setPreviewFrameNumber] = useState<number | null>(null);
+  const [isVideoModelMenuOpen, setIsVideoModelMenuOpen] = useState(false);
+  const videoModelMenuRef = useRef<HTMLDivElement>(null);
   const coreGroups = storyboard.storyboard.coreStoryboardGroups.slice(0, 1);
   const activeIndex = Math.min(selectedIndex, coreGroups.length - 1);
   const selectedGroup = coreGroups[activeIndex] ?? coreGroups[0];
@@ -107,6 +109,32 @@ export function CoreFramesStage({
   const previewFrame = frames.find((frame) => frame.frameNumber === previewFrameNumber && frame.image?.status === "ready");
   const audioSummary = audioSummaryForScript(selectedScript);
   const canStartExpansion = canAttemptExpansionFromImage(selectedGroup?.representativeImage);
+
+  useEffect(() => {
+    if (!isVideoModelMenuOpen) {
+      return;
+    }
+
+    function closeWhenOutside(event: PointerEvent) {
+      if (!videoModelMenuRef.current?.contains(event.target as Node)) {
+        setIsVideoModelMenuOpen(false);
+      }
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsVideoModelMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeWhenOutside);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeWhenOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isVideoModelMenuOpen]);
 
   if (!selectedGroup) {
     return null;
@@ -169,7 +197,6 @@ export function CoreFramesStage({
         </div>
         <h1 className="storycam-heading-xl">核心分镜</h1>
         <p>点击中心主帧后，系统自动延展周围 8 张分镜图，确认后生成 Seedance 片段。</p>
-        <span className="storycam-core-status-pill">{isExpansionLoading ? "生成中" : `${readyExpandedCount} / 8`}</span>
       </header>
 
       <div className="storycam-core-workbench">
@@ -239,29 +266,14 @@ export function CoreFramesStage({
           <Button onClick={onBackToStoryWorld} type="button" variant="secondaryGlass">
             返回故事世界
           </Button>
-          <div className="flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-black/40 px-3 py-2" aria-label="选择视频模型">
-            {storyCamVideoModels.map((model) => {
-              const isSelected = videoModel === model;
-
-              return (
-                <button
-                  aria-pressed={isSelected}
-                  className={[
-                    "rounded-full px-3 py-2 text-xs font-black transition",
-                    isSelected
-                      ? "bg-[#00f0ff] text-black shadow-[0_0_16px_rgba(0,240,255,0.24)]"
-                      : "border border-white/10 bg-white/[0.04] text-[#aebcbd] hover:border-[#00f0ff]/45 hover:text-white"
-                  ].join(" ")}
-                  disabled={isBusy}
-                  key={model}
-                  onClick={() => onVideoModelChange(model)}
-                  type="button"
-                >
-                  {storyCamVideoModelLabel(model)}
-                </button>
-              );
-            })}
-          </div>
+          <VideoModelMenu
+            isBusy={isBusy}
+            isOpen={isVideoModelMenuOpen}
+            menuRef={videoModelMenuRef}
+            onChange={onVideoModelChange}
+            onOpenChange={setIsVideoModelMenuOpen}
+            value={videoModel}
+          />
           <Button
             disabled={isBusy || !canGenerateClip}
             onClick={() => onGenerateClip(activeIndex)}
@@ -289,6 +301,60 @@ export function CoreFramesStage({
         />
       ) : null}
     </section>
+  );
+}
+
+function VideoModelMenu({
+  isBusy,
+  isOpen,
+  menuRef,
+  onChange,
+  onOpenChange,
+  value
+}: {
+  isBusy: boolean;
+  isOpen: boolean;
+  menuRef: RefObject<HTMLDivElement | null>;
+  onChange: (model: StoryCamVideoModel) => void;
+  onOpenChange: Dispatch<SetStateAction<boolean>>;
+  value: StoryCamVideoModel;
+}) {
+  function selectModel(model: StoryCamVideoModel) {
+    onChange(model);
+    onOpenChange(false);
+  }
+
+  return (
+    <div className="storycam-video-model-menu" ref={menuRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-label={`选择视频模型，当前为 ${storyCamVideoModelLabel(value)}`}
+        className="storycam-video-model-trigger"
+        disabled={isBusy}
+        onClick={() => onOpenChange((current) => !current)}
+        type="button"
+      >
+        {storyCamVideoModelLabel(value)}
+        <ChevronDown aria-hidden="true" className="size-3.5" strokeWidth={2.4} />
+      </button>
+      {isOpen ? (
+        <div className="storycam-video-model-menu-panel" role="menu">
+          {storyCamVideoModels.map((model) => (
+            <button
+              aria-checked={value === model}
+              className="storycam-video-model-menu-item"
+              key={model}
+              onClick={() => selectModel(model)}
+              role="menuitemradio"
+              type="button"
+            >
+              {storyCamVideoModelLabel(model)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

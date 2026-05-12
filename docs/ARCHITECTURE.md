@@ -73,7 +73,7 @@ Private Storage buckets:
 
 Storage access stays private across local, staging, and production. Browser previews use short-lived UI signed URLs. External providers use server-created provider reference signed URLs with a separate TTL; those URLs must be public HTTPS endpoints from a hosted Supabase project. Local Supabase Storage URLs are valid for mock/local UI work only, not for real Seedance or reference-image provider calls.
 
-Restore responses are account-scoped, `Cache-Control: no-store`, and may be cached in browser `sessionStorage` only for the current tab/user/session. Restore caches store JSON payloads and signed URLs, never media bytes, and must clear on sign-out, anonymous auth, user switch, restore 401, or restore failure.
+Restore responses are account-scoped, `Cache-Control: no-store`, and may be cached in browser `sessionStorage` only for the current tab/user/session. Recent-project summaries may use the same current-tab, user-bound cache so the input screen can render immediately while a background refresh runs. These caches store JSON payloads and signed URLs, never media bytes, and must clear on sign-out, anonymous auth, user switch, restore 401, restore failure, session deletion, or new story creation.
 
 See `docs/generated/db-schema.md` and `docs/generated/api-contract.md` for implementation snapshots.
 

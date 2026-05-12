@@ -41,7 +41,7 @@ Error bodies must not include raw private input, full prompts, full prompt packe
 | `DELETE /api/storycam-sessions/[id]` | Tombstones a user-owned session and cleans associated storage where applicable. |
 | `GET /api/storycam-sessions/[id]/restore` | Restores a full account-scoped session snapshot with signed preview URLs. |
 
-Restore responses may be cached client-side in `sessionStorage` only for the current tab, user, and session id. The cache stores JSON and signed URLs, never media bytes, and must preserve absolute URL expiry instead of extending old URLs.
+Restore responses and recent-project summaries may be cached client-side in `sessionStorage` only for the current tab and authenticated user. Restore cache entries are additionally keyed by session id. These caches store JSON and signed URLs, never media bytes, and must preserve absolute URL expiry instead of extending old URLs.
 
 ## Creation And Story Routes
 
