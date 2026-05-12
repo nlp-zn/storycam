@@ -10,11 +10,15 @@ export async function POST(request: Request) {
     const user = await requireUser();
     const { file, sessionId } = await parseUploadFormData(request);
     const client = createSupabaseAdminClient();
-    const session = sessionId ? undefined : await new StoryCamSessionRepository(client).create(user.id);
-    const targetSessionId = sessionId ?? session?.id;
+    const sessions = new StoryCamSessionRepository(client);
+    const session = sessionId ? await sessions.findById(user.id, sessionId) : await sessions.create(user.id);
+    const targetSessionId = session?.id;
 
     if (!targetSessionId) {
-      return NextResponse.json({ error: "upload_failed" }, { status: 500 });
+      const errorCode = sessionId ? "session_not_found" : "upload_failed";
+      const status = sessionId ? 404 : 500;
+
+      return NextResponse.json({ error: errorCode }, { status });
     }
 
     const media = await uploadStoryCamPhoto(client, {

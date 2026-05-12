@@ -56,6 +56,8 @@ Current duration constraints:
 - `input_artifact_versions_json`
 - `output_artifact_id`
 - `error_code`
+- `provider_error_category`
+- `provider_http_status`
 - `redacted_error`
 - `started_at`
 - `ended_at`
@@ -103,6 +105,7 @@ Current duration constraints:
 - All StoryCam metadata tables include `user_id uuid not null references auth.users(id) on delete cascade`.
 - Row-level security is enabled for every StoryCam metadata table.
 - Table policies scope select, insert, update, and delete to `auth.uid() = user_id`.
+- Follow-up migrations add account-scoped composite foreign keys so admin-client writes cannot attach artifacts, jobs, media, or provider requests to another user's session/job/artifact.
 - Storage buckets are private and object policies scope access to `users/{auth.uid()}/...` paths.
 - `soft_delete_storycam_session` tombstones in-flight jobs and soft deletes related artifacts/media/session metadata inside one database function.
 

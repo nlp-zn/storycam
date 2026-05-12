@@ -1,11 +1,17 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+const migrationsDir = join(process.cwd(), "supabase/migrations");
 const migrationSql = readFileSync(
-  join(process.cwd(), "supabase/migrations/20260426033600_storycam_phase1_schema.sql"),
+  join(migrationsDir, "20260426033600_storycam_phase1_schema.sql"),
   "utf8"
 );
+const allMigrationSql = readdirSync(migrationsDir)
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => readFileSync(join(migrationsDir, file), "utf8"))
+  .join("\n");
 
 const requiredTables = [
   "storycam_sessions",
@@ -60,5 +66,15 @@ describe("supabase-db migration baseline", () => {
     expect(migrationSql).toContain("update public.media_assets");
     expect(migrationSql).toContain("update public.storycam_sessions");
     expect(migrationSql).toContain("where user_id = target_user_id");
+  });
+
+  it("adds account-scoped foreign keys for admin-client writes", () => {
+    expect(allMigrationSql).toContain("storycam_artifacts_session_owner_fk");
+    expect(allMigrationSql).toContain("generation_jobs_session_owner_fk");
+    expect(allMigrationSql).toContain("media_assets_session_owner_fk");
+    expect(allMigrationSql).toContain("provider_requests_job_owner_fk");
+    expect(allMigrationSql).toContain("storycam_artifacts_parent_owner_fk");
+    expect(allMigrationSql).toContain("media_assets_linked_artifact_owner_fk");
+    expect(allMigrationSql).toContain("generation_jobs_output_artifact_owner_fk");
   });
 });
