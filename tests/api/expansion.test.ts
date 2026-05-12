@@ -258,6 +258,66 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
   });
 
+  it("returns a placeholder instead of a 500 when regeneration image submission throws", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
+    const client = new FakeSupabaseClient({
+      artifactRows: [scriptArtifactRow(), characterAssetRow(), sceneAssetRow(), coreGroupRow(), storyboardScriptRow()],
+      mediaRows: assetImageRows()
+    });
+    const provider = fakeAsyncImageProvider();
+    provider.submitImageTask.mockRejectedValue(new Error("provider transport failed"));
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(provider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(jsonRequest({ sessionId: "session-1" }), {
+      params: { frameNumber: "1", id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      frameNumber: 1,
+      image: { placeholder: true, reason: "storage_failed", status: "placeholder" },
+      ok: true
+    });
+  });
+
+  it("rejects invalid JSON for storyboard frame image regeneration", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+
+    const response = await POST(invalidJsonRequest(), {
+      params: { frameNumber: "1", id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_input",
+      redactedError: "Invalid storyboard frame image request.",
+      redactionApplied: true
+    });
+  });
+
+  it("returns a redacted config error for storyboard frame image regeneration", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
+
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+
+    const response = await POST(jsonRequest({ sessionId: "session-1" }), {
+      params: { frameNumber: "1", id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "STORYCAM_CONFIG_INVALID",
+      redactedError: expect.stringContaining("SUPABASE_SERVICE_ROLE_KEY"),
+      redactionApplied: true
+    });
+  });
+
   it("creates expansion cards without image jobs when reference signed urls are local", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/expand/route");
     const client = new FakeSupabaseClient({
@@ -290,6 +350,14 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
 function jsonRequest(body: unknown) {
   return new Request("https://storycam.test/api/storyboard-groups/core-artifact-1/expand", {
     body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+    method: "POST"
+  });
+}
+
+function invalidJsonRequest() {
+  return new Request("https://storycam.test/api/storyboard-groups/core-artifact-1/frames/1/regenerate-image", {
+    body: "{not-json",
     headers: { "content-type": "application/json" },
     method: "POST"
   });

@@ -218,24 +218,31 @@ export async function submitStoryWorldAssetImageJobs(
   const entries = await Promise.all(
     targets.map(async (target) => {
       const assetKind = target.type === "character_asset" ? "character" : "scene";
-      const imageJob = await submitImageGenerationJob(client, userId, {
-        imageInput: buildStoryWorldAssetImageProviderInput(
-          {
-            assetArtifactId: target.id,
-            assetKind,
-            sessionId: input.sessionId
-          },
-          target,
-          artifactRows
-        ),
-        inputArtifactVersionsJson: { [target.id]: target.version },
-        linkedArtifactId: target.id,
-        provider,
-        sessionId: input.sessionId,
-        type: "story_world_asset_image"
-      });
+      try {
+        const imageJob = await submitImageGenerationJob(client, userId, {
+          imageInput: buildStoryWorldAssetImageProviderInput(
+            {
+              assetArtifactId: target.id,
+              assetKind,
+              sessionId: input.sessionId
+            },
+            target,
+            artifactRows
+          ),
+          inputArtifactVersionsJson: { [target.id]: target.version },
+          linkedArtifactId: target.id,
+          provider,
+          sessionId: input.sessionId,
+          type: "story_world_asset_image"
+        });
 
-      return [target.id, toStoryWorldAssetImageOutput(target.id, assetKind, imageJob.image)] as const;
+        return [target.id, toStoryWorldAssetImageOutput(target.id, assetKind, imageJob.image)] as const;
+      } catch {
+        return [
+          target.id,
+          storyWorldAssetImagePlaceholderOutput(target.id, assetKind, "Asset image generation is unavailable for this asset.")
+        ] as const;
+      }
     })
   );
 
@@ -305,6 +312,23 @@ function toStoryWorldAssetImageOutput(
           }
         }
       : {})
+  };
+}
+
+function storyWorldAssetImagePlaceholderOutput(
+  assetArtifactId: string,
+  assetKind: StoryWorldAssetKind,
+  redactedError: string
+): StoryWorldAssetImageServiceOutput {
+  return {
+    assetArtifactId,
+    assetKind,
+    image: {
+      placeholder: true,
+      reason: "storage_failed",
+      redactedError,
+      status: "placeholder"
+    }
   };
 }
 

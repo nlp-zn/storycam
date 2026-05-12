@@ -204,6 +204,53 @@ test.describe("StoryCam session restore", () => {
     await expect(recentProjectsDialog.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
   });
 
+  test("does not duplicate recent project refreshes while one request is in flight", async ({ page }) => {
+    let recentProjectCalls = 0;
+    let releaseRecentProjects!: () => void;
+    let markRecentProjectStarted!: () => void;
+    const recentProjectsCanResolve = new Promise<void>((resolve) => {
+      releaseRecentProjects = resolve;
+    });
+    const recentProjectStarted = new Promise<void>((resolve) => {
+      markRecentProjectStarted = resolve;
+    });
+
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      recentProjectCalls += 1;
+      markRecentProjectStarted();
+      await recentProjectsCanResolve;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          projects: []
+        })
+      });
+    });
+
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, restored: false })
+      });
+    });
+
+    await page.goto("/");
+    await recentProjectStarted;
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("pageshow"));
+    });
+    await page.waitForTimeout(50);
+    expect(recentProjectCalls).toBe(1);
+
+    releaseRecentProjects();
+    await expect(page.getByText("还没有可继续的项目。")).toBeVisible();
+  });
+
   test("keeps recent project thumbnail URLs stable across drawer refreshes", async ({ page }) => {
     let recentProjectCalls = 0;
     await mockAuthenticated(page);
@@ -548,8 +595,10 @@ test.describe("StoryCam session restore", () => {
     await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByRole("heading", { name: "生成片段" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "导出 MP4" }).first()).toBeVisible();
-    await expect(page.getByText("打开最终作品")).toBeVisible();
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
+    await expect(page.getByRole("button", { name: "导出 MP4" })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "查看" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "打开最终作品" })).toHaveCount(0);
   });
 });
 

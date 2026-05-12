@@ -86,6 +86,7 @@ export function IdeaInputPanel({
   const [storyModeNotice, setStoryModeNotice] = useState<string | null>(null);
   const aspectRatioMenuRef = useRef<HTMLDivElement>(null);
   const recentProjectsAbortRef = useRef<AbortController | null>(null);
+  const recentProjectsInFlightRef = useRef(false);
   const recentProjectsRequestIdRef = useRef(0);
   const recentProjectThumbnailCacheRef = useRef<Record<string, CachedRecentProjectThumbnail>>({});
   const canSubmit = idea.trim().length > 0 && authStatus === "authenticated";
@@ -129,13 +130,21 @@ export function IdeaInputPanel({
       return;
     }
 
+    if (recentProjectsInFlightRef.current) {
+      if (options.showLoading ?? true) {
+        setRecentProjectsStatus((current) => (current === "idle" ? "loading" : current));
+      }
+
+      return;
+    }
+
     const requestId = recentProjectsRequestIdRef.current + 1;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12_000);
 
     recentProjectsRequestIdRef.current = requestId;
-    recentProjectsAbortRef.current?.abort();
     recentProjectsAbortRef.current = controller;
+    recentProjectsInFlightRef.current = true;
 
     if (options.showLoading ?? true) {
       setRecentProjectsStatus("loading");
@@ -154,6 +163,7 @@ export function IdeaInputPanel({
       }
     } finally {
       window.clearTimeout(timeout);
+      recentProjectsInFlightRef.current = false;
 
       if (recentProjectsAbortRef.current === controller) {
         recentProjectsAbortRef.current = null;

@@ -8,7 +8,7 @@ StoryCam's first UI should feel like a private mini-theater camera: dark, cinema
 - Keep the first version Web-first.
 - Show story-world confirmation before storyboard or video generation.
 - Treat the core storyboard group as the video clip group.
-- Use ordinary language: `我的剧本`, `人物`, `地点`, `这一段会这样拍`, `重拍这个片段`, `生成最终作品`.
+- Use ordinary language: `我的剧本`, `人物`, `地点`, `这一段会这样拍`, `重拍这个片段`, `保存中`, `导出 MP4`.
 - Do not expose `prompt packet`, `Shanyin-style shot data`, model parameters, raw provider payloads, or professional shot tables.
 
 ## Current Visual References

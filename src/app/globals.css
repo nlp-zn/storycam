@@ -356,6 +356,8 @@ button:disabled {
 }
 
 .storycam-stepper {
+  --storycam-stepper-line-inset: 56px;
+
   position: relative;
   width: min(100%, 1040px);
   margin: 0 auto;
@@ -365,6 +367,8 @@ button:disabled {
 }
 
 .storycam-topbar-progress .storycam-stepper {
+  --storycam-stepper-line-inset: 32px;
+
   width: 100%;
   padding: 0;
   overflow: visible;
@@ -377,16 +381,14 @@ button:disabled {
 .storycam-stepper-line,
 .storycam-stepper-line-active {
   position: absolute;
-  left: 56px;
-  right: 56px;
+  left: var(--storycam-stepper-line-inset);
+  right: var(--storycam-stepper-line-inset);
   top: 39px;
   height: 1px;
 }
 
 .storycam-topbar-progress .storycam-stepper-line,
 .storycam-topbar-progress .storycam-stepper-line-active {
-  left: 32px;
-  right: 32px;
   top: 11px;
 }
 
@@ -396,6 +398,7 @@ button:disabled {
 
 .storycam-stepper-line-active {
   right: auto;
+  width: calc((100% - (var(--storycam-stepper-line-inset) * 2)) * var(--storycam-progress, 0));
   background: rgba(0, 240, 255, 0.72);
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.62);
 }
@@ -2759,6 +2762,8 @@ button:disabled {
   }
 
   .storycam-stepper {
+    --storycam-stepper-line-inset: 18px;
+
     position: relative;
     top: auto;
     width: 100%;
@@ -2769,6 +2774,8 @@ button:disabled {
   }
 
   .storycam-topbar-progress .storycam-stepper {
+    --storycam-stepper-line-inset: 20px;
+
     margin: 0;
     padding: 0;
   }
@@ -2786,8 +2793,6 @@ button:disabled {
   .storycam-stepper-line,
   .storycam-stepper-line-active {
     bottom: auto;
-    left: 18px;
-    right: 18px;
     top: 29px;
     height: 1px;
     min-width: 584px;
@@ -2796,14 +2801,12 @@ button:disabled {
 
   .storycam-topbar-progress .storycam-stepper-line,
   .storycam-topbar-progress .storycam-stepper-line-active {
-    left: 20px;
-    right: 20px;
     top: 7px;
     min-width: 0;
   }
 
   .storycam-stepper-line-active {
-    width: var(--storycam-progress, 0%);
+    width: calc((100% - (var(--storycam-stepper-line-inset) * 2)) * var(--storycam-progress, 0));
     height: 1px !important;
     background: rgba(0, 240, 255, 0.72);
   }
