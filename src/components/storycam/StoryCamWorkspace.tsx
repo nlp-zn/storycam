@@ -346,6 +346,47 @@ export function StoryCamWorkspace() {
     }
   }
 
+  function clearRestoredWorkspaceState() {
+    storyWorldRequestIdRef.current += 1;
+    storyboardRequestIdRef.current += 1;
+    clipRequestIdRef.current += 1;
+    imagePollAttemptsRef.current = {};
+    storyWorldAssetImagePollAttemptsRef.current = {};
+    videoPollAttemptsRef.current = {};
+    storyWorldAssetImagesInFlightRef.current.clear();
+    finalWorkCreationInFlightRef.current.clear();
+    finalWorkAutoSubmittedKeyRef.current = null;
+    finalWorkSaveFailedKeyRef.current = null;
+    finalWorkActiveSaveKeyRef.current = null;
+
+    setStoryWorld(null);
+    setStoryWorldAssetImageJobs({});
+    setStoryWorldConfirmed(false);
+    setStoryboard(null);
+    setSelectedCoreGroupIndex(null);
+    setExpansion(null);
+    setIsExpansionLoading(false);
+    setRegeneratingFrameKey(null);
+    setClipConfirmationSummary(null);
+    setClipJob(null);
+    setIsClipSubmitting(false);
+    setFinalWork(null);
+    setIsFinalWorkSubmitting(false);
+    resetFinalWorkSaveState();
+    setIsStoryWorldEditorOpen(false);
+    setStoryWorldGeneration({ kind: "idle" });
+    setStoryboardGeneration({ kind: "idle" });
+    setClipGeneration({ kind: "idle" });
+    setCoreGroupTargetCount(1);
+    setVideoAspectRatio(defaultStoryCamVideoAspectRatio);
+    setVideoModel(defaultStoryCamVideoModel);
+    setSelectedStepIndex(0);
+    setWorkspaceNotice("上次项目已不可用，可以重新开始。");
+    setStoryboardStatus("idle");
+    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
+    syncStepPath(0);
+  }
+
   const refreshSessionMediaUrls = useCallback(async (sessionId: string) => {
     const hasPendingImageJobs = collectStoryboardImageJobIds(storyboardRef.current, expansionRef.current).length > 0;
 
@@ -451,7 +492,9 @@ export function StoryCamWorkspace() {
         }
 
         if (!restored.restored) {
-          if (!cachedRestore.restored) {
+          if (cachedRestore.restored) {
+            clearRestoredWorkspaceState();
+          } else {
             setIsRestoringSession(false);
           }
           return;

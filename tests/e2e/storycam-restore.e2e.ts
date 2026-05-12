@@ -481,6 +481,59 @@ test.describe("StoryCam session restore", () => {
     releaseNetworkRestore();
   });
 
+  test("clears cached storyboard when network restore confirms there is no current project", async ({ page }) => {
+    let currentRestoreCalls = 0;
+    let selectedRestoreCalls = 0;
+    let releaseSelectedRestore!: () => void;
+    let markSelectedRestoreStarted!: () => void;
+    const selectedRestoreCanResolve = new Promise<void>((resolve) => {
+      releaseSelectedRestore = resolve;
+    });
+    const selectedRestoreStarted = new Promise<void>((resolve) => {
+      markSelectedRestoreStarted = resolve;
+    });
+
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      currentRestoreCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(currentRestoreCalls === 1 ? restoredCompletedProject() : { ok: true, restored: false })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-2/restore", async (route) => {
+      selectedRestoreCalls += 1;
+      markSelectedRestoreStarted();
+      await selectedRestoreCanResolve;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 404,
+        body: JSON.stringify({
+          error: "not_found",
+          redactedError: "StoryCam project was not found.",
+          redactionApplied: true
+        })
+      });
+    });
+
+    await page.goto("/storycam/core-storyboard");
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+
+    await page.reload();
+    await selectedRestoreStarted;
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+
+    releaseSelectedRestore();
+
+    await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
+    await expect(page.getByText("上次项目已不可用，可以重新开始。")).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/storycam\/input$/);
+    expect(currentRestoreCalls).toBe(2);
+    expect(selectedRestoreCalls).toBe(1);
+  });
+
   test("does not extend reused signed URL cache expiry across a network restore", async ({ page }) => {
     await mockAuthenticated(page);
     await page.route("**/api/storycam-sessions/current", async (route) => {

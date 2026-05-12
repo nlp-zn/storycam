@@ -456,11 +456,17 @@ export async function restoreCurrentStoryCamSession() {
 
   if (currentSessionId) {
     try {
-      return await restoreStoryCamSessionValue(currentSessionId, {
+      const restored = await restoreStoryCamSessionValue(currentSessionId, {
         forceNetwork: true,
         markCurrent: true,
         persist: true
       });
+
+      if (!restored.restored) {
+        deleteCurrentRestoredSessionId(currentSessionId, authStatus.user.id);
+      }
+
+      return restored;
     } catch (error) {
       if (!(error instanceof Error) || error.message !== "not_found") {
         throw error;
