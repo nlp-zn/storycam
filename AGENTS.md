@@ -72,6 +72,7 @@ private idea + optional photos
 
 ## Quality Gates
 
+- Use the smallest deterministic check that proves the change; reserve full gates for review, ship, PR, or merge. See `docs/PR_REVIEW.md` for the test selection strategy.
 - "PR gate", "ship review", "pre-PR check", "review before PR", "push 前检查", and similar requests mean: run the StoryCam PR Gate from `docs/PR_REVIEW.md`.
 - PR Gate is review-only. Do not commit, push, or open a PR during PR Gate.
 - "ship", "gstack-ship", "可以 push 并提 PR", "开 PR 到 dev", and similar publishing requests mean: run the StoryCam Ship Gate from `docs/PR_REVIEW.md`.

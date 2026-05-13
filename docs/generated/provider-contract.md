@@ -76,6 +76,8 @@ Requirements:
 - core storyboard optional comma-separated fallback chain from `OPENROUTER_TEXT_FALLBACK_MODELS`,
 - `/api/storyboard` creates one script and main-image prompt per core group.
 - storyboard scripts are adapted from confirmed script, character assets, and scene assets; they must not invent new people, locations, wardrobes, props, or spatial rules outside the story world.
+- core storyboard titles, summaries, frame descriptions, scene notes, and audio cues are ordinary-user-facing text and must be Simplified Chinese; only internal storyboard `imagePrompt` fields may stay English for image generation.
+- core storyboard scripts must apply internal Shanyin-style shot connection logic: adjacent frames should not repeat the same shot size or neighboring shot-size scale without a narrative reason; scene-heavy/travel frames should vary establishing, action, reaction, detail, and empty-frame beats through cross-scale shot-size and viewpoint contrast.
 
 ## Multimodal Provider
 
@@ -115,10 +117,14 @@ Requirements:
 - the Inference.sh app's required `OPENAI_KEY` secret must be configured in Inference.sh,
 - model name from `OPENROUTER_IMAGE_MODEL` for the legacy OpenRouter path,
 - output stored in private StoryCam Storage,
-- handdrawn travel character asset images may send the uploaded user photo plus a server-owned hand-drawn style reference as image inputs; prompts may use the photo only for hair, glasses, clothing silhouette, posture, and travel mood, never for a photorealistic likeness,
+- story-world character and scene asset images must inherit the session `video_aspect_ratio`; `9:16` sessions use vertical portrait image task dimensions and prompt guidance for scene boards,
+- handdrawn travel character asset images send the project-owned hand-drawn character style plate as Image 1 and may send the uploaded user photo as Image 2; prompts use Image 1 for style and Image 2 only for hair, glasses, clothing silhouette, posture, and travel mood, never for a photorealistic likeness,
+- handdrawn travel scene asset images must stay photographic, real-world, and destination-specific; the shared hand-drawn style applies to the traveler character, not to the travel background,
 - representative images are stored as `thumbnail` media linked to the core storyboard group,
 - expanded storyboard images are stored as `thumbnail` media linked to their expanded card artifact,
 - storyboard images must use ready story-world character and scene asset images as Inference.sh `images[]` reference inputs plus the frame prompt; pure text fallback is not allowed for storyboard images,
+- expanded storyboard image jobs should append the ready core storyboard thumbnail as a `core_storyboard` continuity reference when available, and must preserve fixed scene anchors such as doors, wall cracks, plants/flowers, windows, landmarks, and left/right relationships instead of relocating them between frames,
+- in `handdrawn-travel-vlog`, storyboard images must keep scene references as real travel-location photography while compositing only the confirmed traveler as a 2D hand-drawn illustrated character; do not apply the generic all-comic storyboard style to the travel background,
 - providers that do not explicitly support reference images must return placeholders with `reference_images_unsupported`,
 - missing character or scene asset thumbnails return placeholders with `waiting_for_asset_images`,
 - failure may degrade to placeholder without blocking video generation.
@@ -144,7 +150,7 @@ Requirements:
 - timeout,
 - cancellation/tombstone,
 - late-result discard,
-- model name from `SEEDANCE_MODEL` or `SEEDANCE_FAST_MODEL`, selected by `generation_jobs.provider_name`,
+- model name from `SEEDANCE_MODEL` or `SEEDANCE_FAST_MODEL`, selected by `generation_jobs.provider_name`; selected Fast requests must not be silently downgraded to regular `seedance_2_0`, and Fast submission failures stay recorded against `seedance_2_0_fast`,
 - create tasks with `POST /contents/generations/tasks`,
 - poll or normalize webhook payloads from `GET /contents/generations/tasks/{id}`,
 - terminal success returns `content.video_url`, which must be downloaded before the provider URL expires,

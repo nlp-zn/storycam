@@ -37,11 +37,11 @@ Error bodies must not include raw private input, full prompts, full prompt packe
 | `POST /api/auth/sign-out` | Signs out and clears local auth bypass opt-out state. |
 | `GET /auth/callback` | Exchanges Supabase OAuth callback and returns to StoryCam. |
 | `GET /api/storycam-sessions/current` | Returns current account-scoped active session summary. |
-| `GET /api/storycam-sessions/recent` | Returns recent account-scoped sessions for the input screen. |
+| `GET /api/storycam-sessions/recent` | Returns a bounded list of recent account-scoped sessions for the input screen, capped at 20 restorable projects. |
 | `DELETE /api/storycam-sessions/[id]` | Tombstones a user-owned session and cleans associated storage where applicable. |
 | `GET /api/storycam-sessions/[id]/restore` | Restores a full account-scoped session snapshot with signed preview URLs. |
 
-Restore responses and recent-project summaries may be cached client-side in `sessionStorage` only for the current tab and authenticated user. Restore cache entries are additionally keyed by session id. These caches store JSON and signed URLs, never media bytes, and must preserve absolute URL expiry instead of extending old URLs.
+Restore responses and recent-project summaries may be cached client-side in `sessionStorage` only for the current tab and authenticated user. Restore cache entries are additionally keyed by session id. These caches store JSON and signed URLs, never media bytes, and must preserve absolute URL expiry instead of extending old URLs. Deleting a session clears recent-project cache; selecting any recent project restores it to the story-world review step, regardless of its latest downstream progress.
 
 ## Creation And Story Routes
 
@@ -67,8 +67,9 @@ New MVP storyboard creation normalizes to one core group, 15 seconds, and one ge
 | `POST /api/generation-jobs/[id]/cancel` | Requests cancellation/tombstone and prevents late provider results from creating outputs. |
 | `POST /api/stitch-suggestion` | Produces a user-facing final-work suggestion from confirmed clips. |
 | `POST /api/final-work` | Creates the account-scoped final work preview/export artifact. |
+| `GET /api/storycam-media/[id]/download` | Streams the current user's final-work MP4 as an attachment; it does not expose storage bucket/key or raw signed URLs. |
 
-The server-created clip prompt packet is internal. The UI may show plain product status such as `720p`, ready/failure states, and retry/retake actions, but must not show provider payloads or professional shot-table data.
+The server-created clip prompt packet is internal. The UI may show plain product status such as `720p`, ready/failure states, and retry/retake actions, but must not show provider payloads or professional shot-table data. MP4 export should use the same-origin authenticated download route rather than navigating users to a raw signed Storage URL.
 
 ## Media Refs
 

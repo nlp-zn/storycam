@@ -195,6 +195,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 - `storyboard_script` 和 `core_storyboard_groups[]` 可以先于核心分镜代表图返回；UI 必须先展示分镜脚本，再在原画布内等待第 1 帧主图生成。
 - 分镜脚本是已确认 `script` 的内部改编，必须继承 `character_assets[]` 和 `scene_assets[]`，不得另造人物、地点、服装、道具或空间逻辑。
 - 每帧分镜必须记录本帧允许出镜的 `visibleCharacterAssetIds`；分镜图生成只能渲染这些人物资产，未列入资产的主人、路人、人影、手、背影或剪影必须改为离屏效果。
+- 分镜脚本必须应用内部 Shanyin-style 切镜连接逻辑：相邻帧避免连续同景别或相邻景别，也避免连续同角度，风景/旅行段落避免连续同类风景图；通过动作-反应、递进、因果或对比组，以及全景/近景/大特写/中远景/全景空镜等跨级景别节奏组织画面。
 
 核心分镜组数量规则：
 
@@ -233,6 +234,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 - 根据父核心组的 9 帧脚本生成进入、动作、反应、氛围、转场、情绪点等卡片。
 - 保持人物、场景、情绪连续。
 - 把 Shanyin 的镜头组逻辑转译为普通用户能看懂的“这一段会这样拍”。
+- 扩展分镜图应承接脚本里的景别/角度节奏；同一地标连续出现时必须改变景别、角度、动作/反应角色或画面信息量，避免把相邻镜头硬凑在一起。
 
 模型选择边界：
 
@@ -637,7 +639,7 @@ Job 行为：
 
 - 片段 ready 后自动保存最终作品。
 - 保存失败时显示 `重试保存`。
-- 保存成功后显示 `导出 MP4`。
+- 保存成功后显示 `导出 MP4`，点击后应直接下载文件，不跳转到浏览器原生视频页。
 
 次要动作：
 
@@ -674,7 +676,7 @@ Job 行为：
 主 CTA：
 
 - 片段 ready 后自动保存最终作品。
-- 最终作品保存成功后显示 `导出 MP4`。
+- 最终作品保存成功后显示 `导出 MP4`，通过账号鉴权的同源下载完成文件保存，不暴露原始 Storage 路径或 signed URL。
 
 次要动作：
 
@@ -829,6 +831,7 @@ estimated_clip_duration
 characters[]
 scene
 expanded_storyboard_card_ids[]
+continuity_anchor_note: expanded storyboard images should use this core thumbnail as the spatial reference when available
 clip_status
 clip_result_id
 state
@@ -848,6 +851,7 @@ emotion
 dialogue_or_subtitle
 sound_hint
 duration_hint
+continuity_anchor_note: fixed scene anchors from the core storyboard and scene asset must stay on the same side/location
 state
 version
 ```

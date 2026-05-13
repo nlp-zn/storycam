@@ -27,11 +27,11 @@
 ## Expected Main Surfaces
 
 - Idea input + five creation modes + lightweight director choices + photo upload. `手绘旅行 VLOG` additionally shows a compact travel-destination input, defaults to `9:16`, and disables submit until one photo and one destination are present.
-- Recent projects entry above the creation-entry list; homepage stays on input and lets users choose a project instead of auto-jumping.
+- Recent projects entry above the creation-entry list; homepage stays on input and lets users choose a project instead of auto-jumping. The inline entry previews only a couple of projects, while the drawer can list up to 20 recent restorable projects in an internal scroll area, supports two-step deletion, and always continues a selected project at the story-world review step.
 - Story world confirmation, including local generating and failed states after the input CTA immediately navigates to `/storycam/story-world`.
 - Core storyboard confirmation, including local generating and failed states after story-world confirmation immediately navigates to `/storycam/core-storyboard`; when the 9-frame script returns before the first representative image job, show the script immediately and keep only the image area in a waiting state.
 - Inline 9-frame core storyboard workbench: frame 01 stays in the center on first entry; frames 02-09 are introduced only after the user clicks the center image, then generate around it without navigating away from `/storycam/core-storyboard`.
-- Clip generation workbench on `/storycam/clip-generation`, including local task-creation loading/failure after the core storyboard CTA immediately navigates there, async job status, 720p output spec, preview, retry/retake, final work creation, account-scoped preview, and MP4 export.
+- Clip generation workbench on `/storycam/clip-generation`, including local task-creation loading/failure after the core storyboard CTA immediately navigates there, async job status, 720p output spec, preview, retry/retake, final work creation, account-scoped preview, and one-click MP4 export without opening a raw browser video page.
 
 ## Visual Reference Policy
 

@@ -48,7 +48,7 @@ Current API route handlers:
 - Auth/session: `/api/auth/me`, `/api/auth/sign-out`, `/auth/callback`.
 - Story creation: `/api/uploads`, `/api/story-world`, `/api/storyboard`, `/api/storyboard-groups/[id]/expand`.
 - Media generation: `/api/story-world/assets/generate-image`, `/api/story-world/assets/generate-images`, `/api/storyboard-groups/[id]/generate-clip`.
-- Jobs and outputs: `/api/generation-jobs/[id]`, `/api/generation-jobs/[id]/cancel`, `/api/stitch-suggestion`, `/api/final-work`.
+- Jobs and outputs: `/api/generation-jobs/[id]`, `/api/generation-jobs/[id]/cancel`, `/api/stitch-suggestion`, `/api/final-work`, `/api/storycam-media/[id]/download`.
 - Session restore and recent projects: `/api/storycam-sessions/current`, `/api/storycam-sessions/recent`, `/api/storycam-sessions/[id]`, `/api/storycam-sessions/[id]/restore`.
 
 Client flow lives under `/storycam/[[...step]]` and renders the creation workspace for input, story world, core storyboard, expansion, clip generation, and final work states.
@@ -71,9 +71,9 @@ Private Storage buckets:
 - `storycam-generated`
 - `storycam-mock`
 
-Storage access stays private across local, staging, and production. Browser previews use short-lived UI signed URLs. External providers use server-created provider reference signed URLs with a separate TTL; those URLs must be public HTTPS endpoints from a hosted Supabase project. Local Supabase Storage URLs are valid for mock/local UI work only, not for real Seedance or reference-image provider calls.
+Storage access stays private across local, staging, and production. Browser previews use short-lived UI signed URLs. Final MP4 export uses an authenticated same-origin download route so the browser receives an attachment response instead of navigating to a raw signed URL. External providers use server-created provider reference signed URLs with a separate TTL; those URLs must be public HTTPS endpoints from a hosted Supabase project. Local Supabase Storage URLs are valid for mock/local UI work only, not for real Seedance or reference-image provider calls.
 
-Restore responses are account-scoped, `Cache-Control: no-store`, and may be cached in browser `sessionStorage` only for the current tab/user/session. Recent-project summaries may use the same current-tab, user-bound cache so the input screen can render immediately while a background refresh runs. These caches store JSON payloads and signed URLs, never media bytes, and must clear on sign-out, anonymous auth, user switch, restore 401, restore failure, session deletion, or new story creation.
+Restore responses are account-scoped, `Cache-Control: no-store`, and may be cached in browser `sessionStorage` only for the current tab/user/session. Recent-project summaries may use the same current-tab, user-bound cache so the input screen can render immediately while a background refresh runs. The recent-project endpoint returns a bounded view, currently up to 20 restorable sessions; deleting from the drawer uses the same session deletion route and clears recent-project cache. These caches store JSON payloads and signed URLs, never media bytes, and must clear on sign-out, anonymous auth, user switch, restore 401, restore failure, session deletion, or new story creation.
 
 See `docs/generated/db-schema.md` and `docs/generated/api-contract.md` for implementation snapshots.
 
