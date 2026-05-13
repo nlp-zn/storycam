@@ -128,44 +128,8 @@ export async function createFinalWorkFromSuggestion(
   composer: FinalWorkComposer<FfmpegComposerInput, FfmpegComposerOutput> = createFfmpegFinalWorkComposer()
 ) {
   const input = parseFinalWorkRequest(body);
-  const session = await new StoryCamSessionRepository(client).findById(userId, input.sessionId);
-
-  if (!session) {
-    throw new FinalWorkRequestError("session_not_found");
-  }
-
-  const artifacts = new StoryCamArtifactRepository(client);
-  const rows = (await artifacts.listBySession(userId, { sessionId: session.id })) ?? [];
-  const stitchSuggestion = rows.find(
-    (row) => row.id === input.stitchSuggestionArtifactId && row.type === "stitch_suggestion" && row.state === "ready"
-  );
-
-  if (!stitchSuggestion) {
-    throw new FinalWorkRequestError("stitch_suggestion_not_found");
-  }
-
-  const suggestionData = parseStitchSuggestionData(stitchSuggestion.data_json);
-  const generatedClipArtifacts = await loadReadyGeneratedClipArtifacts(
-    artifacts,
-    userId,
-    session.id,
-    suggestionData.generatedClipArtifactIds
-  );
-  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(userId, session.id)) ?? [];
-  const clips = await Promise.all(
-    generatedClipArtifacts.map(async (artifact) => {
-      const generatedClip = generatedClipSchema.parse(artifact.data_json);
-      const media = requireMediaAsset(mediaRows, generatedClip.mediaAssetId);
-
-      assertStoryCamPrivateBucket(media.storage_bucket);
-
-      return {
-        bytes: await downloadStoryCamObject(client, media.storage_bucket, media.storage_path),
-        durationSeconds: generatedClip.durationSeconds,
-        generatedClipId: generatedClip.id
-      };
-    })
-  );
+  const { generatedClipArtifacts, session, stitchSuggestion } = await loadFinalWorkArtifacts(client, userId, input);
+  const clips = await loadFinalWorkClips(client, userId, session.id, generatedClipArtifacts);
 
   return composeAndStoreFinalWork(client, composer, {
     clips,
@@ -424,21 +388,7 @@ async function loadFinalWorkCompositionInput(
     job.session_id,
     suggestionData.generatedClipArtifactIds
   );
-  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(job.user_id, job.session_id)) ?? [];
-  const clips = await Promise.all(
-    generatedClipArtifacts.map(async (artifact) => {
-      const generatedClip = generatedClipSchema.parse(artifact.data_json);
-      const media = requireMediaAsset(mediaRows, generatedClip.mediaAssetId);
-
-      assertStoryCamPrivateBucket(media.storage_bucket);
-
-      return {
-        bytes: await downloadStoryCamObject(client, media.storage_bucket, media.storage_path),
-        durationSeconds: generatedClip.durationSeconds,
-        generatedClipId: generatedClip.id
-      };
-    })
-  );
+  const clips = await loadFinalWorkClips(client, job.user_id, job.session_id, generatedClipArtifacts);
 
   return {
     clips,
@@ -459,13 +409,43 @@ async function loadReadyGeneratedClipArtifacts(
   generatedClipArtifactIds: string[]
 ) {
   const rows = (await artifacts.listBySession(userId, { sessionId, type: "generated_clip" })) ?? [];
-  const generatedClipArtifacts = generatedClipArtifactIds.map((id) => rows.find((row) => row.id === id && row.state === "ready"));
+  const generatedClipArtifacts: StoryCamArtifactRow[] = [];
 
-  if (generatedClipArtifacts.some((row) => !row)) {
-    throw new FinalWorkRequestError("generated_clip_not_confirmed");
+  for (const id of generatedClipArtifactIds) {
+    const artifact = rows.find((row) => row.id === id && row.state === "ready");
+
+    if (!artifact) {
+      throw new FinalWorkRequestError("generated_clip_not_confirmed");
+    }
+
+    generatedClipArtifacts.push(artifact);
   }
 
-  return generatedClipArtifacts.map((row) => row as StoryCamArtifactRow);
+  return generatedClipArtifacts;
+}
+
+async function loadFinalWorkClips(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessionId: string,
+  generatedClipArtifacts: StoryCamArtifactRow[]
+): Promise<FfmpegComposerInput["clips"]> {
+  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(userId, sessionId)) ?? [];
+
+  return Promise.all(
+    generatedClipArtifacts.map(async (artifact) => {
+      const generatedClip = generatedClipSchema.parse(artifact.data_json);
+      const media = requireMediaAsset(mediaRows, generatedClip.mediaAssetId);
+
+      assertStoryCamPrivateBucket(media.storage_bucket);
+
+      return {
+        bytes: await downloadStoryCamObject(client, media.storage_bucket, media.storage_path),
+        durationSeconds: generatedClip.durationSeconds,
+        generatedClipId: generatedClip.id
+      };
+    })
+  );
 }
 
 function parseStitchSuggestionData(value: Json): StitchSuggestionData {

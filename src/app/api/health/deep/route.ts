@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     const { data: buckets, error: bucketError } = await client.storage.listBuckets();
     const bucketNames = new Set((buckets ?? []).map((bucket) => bucket.name));
     const missingBuckets = ["storycam-generated", "storycam-uploads"].filter((bucket) => !bucketNames.has(bucket));
+    const storageStatus = getStorageStatus(Boolean(bucketError), missingBuckets.length > 0);
 
     if (dbError || bucketError || missingBuckets.length > 0) {
       return NextResponse.json(
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
           database: dbError ? "error" : "ok",
           ...(missingBuckets.length > 0 ? { missingBuckets } : {}),
           ok: false,
-          storage: bucketError ? "error" : missingBuckets.length > 0 ? "missing_bucket" : "ok"
+          storage: storageStatus
         },
         { headers: { "Cache-Control": "no-store" }, status: 503 }
       );
@@ -57,4 +58,16 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ error: "deep_health_failed", ok: false }, { headers: { "Cache-Control": "no-store" }, status: 503 });
   }
+}
+
+function getStorageStatus(hasBucketError: boolean, hasMissingBuckets: boolean): "error" | "missing_bucket" | "ok" {
+  if (hasBucketError) {
+    return "error";
+  }
+
+  if (hasMissingBuckets) {
+    return "missing_bucket";
+  }
+
+  return "ok";
 }

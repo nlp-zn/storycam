@@ -55,7 +55,7 @@ type StoryCamWorkerRuntime = {
   workerId: string;
 };
 
-export async function runStoryCamWorker(options: StoryCamWorkerOptions = {}) {
+export async function runStoryCamWorker(options: StoryCamWorkerOptions = {}): Promise<void> {
   const runtime = createStoryCamWorkerRuntime(options);
   const pollIntervalMs = options.pollIntervalMs ?? numberEnv("STORYCAM_WORKER_POLL_INTERVAL_MS", 5_000);
 
@@ -70,7 +70,7 @@ export async function runStoryCamWorker(options: StoryCamWorkerOptions = {}) {
   }
 }
 
-export async function processStoryCamWorkerOnce(options: StoryCamWorkerOptions = {}) {
+export async function processStoryCamWorkerOnce(options: StoryCamWorkerOptions = {}): Promise<number> {
   const runtime = isStoryCamWorkerRuntime(options) ? options : createStoryCamWorkerRuntime(options);
   const jobs = await new StoryCamGenerationJobRepository(runtime.client).claimRunnable({
     jobTypes: storyCamWorkerJobTypes,
@@ -96,7 +96,7 @@ function isStoryCamWorkerRuntime(options: StoryCamWorkerOptions): options is Sto
   );
 }
 
-export async function processStoryCamWorkerJob(runtime: StoryCamWorkerRuntime, job: GenerationJobRow) {
+export async function processStoryCamWorkerJob(runtime: StoryCamWorkerRuntime, job: GenerationJobRow): Promise<void> {
   const jobs = new StoryCamGenerationJobRepository(runtime.client);
 
   try {

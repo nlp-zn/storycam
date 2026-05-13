@@ -2,6 +2,13 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.1.1] - 2026-05-14
+
+### Changed
+
+- Simplified final work composition internals, provider config parsing, worker typing, and deep health status reporting without changing user-facing behavior.
+- GitHub CI now installs ffmpeg so real-mode final MP4 readiness checks run in the same class of runtime the deployment expects.
+
 ## [0.1.1.0] - 2026-05-14
 
 ### Added
