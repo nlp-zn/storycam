@@ -70,7 +70,9 @@ Start here:
 - [Product specs](docs/product-specs/index.md)
 - [Local development](docs/references/local-dev.md)
 - [Provider modes](docs/references/providers.md)
+- [Deployment plan](docs/DEPLOYMENT.md)
 - [PR review gate](docs/PR_REVIEW.md)
+- [Changelog](CHANGELOG.md)
 
 For UI work, use [Frontend](docs/FRONTEND.md), [Design](docs/DESIGN.md), and the current visual references in [design docs](docs/design-docs/index.md).
 

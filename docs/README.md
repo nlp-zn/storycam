@@ -25,6 +25,7 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 - `PR_REVIEW.md` — progressive deterministic gates, Codex PR Gate, Ship Gate.
 - `QUALITY_SCORE.md` — review rubric for major changes.
 - `PLANS.md` — execution plan lifecycle.
+- `../CHANGELOG.md` — release history.
 
 ## Directories
 
