@@ -2,6 +2,7 @@ import { createInferenceShImageProvider } from "@/lib/providers/inferenceSh/imag
 import { createOpenRouterImageProvider } from "@/lib/providers/openrouter/imageProvider";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import { isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
+import { defaultStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import { normalizeStoryCamVisualStyle, storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { StoryCamConfig } from "@/server/config";
 import type { StoryWorldAssetImageInput, StoryWorldAssetImageOutput } from "./storyWorldAssetImageService";
@@ -17,12 +18,16 @@ export function createConfiguredStoryWorldAssetImageProvider(
     return createInferenceShImageProvider<StoryWorldAssetImageInput>({
       apiKey: config.inferenceSh.apiKey,
       app: config.inferenceSh.imageApp,
-      buildPrompt: (input) => ({
-        ...buildStoryWorldAssetImagePrompt(input),
-        height: 864,
-        quality: "high",
-        width: 1536
-      }),
+      buildPrompt: (input) => {
+        const prompt = buildStoryWorldAssetImagePrompt(input);
+
+        return {
+          ...prompt,
+          height: prompt.aspectRatio === "9:16" ? 1536 : 864,
+          quality: "high",
+          width: prompt.aspectRatio === "9:16" ? 864 : 1536
+        };
+      },
       maxAttempts: 2
     });
   }
@@ -50,19 +55,20 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
   const visualStyle = sharedVisualStyleForPrompt(input);
   const referenceImages = referenceImageUrls(input);
   const isHanddrawnTravel = isHanddrawnTravelVlogMode(input.script?.storyModeId);
+  const aspectRatio = input.aspectRatio ?? defaultStoryCamVideoAspectRatio;
 
   if (input.assetKind === "character") {
     return {
-      aspectRatio: "16:9" as const,
+      aspectRatio,
       ...(referenceImages.length ? { images: referenceImages } : {}),
       prompt: [
         isHanddrawnTravel
-          ? "Create a hand-drawn traveler character asset board for StoryCam, using the uploaded user photo and the StoryCam hand-drawn travel style reference."
+          ? "根据 Image 1 的简单粗硬画笔画风，绘制 Image 2 中人物转译后的全身手绘旅行角色，并整理成 StoryCam 角色资产板。"
           : "Create a two-panel character design board for StoryCam, like a professional character production reference sheet.",
         storyContext,
         `Use the shared StoryCam visual style: ${visualStyle}.`,
         isHanddrawnTravel
-          ? "References: one uploaded user photo plus one StoryCam hand-drawn travel style reference. Use the photo only for hair, glasses, clothing silhouette, posture, and travel mood; do not create a photorealistic likeness, face match, identity replica, or celebrity-like person."
+          ? "参考方式：Image 1 只用于简单粗硬黑色线条、扁平色块、简化五官和休闲旅行人物比例；Image 2 如存在，只用于发型、眼镜、衣着轮廓、姿态和旅行气质。描述要具体，生成的形象越贴近下面的人物设定越好；不要真人复刻、脸部匹配、身份复制或 celebrity-like person."
           : "",
         isHanddrawnTravel
           ? "Style target: rough black pencil/marker line art, simple expressive hand-drawn character, light sketch texture, travel VLOG warmth, full-body readability."
@@ -90,17 +96,22 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
   }
 
   return {
-    aspectRatio: "16:9" as const,
+    aspectRatio,
     ...(referenceImages.length ? { images: referenceImages } : {}),
     prompt: [
       isHanddrawnTravel
         ? "Create one real travel destination route board for StoryCam, like a photographic travel-location background reference sheet for a light VLOG."
         : "Create one polished multi-panel environment-only asset board for StoryCam, like a professional background/location production reference sheet.",
       storyContext,
-      `Use the shared StoryCam visual style: ${visualStyle}.`,
+      isHanddrawnTravel
+        ? "Scene visual style: real travel-location photography background reference. Do not cartoonize, illustrate, sketch, paint, or turn the destination into comic/anime style; the hand-drawn traveler will be composited later."
+        : `Use the shared StoryCam visual style: ${visualStyle}.`,
       isHanddrawnTravel
         ? "For this mode, keep the environment grounded in real travel-location photography: authentic streets, architecture, landmarks, light, local details, and natural perspective. The later character will be hand-drawn, but this scene board itself remains environment-only."
         : "",
+      aspectRatio === "9:16"
+        ? "Format: vertical 9:16 portrait asset board. Compose the travel route and environment panels for a vertical VLOG frame, not a horizontal 16:9 canvas."
+        : "Format: horizontal 16:9 landscape asset board.",
       `Scene name: ${input.asset.name}. Location: ${input.asset.location}. Time: ${input.asset.timeOfDay}.`,
       `Light: ${input.asset.light}. Atmosphere: ${input.asset.atmosphere}.`,
       `Key objects: ${input.asset.keyObjects.join(", ")}.`,
@@ -114,7 +125,9 @@ export function buildStoryWorldAssetImagePrompt(input: StoryWorldAssetImageInput
       ),
       "All panels must belong to the same single location with consistent architecture, time of day, lighting continuity, and spatial logic.",
       "The smaller panels should cover environment angles, lighting, key objects, and action-space details required by the script.",
-      "Keep the environment board style consistent with the shared visual style and with the character asset boards for this story.",
+      isHanddrawnTravel
+        ? "Keep every environment panel photographic, real-world, destination-specific, and usable as a later VLOG background reference for a 2D hand-drawn traveler."
+        : "Keep the environment board style consistent with the shared visual style and with the character asset boards for this story.",
       "This is not a poster, standalone cinematic still, UI mockup, or collection of unrelated locations.",
       "No readable copyrighted logos, no UI, no watermarks, no large text blocks."
     ].join("\n")

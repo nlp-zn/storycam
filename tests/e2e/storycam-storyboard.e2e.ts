@@ -84,9 +84,9 @@ test.describe("StoryCam core storyboard", () => {
     storyboardGate.resolve();
 
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
-    await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
     await expect(page.getByText("分镜脚本")).toBeVisible();
-    await expect(page.getByText("建立她和未发送短信之间的私人情绪。")).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").getByText("01", { exact: true })).toBeVisible();
     await expect(page.getByAltText("未发送短信 主分镜图")).toHaveCount(0);
     await expect.poll(() => firstFrameWasRequested).toBe(true);
 
@@ -265,7 +265,7 @@ test.describe("StoryCam core storyboard", () => {
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
 
-    await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
     await expect(page.getByAltText("未发送短信 主分镜图")).toBeVisible({ timeout: 12_000 });
     expect(pollCalls).toBeGreaterThanOrEqual(2);
     expect(restoreCalls).toBeLessThanOrEqual(2);
@@ -339,7 +339,7 @@ test.describe("StoryCam core storyboard", () => {
     await expect(page.getByText("核心分镜生成失败，可以重试或返回故事世界。")).toBeVisible();
     await page.getByRole("button", { name: "重试生成" }).click();
 
-    await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
     expect(storyboardCalls).toBe(2);
   });
 
@@ -561,7 +561,7 @@ test.describe("StoryCam core storyboard", () => {
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page.getByText("1 个核心分镜组，控制在 45 秒内。")).toHaveCount(0);
     await expect(page.getByText("1 组 · 约 15 秒内")).toBeVisible();
-    await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
     await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toHaveCount(0);
     await expect(page.getByRole("heading", { exact: true, name: "擦肩而过" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "点击中心主图生成扩展分镜" })).toHaveCount(1);
