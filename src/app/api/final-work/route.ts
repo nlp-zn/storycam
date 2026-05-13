@@ -1,46 +1,27 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
-import { createFinalWorkFromSuggestion, createPrivateFinalWorkPreviewUrl, FinalWorkRequestError } from "@/server/storycam/finalWorkService";
+import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
+import { createFinalWorkJobFromSuggestion, FinalWorkRequestError } from "@/server/storycam/finalWorkService";
 import { StoryCamMediaStoreError } from "@/server/storycam/mediaStore";
+import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
+    const config = loadStoryCamConfig();
     const client = createSupabaseAdminClient();
-    const result = await createFinalWorkFromSuggestion(client, user.id, await request.json());
-
-    if (!result.ok) {
-      return NextResponse.json(
-        {
-          error: result.errorCode,
-          redactedError: result.redactedError,
-          redactionApplied: true
-        },
-        { status: 502 }
-      );
-    }
-    const preview = await createPrivateFinalWorkPreviewUrl(client, {
-      media: result.value.media
-    });
+    await assertStoryCamDailyJobQuota(client, user.id, config, "final_work");
+    const job = await createFinalWorkJobFromSuggestion(client, user.id, await request.json(), config.generation.mode);
 
     return NextResponse.json(
       {
-        finalWork: result.value.artifact,
-        media: {
-          byteSize: result.value.media.byteSize,
-          id: result.value.media.id,
-          kind: "final_work",
-          mimeType: result.value.media.mimeType
-        },
+        job,
         ok: true,
-        preview: {
-          durationSeconds: result.value.finalWork.durationSeconds,
-          mimeType: result.value.media.mimeType,
-          ...preview
-        }
+        providerName: job.providerName,
+        status: job.status
       },
-      { status: 201 }
+      { status: 202 }
     );
   } catch (error) {
     if (error instanceof UnauthorizedError) {
@@ -56,6 +37,23 @@ export async function POST(request: Request) {
         },
         { status: 400 }
       );
+    }
+
+    if (error instanceof StoryCamConfigError) {
+      const redacted = redactConfigError(error);
+
+      return NextResponse.json(
+        {
+          error: redacted.code,
+          redactedError: redacted.message,
+          redactionApplied: true
+        },
+        { status: 500 }
+      );
+    }
+
+    if (error instanceof StoryCamQuotaError) {
+      return quotaErrorResponse(error);
     }
 
     return NextResponse.json(

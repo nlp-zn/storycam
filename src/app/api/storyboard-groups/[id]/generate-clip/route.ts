@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createGenerateClipJob, GenerationJobRequestError } from "@/server/storycam/generationJobService";
+import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 import { createConfiguredVideoProviders } from "@/server/storycam/videoProviderFactory";
 
 type GenerateClipRouteContext = {
@@ -16,8 +17,10 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
     const config = loadStoryCamConfig();
     const videoProviders = createConfiguredVideoProviders(config);
     const body = await request.json();
+    const client = createSupabaseAdminClient();
+    await assertStoryCamDailyJobQuota(client, user.id, config, "video");
     const result = await createGenerateClipJob(
-      createSupabaseAdminClient(),
+      client,
       user.id,
       params.id,
       {
@@ -64,6 +67,10 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
         },
         { status: 500 }
       );
+    }
+
+    if (error instanceof StoryCamQuotaError) {
+      return quotaErrorResponse(error);
     }
 
     return NextResponse.json(

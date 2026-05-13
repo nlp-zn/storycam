@@ -171,6 +171,12 @@ Possible implementation:
 Requirements:
 
 - one clip still produces a new final work artifact,
+- `POST /api/final-work` creates or reuses a `final_work` job; the worker performs ffmpeg
+  composition and storage writes,
+- production `STORYCAM_GENERATION_MODE=real` requires `STORYCAM_FINAL_WORK_PROVIDER=ffmpeg`
+  and must not fall back to mock final work,
+- real-mode config loading checks that `ffmpeg -version` succeeds before startup/build
+  completes,
 - output stored in Supabase Storage,
 - account-scoped preview only,
 - no sharing link in Phase 1.
@@ -180,6 +186,8 @@ Requirements:
 ```text
 STORYCAM_GENERATION_MODE=mock|real
 STORYCAM_TEXT_PROVIDER=mock|openrouter|deepseek
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock|openrouter|deepseek
+STORYCAM_STORYBOARD_TEXT_PROVIDER=mock|openrouter
 STORYCAM_MULTIMODAL_PROVIDER=mock|openrouter
 STORYCAM_IMAGE_PROVIDER=mock|openrouter|inference_sh
 STORYCAM_VIDEO_PROVIDER=mock|seedance_2_0
@@ -202,3 +210,8 @@ SEEDANCE_API_KEY=
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
 SEEDANCE_FAST_MODEL=doubao-seedance-2-0-fast-260128
 ```
+
+In real mode the current P0 production combination is DeepSeek story-world text,
+OpenRouter storyboard/structured text and multimodal, Inference.sh images, Seedance video,
+and ffmpeg final-work composition. `STORYCAM_TEXT_PROVIDER` remains a compatibility fallback
+for local mixed-mode checks; production should set the split text provider variables.

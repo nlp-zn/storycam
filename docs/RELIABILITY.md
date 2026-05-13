@@ -13,6 +13,11 @@ Jobs must support:
 - late-result discard,
 - redacted provider errors.
 
+Production job progress is owned by the background worker, not browser polling. The worker
+claims jobs with `locked_by`, `locked_at`, and `run_after`; provider-pending jobs are
+released for a later poll, and completed/failed/canceled jobs clear their locks. Closing the
+browser must not stop image, video, or final-work completion.
+
 ## Provider Failures
 
 Expected failures:

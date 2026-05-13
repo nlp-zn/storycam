@@ -11,6 +11,8 @@ Sources: `src/app/api/**/route.ts`, `src/features/storycam/client/storycamApi.ts
 - Route handlers validate input, call server-only services, and return redacted responses.
 - Route handlers must not expose prompt packets, raw provider payloads, provider secrets, signed provider-reference URLs, or Supabase service-role keys.
 - Media previews use short-lived signed URLs. Restore responses use `Cache-Control: no-store`.
+- Unsafe API methods are guarded by same-origin/allowed-origin checks before reaching route handlers.
+- Real generation mode enforces per-user daily server-side job quotas for image, video, and final-work job families.
 
 ## Error Shape
 
@@ -33,6 +35,8 @@ Error bodies must not include raw private input, full prompts, full prompt packe
 
 | Route | Purpose |
 | --- | --- |
+| `GET /api/health` | Public, no-store, lightweight web/config readiness check without secrets. |
+| `GET /api/health/deep` | Bearer-token protected deep check for Supabase DB and Storage reachability. |
 | `GET /api/auth/me` | Returns anonymous/authenticated account state without leaking server internals. |
 | `POST /api/auth/sign-out` | Signs out and clears local auth bypass opt-out state. |
 | `GET /auth/callback` | Exchanges Supabase OAuth callback and returns to StoryCam. |
@@ -66,10 +70,12 @@ New MVP storyboard creation normalizes to one core group, 15 seconds, and one ge
 | `GET /api/generation-jobs/[id]` | Polls an account-scoped generation job and returns normalized status/output. |
 | `POST /api/generation-jobs/[id]/cancel` | Requests cancellation/tombstone and prevents late provider results from creating outputs. |
 | `POST /api/stitch-suggestion` | Produces a user-facing final-work suggestion from confirmed clips. |
-| `POST /api/final-work` | Creates the account-scoped final work preview/export artifact. |
+| `POST /api/final-work` | Creates or reuses an account-scoped `final_work` generation job and returns `202` with `jobId`, `status`, and `providerName=ffmpeg`. |
 | `GET /api/storycam-media/[id]/download` | Streams the current user's final-work MP4 as an attachment; it does not expose storage bucket/key or raw signed URLs. |
 
 The server-created clip prompt packet is internal. The UI may show plain product status such as `720p`, ready/failure states, and retry/retake actions, but must not show provider payloads or professional shot-table data. MP4 export should use the same-origin authenticated download route rather than navigating users to a raw signed Storage URL.
+
+`GET /api/generation-jobs/[id]` is read-only. It returns persisted state, clip previews, or final-work preview metadata for succeeded jobs, but it does not poll providers, compose media, or advance generation. The Render worker is the production progress engine after job creation.
 
 ## Media Refs
 

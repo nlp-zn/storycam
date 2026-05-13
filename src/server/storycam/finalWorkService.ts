@@ -6,9 +6,11 @@ import type {
   FfmpegComposerOutput
 } from "@/lib/providers/finalWork/ffmpegComposer";
 import { createFfmpegFinalWorkComposer } from "@/lib/providers/finalWork/ffmpegComposer";
+import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { FinalWorkComposer } from "@/lib/providers/types";
-import type { Database, Json, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
+import type { Database, GenerationJobRow, Json, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
+import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { writeGeneratedStoryCamMedia, type WriteGeneratedStoryCamMediaResult } from "./generatedMediaService";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import {
@@ -37,6 +39,13 @@ export type ComposeFinalWorkOutput = {
 export type FinalWorkPreviewUrl = {
   signedUrl: string;
   signedUrlExpiresIn: number;
+};
+
+export type FinalWorkJobOutput = {
+  jobId: string;
+  outputArtifactId?: string;
+  providerName: string;
+  status: GenerationJobRow["status"];
 };
 
 export type StoryCamArtifactRef = {
@@ -170,6 +179,92 @@ export async function createFinalWorkFromSuggestion(
   });
 }
 
+export async function createFinalWorkJobFromSuggestion(
+  client: SupabaseClient<Database>,
+  userId: string,
+  body: FinalWorkRequestBody,
+  generationMode: GenerationJobRow["generation_mode"]
+): Promise<FinalWorkJobOutput> {
+  const input = parseFinalWorkRequest(body);
+  const { generatedClipArtifacts, session, stitchSuggestion } = await loadFinalWorkArtifacts(client, userId, input);
+  const idempotencyKeyHash = hashLogIdentifier(
+    [
+      "storycam-final-work",
+      input.sessionId,
+      generatedClipArtifacts.map((row) => row.id).sort().join(","),
+      input.idempotencyKey
+    ].join(":")
+  );
+  const jobs = new StoryCamGenerationJobRepository(client);
+  const existingJob = await jobs.findActiveByIdempotencyKey(userId, idempotencyKeyHash);
+
+  if (existingJob) {
+    return toFinalWorkJobOutput(existingJob);
+  }
+
+  const job = await jobs.create(userId, {
+    generationMode,
+    idempotencyKeyHash,
+    inputArtifactVersionsJson: Object.fromEntries([
+      [stitchSuggestion.id, stitchSuggestion.version],
+      ...generatedClipArtifacts.map((row) => [row.id, row.version] as const)
+    ]),
+    maxAttempts: 1,
+    providerKind: "stitch",
+    providerName: "ffmpeg",
+    sessionId: session.id,
+    status: "queued",
+    type: "final_work"
+  });
+
+  if (!job) {
+    throw new Error("StoryCam final work job creation failed.");
+  }
+
+  return toFinalWorkJobOutput(job);
+}
+
+export async function completeFinalWorkJob(
+  client: SupabaseClient<Database>,
+  job: GenerationJobRow,
+  composer: FinalWorkComposer<FfmpegComposerInput, FfmpegComposerOutput> = createFfmpegFinalWorkComposer()
+) {
+  const jobs = new StoryCamGenerationJobRepository(client);
+
+  if (job.status === "succeeded" || job.status === "failed" || job.status === "canceled" || job.status === "expired") {
+    return job;
+  }
+
+  if (job.status === "cancel_requested" || job.tombstoned_at) {
+    return (await jobs.markCanceled(job.user_id, job.id)) ?? job;
+  }
+
+  try {
+    const input = await loadFinalWorkCompositionInput(client, job);
+    const result = await composeAndStoreFinalWork(client, composer, input);
+
+    if (!result.ok) {
+      return (
+        (await jobs.markFailed(job.user_id, job.id, {
+          errorCode: result.errorCode,
+          providerErrorCategory: result.providerErrorCategory,
+          providerHttpStatus: result.providerHttpStatus,
+          redactedError: result.redactedError
+        })) ?? job
+      );
+    }
+
+    return (await jobs.markSucceeded(job.user_id, job.id, { outputArtifactId: result.value.artifact.id })) ?? job;
+  } catch {
+    return (
+      (await jobs.markFailed(job.user_id, job.id, {
+        errorCode: "FINAL_WORK_JOB_FAILED",
+        redactedError: "Final work generation failed."
+      })) ?? job
+    );
+  }
+}
+
 export async function composeAndStoreFinalWork(
   client: SupabaseClient<Database>,
   composer: FinalWorkComposer<FfmpegComposerInput, FfmpegComposerOutput>,
@@ -273,6 +368,90 @@ function parseFinalWorkRequest(body: FinalWorkRequestBody) {
   };
 }
 
+async function loadFinalWorkArtifacts(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: ReturnType<typeof parseFinalWorkRequest>
+) {
+  const session = await new StoryCamSessionRepository(client).findById(userId, input.sessionId);
+
+  if (!session) {
+    throw new FinalWorkRequestError("session_not_found");
+  }
+
+  const artifacts = new StoryCamArtifactRepository(client);
+  const rows = (await artifacts.listBySession(userId, { sessionId: session.id })) ?? [];
+  const stitchSuggestion = rows.find(
+    (row) => row.id === input.stitchSuggestionArtifactId && row.type === "stitch_suggestion" && row.state === "ready"
+  );
+
+  if (!stitchSuggestion) {
+    throw new FinalWorkRequestError("stitch_suggestion_not_found");
+  }
+
+  const suggestionData = parseStitchSuggestionData(stitchSuggestion.data_json);
+  const generatedClipArtifacts = await loadReadyGeneratedClipArtifacts(
+    artifacts,
+    userId,
+    session.id,
+    suggestionData.generatedClipArtifactIds
+  );
+
+  return { generatedClipArtifacts, session, stitchSuggestion };
+}
+
+async function loadFinalWorkCompositionInput(
+  client: SupabaseClient<Database>,
+  job: GenerationJobRow
+): Promise<ComposeFinalWorkInput> {
+  const artifacts = new StoryCamArtifactRepository(client);
+  const rows = (await artifacts.listBySession(job.user_id, { sessionId: job.session_id })) ?? [];
+  const versionMap = job.input_artifact_versions_json && typeof job.input_artifact_versions_json === "object"
+    ? (job.input_artifact_versions_json as Record<string, unknown>)
+    : {};
+  const stitchSuggestion = rows.find(
+    (row) => row.type === "stitch_suggestion" && row.state === "ready" && typeof versionMap[row.id] === "number"
+  );
+
+  if (!stitchSuggestion) {
+    throw new FinalWorkRequestError("stitch_suggestion_not_found");
+  }
+
+  const suggestionData = parseStitchSuggestionData(stitchSuggestion.data_json);
+  const generatedClipArtifacts = await loadReadyGeneratedClipArtifacts(
+    artifacts,
+    job.user_id,
+    job.session_id,
+    suggestionData.generatedClipArtifactIds
+  );
+  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(job.user_id, job.session_id)) ?? [];
+  const clips = await Promise.all(
+    generatedClipArtifacts.map(async (artifact) => {
+      const generatedClip = generatedClipSchema.parse(artifact.data_json);
+      const media = requireMediaAsset(mediaRows, generatedClip.mediaAssetId);
+
+      assertStoryCamPrivateBucket(media.storage_bucket);
+
+      return {
+        bytes: await downloadStoryCamObject(client, media.storage_bucket, media.storage_path),
+        durationSeconds: generatedClip.durationSeconds,
+        generatedClipId: generatedClip.id
+      };
+    })
+  );
+
+  return {
+    clips,
+    inputArtifactVersions: Object.fromEntries([
+      [stitchSuggestion.id, stitchSuggestion.version],
+      ...generatedClipArtifacts.map((row) => [row.id, row.version] as const)
+    ]),
+    sessionId: job.session_id,
+    stitchSuggestionId: stitchSuggestion.id,
+    userId: job.user_id
+  };
+}
+
 async function loadReadyGeneratedClipArtifacts(
   artifacts: StoryCamArtifactRepository,
   userId: string,
@@ -337,5 +516,14 @@ function toArtifactRef(row: StoryCamArtifactRow): StoryCamArtifactRef {
     state: row.state,
     type: row.type,
     version: row.version
+  };
+}
+
+function toFinalWorkJobOutput(job: GenerationJobRow): FinalWorkJobOutput {
+  return {
+    jobId: job.id,
+    ...(job.output_artifact_id ? { outputArtifactId: job.output_artifact_id } : {}),
+    providerName: job.provider_name,
+    status: job.status
   };
 }

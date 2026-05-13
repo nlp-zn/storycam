@@ -1,3 +1,5 @@
+import { nextVideoGenerationPollDelayMs } from "./jobPolling";
+
 type ArtifactRef = {
   id: string;
   state: string;
@@ -238,6 +240,7 @@ export type GenerationJobSummary = {
     signedUrl: string;
     signedUrlExpiresIn: number;
   };
+  outputFinalWork?: FinalWorkResponse;
   providerErrorCategory?: string;
   providerHttpStatus?: number;
   providerKind: string;
@@ -1452,7 +1455,39 @@ export async function createFinalWork(input: { idempotencyKey: string; sessionId
     throw new Error(errorCode(await response.json(), "final_work_failed"));
   }
 
-  return (await response.json()) as FinalWorkResponse;
+  const result = (await response.json()) as FinalWorkResponse | { job?: { jobId: string }; ok: true };
+
+  if ("finalWork" in result) {
+    return result;
+  }
+
+  if (result.job?.jobId) {
+    return waitForFinalWorkJob(result.job.jobId);
+  }
+
+  throw new Error("final_work_failed");
+}
+
+async function waitForFinalWorkJob(jobId: string): Promise<FinalWorkResponse> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await getGenerationJob(jobId);
+
+    if (response.job.outputFinalWork) {
+      return response.job.outputFinalWork;
+    }
+
+    if (response.job.status === "failed" || response.job.status === "canceled" || response.job.status === "expired") {
+      throw new Error(response.job.redactedError ?? "final_work_failed");
+    }
+
+    await delay(nextVideoGenerationPollDelayMs(attempt));
+  }
+
+  throw new Error("final_work_timeout");
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => globalThis.setTimeout(resolve, ms));
 }
 
 function errorCode(value: unknown, fallback: string) {

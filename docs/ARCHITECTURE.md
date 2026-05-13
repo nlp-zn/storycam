@@ -93,7 +93,7 @@ Provider selection is server configuration, not a client parameter.
 - Video generation uses Seedance 2.0 / Seedance 2.0 Fast behind `VideoGenerationProvider`.
 - Final work uses the final-work provider/composer boundary and remains account-scoped.
 
-Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_TEXT_PROVIDER=deepseek`; other providers may remain mock. Runtime process env takes precedence over `.env.local`.
+Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek`; other providers may remain mock. `STORYCAM_TEXT_PROVIDER` remains a compatibility fallback. Runtime process env takes precedence over `.env.local`.
 
 See `docs/references/providers.md` and `docs/generated/provider-contract.md`.
 
@@ -109,7 +109,7 @@ Job-backed surfaces include:
 - Seedance video clip generation,
 - final work composition.
 
-Jobs must never mutate terminal failed/canceled/expired records into success. Retry creates a new attempt or job according to service policy. Running jobs for deleted sessions are tombstoned and late provider results are discarded.
+Jobs must never mutate terminal failed/canceled/expired records into success. Retry creates a new attempt or job according to service policy. Running jobs for deleted sessions are tombstoned and late provider results are discarded. Production progress is owned by `storycam-worker`, which claims rows with `locked_by`, `locked_at`, and `run_after`; browser polling is read-only.
 
 See `docs/generated/job-lifecycle.md`.
 

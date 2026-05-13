@@ -1,8 +1,9 @@
 # StoryCam Deployment Plan
 
-Status: planning baseline. This document records the current production deployment
-direction and the gaps to close before launch. It is not an implemented platform
-configuration yet.
+Status: implemented deployment baseline. The repository now contains a Render Blueprint,
+production start/worker scripts, health endpoints, worker claiming primitives, and the
+P0 async final-work job path. Values still belong in Render, Supabase, Cloudflare, and
+provider dashboards rather than in git.
 
 ## Goals
 
@@ -102,16 +103,12 @@ Responsibilities:
   final work records.
 - Return only redacted errors and account-scoped artifact metadata to the browser.
 
-Current deployment gap: `package.json` has `build` but no `start` script. Render can use a
-Start Command such as `pnpm exec next start` for the first deploy, or the project can add a
-`start` script later.
-
 Expected commands:
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm build
-pnpm exec next start
+pnpm start
 ```
 
 ### storycam-worker
@@ -133,9 +130,16 @@ Responsibilities:
 - Mark jobs succeeded, failed, canceled, or tombstoned with redacted diagnostics.
 - Retry transient provider failures within configured limits.
 
-Launch blocker: the current app advances some job state from request/polling paths. For
-production, generation must continue after a browser tab closes, so a real worker entry
-point and job-claiming implementation are P0.
+Worker command:
+
+```bash
+pnpm worker:storycam
+```
+
+The worker claims runnable jobs through `claim_storycam_generation_jobs`, processes only
+non-terminal, non-tombstoned jobs it owns, and releases provider-pending jobs with a future
+`run_after`. Browser polling observes persisted state and is no longer the production
+progress mechanism.
 
 ### Optional Sweeper
 
@@ -215,6 +219,7 @@ Exact values belong in Render and Supabase dashboards, not in this repository.
 - `NEXT_PUBLIC_APP_URL`: canonical app origin, for example `https://storycam.example.com`.
 - `NEXT_PUBLIC_SUPABASE_URL`: public Supabase project URL.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon key.
+- `NEXT_PUBLIC_SENTRY_DSN`: browser-safe Sentry DSN, if browser capture is enabled.
 - `NEXT_PUBLIC_POSTHOG_KEY`: only if PostHog is enabled.
 - `NEXT_PUBLIC_POSTHOG_HOST`: PostHog cloud or self-hosted ingest host.
 
@@ -222,24 +227,35 @@ Exact values belong in Render and Supabase dashboards, not in this repository.
 
 - `SUPABASE_SERVICE_ROLE_KEY`: server and worker only.
 - `STORYCAM_GENERATION_MODE=real` for staging real smoke and production.
-- `STORYCAM_TEXT_PROVIDER`: expected production value is `deepseek` or `openrouter`.
+- `STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek`.
+- `STORYCAM_STORYBOARD_TEXT_PROVIDER=openrouter`.
+- `STORYCAM_TEXT_PROVIDER`: legacy/local fallback only; production should use the split
+  text provider variables.
+- `STORYCAM_MULTIMODAL_PROVIDER=openrouter`.
 - `STORYCAM_IMAGE_PROVIDER`: expected production value is `inference_sh` unless changed by
   provider readiness.
 - `STORYCAM_VIDEO_PROVIDER=seedance_2_0`.
+- `STORYCAM_FINAL_WORK_PROVIDER=ffmpeg`.
 - `DEEPSEEK_API_KEY` and related model/base URL variables.
 - `OPENROUTER_API_KEY` and related model/base URL variables if OpenRouter is used.
 - `INFERENCE_API_KEY` and related model variables.
 - `SEEDANCE_API_KEY`, base URL, model, and polling variables.
 - `STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS`: long enough for provider-side temporary
   image/video references used by video generation.
+- `STORYCAM_ALLOWED_ORIGINS`: comma-separated staging origins allowed for unsafe API
+  methods in addition to the request origin and `NEXT_PUBLIC_APP_URL`.
+- `STORYCAM_DEEP_HEALTH_TOKEN`: bearer token for `/api/health/deep`.
+- `STORYCAM_DAILY_IMAGE_JOB_LIMIT`, `STORYCAM_DAILY_VIDEO_JOB_LIMIT`,
+  `STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT`: per-user daily server-side quota defaults.
 - `ADMIN_EMAILS`: comma-separated Google account allowlist for the initial admin view.
-- `SENTRY_DSN`: server/client DSN as configured by Sentry.
+- `SENTRY_DSN`: server/worker Sentry DSN.
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`: only if source maps are uploaded in
   CI or build steps.
 
 Important current caveat: `next.config.ts` loads StoryCam config during `next build`.
 Provider mode and required env must therefore be present during Render builds, not only at
-runtime.
+runtime. In `STORYCAM_GENERATION_MODE=real`, config loading also verifies that `ffmpeg` is
+available for final MP4 composition.
 
 ## Database, Auth, and Storage
 
@@ -266,12 +282,11 @@ Before production:
 
 P0 before launch:
 
-- Add a durable worker entry point and Render worker service.
-- Add transactional job claiming or equivalent locking for generation jobs.
-- Ensure browser polling only observes job state; it must not be required to advance jobs.
-- Ensure worker produces and stores real final MP4 artifacts with ffmpeg.
-- Add production health endpoints for web and worker-visible dependencies.
-- Add Sentry with redaction for web, API routes, and worker.
+- Review and apply the worker-claim migration in staging and production.
+- Verify the Render Blueprint creates both `storycam-web` and `storycam-worker` in
+  Singapore with the expected secret groups/env values.
+- Verify Render Native Runtime has runtime ffmpeg available; switch to Docker if it does
+  not.
 - Add Cloudflare cache-bypass and rate-limit rules.
 - Configure staging and production Supabase projects, Auth redirect URLs, Storage buckets,
   and provider secrets.
@@ -398,12 +413,11 @@ replace it later.
 
 ## Open Decisions
 
-- Worker implementation shape: direct loop in Node.js, queue table with `locked_at`, or a
-  Supabase/PG advisory-lock based claimant.
+- Whether the first production launch keeps Render Native Runtime or switches to Docker
+  after ffmpeg runtime validation.
 - Provider completion strategy: polling-only initially, or webhooks where providers support
   them.
 - Render instance sizes for beta traffic and MP4 composition.
-- Whether to use Render native runtime or Docker for pinned ffmpeg and media dependencies.
 - PostHog Cloud versus self-hosting and exact analytics retention period.
 - Admin permission source after the initial `ADMIN_EMAILS` allowlist.
 

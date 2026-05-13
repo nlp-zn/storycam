@@ -7,7 +7,9 @@ import type { StoryCamConfig } from "@/server/config";
 export function createConfiguredStoryWorldProvider(
   config: StoryCamConfig
 ): TextGenerationProvider<StoryWorldProviderInput, StoryWorldProviderOutput> | undefined {
-  if (config.generation.textProvider === "deepseek") {
+  const provider = config.generation.storyWorldTextProvider ?? config.generation.textProvider;
+
+  if (provider === "deepseek") {
     return createDeepSeekStoryWorldProvider({
       apiKey: config.deepseek?.apiKey ?? "",
       baseUrl: config.deepseek?.textBaseUrl,
@@ -16,7 +18,7 @@ export function createConfiguredStoryWorldProvider(
     });
   }
 
-  if (config.generation.textProvider === "openrouter") {
+  if (provider === "openrouter") {
     return createOpenRouterStoryWorldProvider({
       apiKey: config.openrouter?.apiKey ?? "",
       fallbackModels: config.openrouter?.textFallbackModels,

@@ -106,11 +106,11 @@ describe("StoryCam metadata repositories", () => {
     expect(client.queries[0]?.calls).toContainEqual(["is", "tombstoned_at", null]);
     expect(client.queries[1]?.calls).toContainEqual([
       "update",
-      {
+      expect.objectContaining({
         ended_at: "2026-04-26T01:02:03.000Z",
         output_artifact_id: "artifact-1",
         status: "succeeded"
-      }
+      })
     ]);
     expect(client.queries[1]?.calls).toContainEqual(["eq", "user_id", "user-1"]);
     expect(client.queries[1]?.calls).toContainEqual(["is", "tombstoned_at", null]);

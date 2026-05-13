@@ -61,6 +61,8 @@ STORYCAM_LOCAL_AUTH_BYPASS=0
 
 STORYCAM_GENERATION_MODE=mock
 STORYCAM_TEXT_PROVIDER=mock
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock
+STORYCAM_STORYBOARD_TEXT_PROVIDER=mock
 STORYCAM_MULTIMODAL_PROVIDER=mock
 STORYCAM_IMAGE_PROVIDER=mock
 STORYCAM_VIDEO_PROVIDER=mock
@@ -74,7 +76,8 @@ To verify only the real text model for Step 2 story-world generation while keepi
 
 ```text
 STORYCAM_GENERATION_MODE=mock
-STORYCAM_TEXT_PROVIDER=deepseek
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek
+STORYCAM_STORYBOARD_TEXT_PROVIDER=mock
 STORYCAM_MULTIMODAL_PROVIDER=mock
 STORYCAM_IMAGE_PROVIDER=mock
 STORYCAM_VIDEO_PROVIDER=mock
@@ -94,13 +97,14 @@ If `/api/story-world` returns the same instant fixture, inspect `diagnostics.tex
 
 ```bash
 unset STORYCAM_TEXT_PROVIDER
+unset STORYCAM_STORY_WORLD_TEXT_PROVIDER
 pnpm dev --port 3000
 ```
 
 You can also force the value for one run:
 
 ```bash
-STORYCAM_TEXT_PROVIDER=deepseek pnpm dev --port 3000
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek pnpm dev --port 3000
 ```
 
 If `/api/story-world` returns `DEEPSEEK_TOOL_CALL_MISSING`, `DEEPSEEK_TOOL_ARGUMENTS_INVALID_JSON`, `DEEPSEEK_STORY_WORLD_INVALID_OUTPUT`, or `DEEPSEEK_TEXT_PROVIDER_FAILED`, check that the model is one that supports DeepSeek strict function calling, that `DEEPSEEK_TEXT_BASE_URL` points to `https://api.deepseek.com/beta`, and that the API key has access to `deepseek-v4-pro`. Restart `pnpm dev` after changing `.env.local`, and use `curl --noproxy '*'` for localhost smoke requests when proxy env vars are present.
@@ -110,7 +114,7 @@ Server-side DeepSeek and OpenRouter calls use a proxy-aware fetch wrapper. If yo
 OpenRouter remains available for core storyboard text and fallback experiments. To test the OpenRouter structured-output path directly:
 
 ```text
-STORYCAM_TEXT_PROVIDER=openrouter
+STORYCAM_STORYBOARD_TEXT_PROVIDER=openrouter
 OPENROUTER_API_KEY=<your-openrouter-key>
 OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash
 OPENROUTER_TEXT_FALLBACK_MODELS=qwen/qwen3.6-flash
@@ -130,7 +134,18 @@ To test real Seedance clip generation from the browser:
 
 ```text
 STORYCAM_GENERATION_MODE=real
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek
+STORYCAM_STORYBOARD_TEXT_PROVIDER=openrouter
+STORYCAM_MULTIMODAL_PROVIDER=openrouter
+STORYCAM_IMAGE_PROVIDER=inference_sh
 STORYCAM_VIDEO_PROVIDER=seedance_2_0
+STORYCAM_FINAL_WORK_PROVIDER=ffmpeg
+DEEPSEEK_API_KEY=<your-deepseek-key>
+OPENROUTER_API_KEY=<your-openrouter-key>
+OPENROUTER_TEXT_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_MULTIMODAL_MODEL=deepseek/deepseek-v4-pro
+INFERENCE_API_KEY=<your-inference-key>
+INFERENCE_IMAGE_APP=openai/gpt-image-2
 SEEDANCE_API_KEY=<your-seedance-key>
 SEEDANCE_MODEL=doubao-seedance-2-0-260128
 SEEDANCE_FAST_MODEL=doubao-seedance-2-0-fast-260128
@@ -246,6 +261,8 @@ Do not commit Google OAuth client secrets. Keep them in the Supabase dashboard f
    ```text
    STORYCAM_GENERATION_MODE=mock
    STORYCAM_TEXT_PROVIDER=mock
+   STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock
+   STORYCAM_STORYBOARD_TEXT_PROVIDER=mock
    STORYCAM_MULTIMODAL_PROVIDER=mock
    STORYCAM_IMAGE_PROVIDER=mock
    STORYCAM_VIDEO_PROVIDER=mock

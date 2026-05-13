@@ -63,6 +63,9 @@ Current duration constraints:
 - `redacted_error`
 - `started_at`
 - `ended_at`
+- `locked_by`
+- `locked_at`
+- `run_after`
 - `created_at`
 - `updated_at`
 - `tombstoned_at`
@@ -97,6 +100,16 @@ Current duration constraints:
 - `status`
 - `created_at`
 - `updated_at`
+
+## Supabase Functions
+
+- `soft_delete_storycam_session(user_id, session_id)`: tombstones a user-owned session and
+  related in-flight jobs/artifacts/media.
+- `claim_storycam_generation_jobs(worker_id, job_types, limit_count, lock_ttl_seconds)`:
+  atomically claims runnable jobs for the background worker with `FOR UPDATE SKIP LOCKED`,
+  writes `locked_by`/`locked_at`, advances `queued` jobs to `running`, increments
+  `attempts`, and returns claimed `generation_jobs` rows. Execute permission is revoked
+  from `public`, `anon`, and `authenticated`; the worker calls it with the service role.
 
 ## Storage Buckets
 

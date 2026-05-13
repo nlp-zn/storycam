@@ -48,6 +48,22 @@ Rules:
 - Retry creates a new attempt or job; it must not mutate a terminal failed/canceled/expired job into success.
 - Deleted sessions tombstone active jobs and discard late provider results.
 - Provider errors are normalized and redacted before storage/logging/client display.
+- Browser polling is read-only; the worker owns production progress after job creation.
+
+## Worker Claiming
+
+The worker claims jobs through `claim_storycam_generation_jobs`:
+
+- runnable statuses are `queued`, `running`, and `cancel_requested`,
+- `run_after <= now()` gates delayed provider polling,
+- stale locks can be reclaimed after the configured lock TTL,
+- claims set `locked_by`, `locked_at`, and a short future `run_after`,
+- `queued` jobs move to `running`, set `started_at`, and increment `attempts`,
+- the SQL implementation uses `FOR UPDATE SKIP LOCKED` to avoid duplicate concurrent claims.
+
+Completion methods clear `locked_by` and `locked_at`. Provider-pending jobs are released
+with a future `run_after`. Workers must only mutate non-terminal, non-tombstoned jobs and
+must discard late provider success after cancel/tombstone.
 
 ## Idempotency
 
@@ -88,6 +104,8 @@ The user-facing rescue path for bad or failed video output is `重拍这个片�
 Final work creation:
 
 - remains account-scoped,
+- starts as a durable `final_work` generation job from `POST /api/final-work`,
+- is claimed and composed by the background worker, not by the browser request,
 - may compose even a single generated clip into a final work artifact,
 - stores preview/export media privately,
 - does not create public sharing links in Phase 1.
@@ -116,6 +134,9 @@ type GenerationJob = {
   redactedError?: string;
   startedAt?: string;
   endedAt?: string;
+  lockedBy?: string;
+  lockedAt?: string;
+  runAfter: string;
   tombstonedAt?: string;
 };
 ```

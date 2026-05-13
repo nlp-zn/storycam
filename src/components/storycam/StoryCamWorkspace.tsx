@@ -1548,7 +1548,7 @@ export function StoryCamWorkspace() {
         sessionId
       });
       const nextFinalWork = await createFinalWork({
-        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${clipArtifactId}-${Date.now()}`,
+        idempotencyKey: `${sessionId}:${clipArtifactId}:final-work-v1`,
         sessionId,
         stitchSuggestionArtifactId: suggestion.stitchSuggestion.id
       });

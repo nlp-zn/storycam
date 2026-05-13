@@ -41,6 +41,17 @@ describe("final work API routes", () => {
     requireUserMock.mockReset();
     createSupabaseAdminClientMock.mockReset();
     composeMock.mockClear();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://storycam.test";
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    process.env.STORYCAM_GENERATION_MODE = "mock";
+    process.env.STORYCAM_TEXT_PROVIDER = "mock";
+    process.env.STORYCAM_IMAGE_PROVIDER = "mock";
+    process.env.STORYCAM_VIDEO_PROVIDER = "mock";
+    process.env.STORYCAM_FINAL_WORK_PROVIDER = "mock";
+    process.env.STORYCAM_MULTIMODAL_PROVIDER = "mock";
+    delete process.env.STORYCAM_STORY_WORLD_TEXT_PROVIDER;
+    delete process.env.STORYCAM_STORYBOARD_TEXT_PROVIDER;
   });
 
   it("creates a stitch suggestion when a generated clip is ready for final confirmation", async () => {
@@ -90,7 +101,7 @@ describe("final work API routes", () => {
     expect(client.queries.some((query) => query.table === "generation_jobs")).toBe(false);
   });
 
-  it("creates a private final work file from one confirmed clip without sharing links", async () => {
+  it("creates a durable final work job from one confirmed clip without composing in the request", async () => {
     const { POST } = await import("@/app/api/final-work/route");
     const client = new FakeSupabaseClient({
       artifactRows: [stitchSuggestionArtifact(), generatedClipArtifact()],
@@ -107,38 +118,35 @@ describe("final work API routes", () => {
     }));
     const body = await response.json();
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(202);
     expect(body).toEqual({
-      finalWork: {
-        id: "final_work-artifact-1",
-        state: "ready",
-        type: "final_work",
-        version: 1
-      },
-      media: {
-        byteSize: 7,
-        id: "media-final-1",
-        kind: "final_work",
-        mimeType: "video/mp4"
+      job: {
+        jobId: "job-1",
+        providerName: "ffmpeg",
+        status: "queued"
       },
       ok: true,
-      preview: {
-        durationSeconds: 4,
-        mimeType: "video/mp4",
-        signedUrl: expect.stringContaining("https://storycam.test/storage/storycam-generated/users/user-1/sessions/session-1/generated/final/"),
-        signedUrlExpiresIn: 300
-      }
+      providerName: "ffmpeg",
+      status: "queued"
     });
-    expect(JSON.stringify(body)).not.toContain("storage_path");
+    expect(JSON.stringify(body)).not.toContain("final-work-secret");
     expect(JSON.stringify(body)).not.toContain("share");
-    expect(composeMock).toHaveBeenCalledWith({
-      clips: [
-        {
-          bytes: new TextEncoder().encode("clip-bytes"),
-          durationSeconds: 4,
-          generatedClipId: "generated-clip-1"
-        }
-      ]
+    expect(composeMock).not.toHaveBeenCalled();
+    expect(client.uploads).toEqual([]);
+    expect(
+      client.queries
+        .filter((query) => query.table === "generation_jobs")
+        .flatMap((query) => query.calls)
+        .find((call) => call[0] === "insert")?.[1]
+    ).toMatchObject({
+      input_artifact_versions_json: {
+        "generated-clip-artifact-1": 1,
+        "stitch-suggestion-artifact-1": 1
+      },
+      provider_kind: "stitch",
+      provider_name: "ffmpeg",
+      status: "queued",
+      type: "final_work"
     });
   });
 
@@ -486,6 +494,38 @@ class FakeQuery {
   }
 
   private row() {
+    if (this.table === "generation_jobs") {
+      return {
+        attempts: 0,
+        created_at: "2026-04-26T00:00:00.000Z",
+        ended_at: null,
+        error_code: null,
+        generation_mode: "mock",
+        id: "job-1",
+        idempotency_key_hash: "hash-1",
+        input_artifact_versions_json: {},
+        locked_at: null,
+        locked_by: null,
+        max_attempts: 1,
+        output_artifact_id: null,
+        provider_error_category: null,
+        provider_http_status: null,
+        provider_kind: "stitch",
+        provider_name: "ffmpeg",
+        provider_request_id: null,
+        redacted_error: null,
+        run_after: "2026-04-26T00:00:00.000Z",
+        session_id: "session-1",
+        started_at: null,
+        status: "queued",
+        tombstoned_at: null,
+        type: "final_work",
+        updated_at: "2026-04-26T00:00:00.000Z",
+        user_id: "user-1",
+        ...this.inserted
+      };
+    }
+
     if (this.table === "media_assets") {
       return {
         byte_size: 7,

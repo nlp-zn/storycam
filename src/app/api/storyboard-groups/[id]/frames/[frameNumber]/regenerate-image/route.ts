@@ -7,6 +7,7 @@ import {
   regenerateStoryboardFrameImage,
   type ExpansionRequestBody
 } from "@/server/storycam/expansionService";
+import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
 
 type RegenerateFrameRouteContext = {
@@ -40,8 +41,10 @@ export async function POST(request: Request, context: RegenerateFrameRouteContex
 
     const config = loadStoryCamConfig();
     const imageProvider = createConfiguredStoryboardImageProvider(config);
+    const client = createSupabaseAdminClient();
+    await assertStoryCamDailyJobQuota(client, user.id, config, "image");
     const result = await regenerateStoryboardFrameImage(
-      createSupabaseAdminClient(),
+      client,
       user.id,
       params.id,
       body as ExpansionRequestBody,
@@ -91,6 +94,10 @@ export async function POST(request: Request, context: RegenerateFrameRouteContex
         },
         { status: 500 }
       );
+    }
+
+    if (error instanceof StoryCamQuotaError) {
+      return quotaErrorResponse(error);
     }
 
     return NextResponse.json(fallbackRegenerateFrame(body, frameNumber), { status: 202 });

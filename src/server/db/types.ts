@@ -99,6 +99,9 @@ export type GenerationJobRow = {
   redacted_error: string | null;
   started_at: string | null;
   ended_at: string | null;
+  locked_by: string | null;
+  locked_at: string | null;
+  run_after: string;
   created_at: string;
   updated_at: string;
   tombstoned_at: string | null;
@@ -125,6 +128,9 @@ export type GenerationJobInsert = {
   redacted_error?: string | null;
   started_at?: string | null;
   ended_at?: string | null;
+  locked_by?: string | null;
+  locked_at?: string | null;
+  run_after?: string;
   created_at?: string;
   updated_at?: string;
   tombstoned_at?: string | null;
@@ -212,6 +218,15 @@ export type Database = {
           target_user_id: string;
         };
         Returns: undefined;
+      };
+      claim_storycam_generation_jobs: {
+        Args: {
+          job_types: string[];
+          limit_count?: number;
+          lock_ttl_seconds?: number;
+          worker_id: string;
+        };
+        Returns: GenerationJobRow[];
       };
     };
     Enums: Record<string, never>;

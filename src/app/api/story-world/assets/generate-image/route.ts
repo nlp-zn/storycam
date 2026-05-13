@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
+import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 import {
   submitStoryWorldAssetImageJob,
   type StoryWorldAssetImageRequestBody,
@@ -33,8 +34,10 @@ export async function POST(request: Request) {
 
     const config = loadStoryCamConfig();
     const provider = createConfiguredStoryWorldAssetImageProvider(config);
+    const client = createSupabaseAdminClient();
+    await assertStoryCamDailyJobQuota(client, user.id, config, "image");
     const result = await submitStoryWorldAssetImageJob(
-      createSupabaseAdminClient(),
+      client,
       user.id,
       body as StoryWorldAssetImageRequestBody,
       provider
@@ -74,6 +77,10 @@ export async function POST(request: Request) {
         },
         { status: 500 }
       );
+    }
+
+    if (error instanceof StoryCamQuotaError) {
+      return quotaErrorResponse(error);
     }
 
     return NextResponse.json({ ok: true, ...fallbackSingleAssetImage(body) }, { status: 202 });

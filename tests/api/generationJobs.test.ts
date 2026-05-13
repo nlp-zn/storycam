@@ -50,6 +50,19 @@ describe("generation job API routes", () => {
     process.env.STORYCAM_IMAGE_PROVIDER = "mock";
     process.env.STORYCAM_TEXT_PROVIDER = "mock";
     process.env.STORYCAM_VIDEO_PROVIDER = "mock";
+    process.env.STORYCAM_GENERATION_MODE = "mock";
+    process.env.STORYCAM_MULTIMODAL_PROVIDER = "mock";
+    process.env.STORYCAM_FINAL_WORK_PROVIDER = "mock";
+    delete process.env.STORYCAM_STORY_WORLD_TEXT_PROVIDER;
+    delete process.env.STORYCAM_STORYBOARD_TEXT_PROVIDER;
+    delete process.env.DEEPSEEK_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_TEXT_MODEL;
+    delete process.env.OPENROUTER_MULTIMODAL_MODEL;
+    delete process.env.INFERENCE_API_KEY;
+    delete process.env.INFERENCE_IMAGE_APP;
+    delete process.env.SEEDANCE_API_KEY;
+    delete process.env.SEEDANCE_MODEL;
   });
 
   it("creates a video generation job for a confirmed core storyboard group", async () => {
@@ -186,10 +199,7 @@ describe("generation job API routes", () => {
       artifactRows: [coreGroupRow(), storyboardScriptRow(), ...expandedCardRows()],
       mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()]
     });
-    process.env.STORYCAM_GENERATION_MODE = "real";
-    process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
-    process.env.SEEDANCE_API_KEY = "seedance-secret";
-    process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+    setRealGenerationEnv();
     const videoProvider = {
       generateClip: vi.fn(),
       providerKind: "video" as const,
@@ -267,10 +277,7 @@ describe("generation job API routes", () => {
       artifactRows: [coreGroupRow(), storyboardScriptRow(), ...expandedCardRows()],
       mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()]
     });
-    process.env.STORYCAM_GENERATION_MODE = "real";
-    process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
-    process.env.SEEDANCE_API_KEY = "seedance-secret";
-    process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+    setRealGenerationEnv();
     const fastProvider = {
       generateClip: vi.fn(),
       providerKind: "video" as const,
@@ -314,10 +321,7 @@ describe("generation job API routes", () => {
       artifactRows: [coreGroupRow(), storyboardScriptRow(), ...expandedCardRows()],
       mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()]
     });
-    process.env.STORYCAM_GENERATION_MODE = "real";
-    process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
-    process.env.SEEDANCE_API_KEY = "seedance-secret";
-    process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+    setRealGenerationEnv();
     const fastProvider = {
       generateClip: vi.fn(),
       providerKind: "video" as const,
@@ -416,10 +420,7 @@ describe("generation job API routes", () => {
       mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()],
       signedUrlBase: "http://127.0.0.1:54321"
     });
-    process.env.STORYCAM_GENERATION_MODE = "real";
-    process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
-    process.env.SEEDANCE_API_KEY = "seedance-secret";
-    process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+    setRealGenerationEnv();
     const videoProvider = {
       generateClip: vi.fn(),
       providerKind: "video" as const,
@@ -569,6 +570,24 @@ function generateClipRequest(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function setRealGenerationEnv() {
+  process.env.STORYCAM_GENERATION_MODE = "real";
+  process.env.STORYCAM_STORY_WORLD_TEXT_PROVIDER = "deepseek";
+  process.env.STORYCAM_STORYBOARD_TEXT_PROVIDER = "openrouter";
+  process.env.STORYCAM_MULTIMODAL_PROVIDER = "openrouter";
+  process.env.STORYCAM_IMAGE_PROVIDER = "inference_sh";
+  process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
+  process.env.STORYCAM_FINAL_WORK_PROVIDER = "ffmpeg";
+  process.env.DEEPSEEK_API_KEY = "deepseek-secret";
+  process.env.OPENROUTER_API_KEY = "openrouter-secret";
+  process.env.OPENROUTER_TEXT_MODEL = "openrouter-text-model";
+  process.env.OPENROUTER_MULTIMODAL_MODEL = "openrouter-multimodal-model";
+  process.env.INFERENCE_API_KEY = "inference-secret";
+  process.env.INFERENCE_IMAGE_APP = "openai/gpt-image-2";
+  process.env.SEEDANCE_API_KEY = "seedance-secret";
+  process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+}
+
 function jobRow(overrides: Record<string, unknown> = {}) {
   return {
     attempts: 0,
@@ -581,6 +600,8 @@ function jobRow(overrides: Record<string, unknown> = {}) {
     id: "job-1",
     idempotency_key_hash: "hash-1",
     input_artifact_versions_json: {},
+    locked_at: null,
+    locked_by: null,
     max_attempts: 1,
     output_artifact_id: null,
     provider_kind: "video",
@@ -594,6 +615,7 @@ function jobRow(overrides: Record<string, unknown> = {}) {
     type: "video_clip",
     updated_at: "2026-04-26T00:00:00.000Z",
     user_id: "user-1",
+    run_after: "2026-04-26T00:00:00.000Z",
     ...overrides
   };
 }
@@ -809,8 +831,8 @@ class FakeQuery {
     return this;
   }
 
-  select(columns: string) {
-    this.calls.push(["select", columns]);
+  select(columns: string, options?: Record<string, unknown>) {
+    this.calls.push(options ? ["select", columns, options] : ["select", columns]);
     return this;
   }
 
@@ -830,6 +852,11 @@ class FakeQuery {
     return this;
   }
 
+  gte(column: string, value: unknown) {
+    this.calls.push(["gte", column, value]);
+    return this;
+  }
+
   single() {
     return Promise.resolve({
       data: this.singleRow(),
@@ -844,8 +871,9 @@ class FakeQuery {
     });
   }
 
-  then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
+  then(resolve: (value: { count?: number; data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
     return Promise.resolve({
+      count: 0,
       data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : this.table === "media_assets" ? this.findMediaRows() : [],
       error: null
     }).then(resolve, reject);

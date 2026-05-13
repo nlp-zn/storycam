@@ -13,6 +13,8 @@ StoryCam defaults to mock mode. Mock mode must be deterministic, account-scoped,
 ```text
 STORYCAM_GENERATION_MODE=mock
 STORYCAM_TEXT_PROVIDER=mock
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock
+STORYCAM_STORYBOARD_TEXT_PROVIDER=mock
 STORYCAM_MULTIMODAL_PROVIDER=mock
 STORYCAM_IMAGE_PROVIDER=mock
 STORYCAM_VIDEO_PROVIDER=mock
@@ -27,7 +29,8 @@ Real provider smoke tests are never part of the default local flow. They require
 
 ```text
 STORYCAM_GENERATION_MODE=real
-STORYCAM_TEXT_PROVIDER=deepseek
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek
+STORYCAM_STORYBOARD_TEXT_PROVIDER=openrouter
 STORYCAM_MULTIMODAL_PROVIDER=openrouter
 STORYCAM_IMAGE_PROVIDER=inference_sh
 STORYCAM_VIDEO_PROVIDER=seedance_2_0
@@ -71,7 +74,7 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 Story-world text generation should use DeepSeek's official beta strict function calling path instead of OpenRouter structured output. Configure:
 
 ```text
-STORYCAM_TEXT_PROVIDER=deepseek
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek
 DEEPSEEK_API_KEY=
 DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
 DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
@@ -129,7 +132,7 @@ Provider draft schemas should be tolerant at the provider boundary and strict at
 
 When reproducing local API behavior with `curl`, use `--noproxy '*'` for localhost if your shell has proxy env vars. Otherwise the request can be routed through a system proxy and return an empty `502`, which looks like a StoryCam/API failure but never reached the Next.js route.
 
-When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_TEXT_PROVIDER=deepseek`, the dev shell likely exported `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
+When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek`, the dev shell likely exported `STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock` or the legacy `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
 
 ## Safety Rules
 
