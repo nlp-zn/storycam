@@ -225,8 +225,8 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const deepseekTextFallbackModels = needsDeepSeek ? optionalCsv(env, "DEEPSEEK_TEXT_FALLBACK_MODELS") : [];
 
   const needsInferenceSh = imageProvider === "inference_sh";
-  const inferenceShApiKey = needsInferenceSh && mode === "real" ? required(env, "INFERENCE_API_KEY", issues) : needsInferenceSh ? optional(env, "INFERENCE_API_KEY") : undefined;
-  const inferenceShImageApp = needsInferenceSh && mode === "real" ? required(env, "INFERENCE_IMAGE_APP", issues) : needsInferenceSh ? optional(env, "INFERENCE_IMAGE_APP") : undefined;
+  const inferenceShApiKey = providerValue(env, "INFERENCE_API_KEY", needsInferenceSh, mode, issues);
+  const inferenceShImageApp = providerValue(env, "INFERENCE_IMAGE_APP", needsInferenceSh, mode, issues);
 
   const needsSeedance = videoProvider === "seedance_2_0";
   const seedanceApiKey = needsSeedance ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
@@ -343,6 +343,24 @@ function required(env: Env, variable: string, issues: ConfigIssue[]): string {
 
 function optional(env: Env, variable: string): string | undefined {
   return env[variable]?.trim() || undefined;
+}
+
+function providerValue(
+  env: Env,
+  variable: string,
+  needed: boolean,
+  mode: GenerationMode,
+  issues: ConfigIssue[]
+): string | undefined {
+  if (!needed) {
+    return undefined;
+  }
+
+  if (mode === "real") {
+    return required(env, variable, issues);
+  }
+
+  return optional(env, variable);
 }
 
 function enumValue<T extends string>(
