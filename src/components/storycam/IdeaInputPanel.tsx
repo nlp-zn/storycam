@@ -3,9 +3,10 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, Clapperboard, Heart, MapPin, PawPrint, Plus, RefreshCw, Sparkles, UserRound, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clapperboard, Heart, MapPin, PawPrint, Plus, RefreshCw, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  deleteStoryCamSession,
   getAuthStatus,
   isRecentStoryCamProjectsCacheStale,
   listRecentStoryCamProjects,
@@ -28,6 +29,7 @@ type SubmitState =
 
 type AuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 type RecentProjectsStatus = "idle" | "loading" | "ready" | "error";
+type RecentProjectsNotice = { kind: "success" | "error"; message: string };
 type StoryModeEntry = (typeof storyModeEntries)[number];
 type StoryModeId = StoryModeEntry["id"];
 type RecentProjectThumbnail = NonNullable<RecentStoryCamProject["thumbnail"]>;
@@ -35,11 +37,13 @@ type CachedRecentProjectThumbnail = RecentProjectThumbnail & {
   expiresAtMs: number;
 };
 
+const recentProjectsListLimit = 20;
 const storyModeSampleIdeas = new Set<string>(storyModeEntries.map((entry) => entry.sampleIdea));
 
 type IdeaInputPanelProps = {
   initialChoices?: string[];
   initialIdea?: string;
+  onProjectDeleted?: (sessionId: string) => void;
   onProjectSelected?: (sessionId: string) => Promise<void> | void;
   onSubmitStoryWorldDraft?: (draft: StoryWorldDraft) => void;
 };
@@ -63,9 +67,13 @@ type RecentProjectsInlineProps = {
 };
 
 type RecentProjectsDrawerProps = {
+  confirmingDeleteProjectId: string | null;
+  deletingProjectId: string | null;
   onClose: () => void;
   onContinue: (project: RecentStoryCamProject) => void;
+  onDelete: (project: RecentStoryCamProject) => void;
   projects: RecentStoryCamProject[];
+  recentProjectsNotice: RecentProjectsNotice | null;
   restoringProjectId: string | null;
   status: RecentProjectsStatus;
 };
@@ -75,6 +83,7 @@ type RecentProjectsDrawerContentProps = Omit<RecentProjectsDrawerProps, "onClose
 export function IdeaInputPanel({
   initialChoices = ["留白多一点"],
   initialIdea = "我想把暗恋拍成韩剧雨夜",
+  onProjectDeleted,
   onProjectSelected,
   onSubmitStoryWorldDraft
 }: IdeaInputPanelProps) {
@@ -90,6 +99,9 @@ export function IdeaInputPanel({
   const [recentProjectsStatus, setRecentProjectsStatus] = useState<RecentProjectsStatus>("idle");
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [restoringProjectId, setRestoringProjectId] = useState<string | null>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  const [confirmingDeleteProjectId, setConfirmingDeleteProjectId] = useState<string | null>(null);
+  const [recentProjectsNotice, setRecentProjectsNotice] = useState<RecentProjectsNotice | null>(null);
   const [selectedStoryModeId, setSelectedStoryModeId] = useState<StoryModeId>(storyModeEntries[0].id);
   const [videoAspectRatio, setVideoAspectRatio] = useState<StoryCamVideoAspectRatio>(defaultStoryCamVideoAspectRatio);
   const [isAspectRatioMenuOpen, setIsAspectRatioMenuOpen] = useState(false);
@@ -160,7 +172,6 @@ export function IdeaInputPanel({
 
     const requestId = recentProjectsRequestIdRef.current + 1;
     const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 12_000);
 
     recentProjectsRequestIdRef.current = requestId;
     recentProjectsAbortRef.current = controller;
@@ -171,7 +182,7 @@ export function IdeaInputPanel({
     }
 
     try {
-      const response = await listRecentStoryCamProjects(5, { signal: controller.signal });
+      const response = await listRecentStoryCamProjects(recentProjectsListLimit, { signal: controller.signal });
 
       if (recentProjectsRequestIdRef.current === requestId) {
         setRecentProjects(cacheRecentProjectThumbnails(response.projects, recentProjectThumbnailCacheRef.current));
@@ -183,7 +194,6 @@ export function IdeaInputPanel({
         setRecentProjectsStatus((current) => (current === "ready" && options.showLoading === false ? current : "error"));
       }
     } finally {
-      window.clearTimeout(timeout);
       recentProjectsInFlightRef.current = false;
 
       if (recentProjectsAbortRef.current === controller) {
@@ -357,18 +367,46 @@ export function IdeaInputPanel({
   }
 
   async function continueProject(project: RecentStoryCamProject) {
-    if (!onProjectSelected || restoringProjectId) {
+    if (!onProjectSelected || restoringProjectId || deletingProjectId) {
       return;
     }
 
     try {
       setRestoringProjectId(project.sessionId);
+      setRecentProjectsNotice(null);
       await onProjectSelected(project.sessionId);
       setIsRecentProjectsOpen(false);
     } catch {
       setSubmitState({ kind: "error", message: "项目恢复失败，可以稍后再试。" });
     } finally {
       setRestoringProjectId(null);
+    }
+  }
+
+  async function deleteRecentProject(project: RecentStoryCamProject) {
+    if (deletingProjectId || restoringProjectId) {
+      return;
+    }
+
+    if (confirmingDeleteProjectId !== project.sessionId) {
+      setConfirmingDeleteProjectId(project.sessionId);
+      setRecentProjectsNotice({ kind: "error", message: "再点一次确认删除，这个故事会从你的账号中移除。" });
+      return;
+    }
+
+    try {
+      setDeletingProjectId(project.sessionId);
+      setRecentProjectsNotice(null);
+      await deleteStoryCamSession(project.sessionId);
+      deleteRestoreThumbnailCache(project, recentProjectThumbnailCacheRef.current);
+      setRecentProjects((current) => current.filter((item) => item.sessionId !== project.sessionId));
+      setConfirmingDeleteProjectId(null);
+      onProjectDeleted?.(project.sessionId);
+      setRecentProjectsNotice({ kind: "success", message: `已删除「${project.title}」。` });
+    } catch {
+      setRecentProjectsNotice({ kind: "error", message: "删除失败，请稍后再试。" });
+    } finally {
+      setDeletingProjectId(null);
     }
   }
 
@@ -381,6 +419,7 @@ export function IdeaInputPanel({
 
   function openRecentProjects() {
     setIsRecentProjectsOpen(true);
+    setConfirmingDeleteProjectId(null);
 
     if (authStatus === "authenticated") {
       void refreshRecentProjects({ force: true, showLoading: recentProjects.length === 0 });
@@ -411,6 +450,25 @@ export function IdeaInputPanel({
           <div className="absolute -inset-0.5 rounded-[2rem] bg-gradient-to-r from-[#ff4b89]/80 via-[#dbfcff]/25 to-[#00f0ff]/90 opacity-75 blur-sm transition group-focus-within:opacity-100" />
           <div className="relative overflow-hidden rounded-[2rem] border border-[#00f0ff]/70 bg-[#0b0e0e]/90 p-5 shadow-[0_0_34px_rgba(0,240,255,0.14)] backdrop-blur-2xl transition group-focus-within:border-[#dbfcff] md:p-7">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,75,137,0.09),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.05),transparent_42%)]" />
+            {photoPreviewUrl ? (
+              <div className="storycam-inline-photo-preview relative mb-5 flex items-center gap-3" data-testid="story-photo-inline-preview">
+                <div className="relative size-[76px] overflow-hidden rounded-[18px] border border-[#dbfcff]/70 bg-white/[0.04] shadow-[0_0_18px_rgba(0,240,255,0.18)]">
+                  <img alt="上传照片预览" className="size-full object-cover" src={photoPreviewUrl} />
+                  <span className="absolute left-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-black/55 text-xs font-black text-white backdrop-blur-sm">
+                    1
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.06] px-3 py-2">
+                    <img alt="" aria-hidden="true" className="size-6 shrink-0 rounded-full object-cover" src={photoPreviewUrl} />
+                    <span className="truncate text-xs font-black text-[#e2e2e2]">{photo?.name}</span>
+                    <button className="shrink-0 text-xs font-black text-[#ffb1c3] transition hover:text-white" onClick={() => selectPhoto(null)} type="button">
+                      移除
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <textarea
               className="storycam-idea-textarea relative min-h-[92px] w-full resize-none border-none bg-transparent p-0 text-[#e2e2e2] outline-none placeholder:text-[#849495]/45 focus:ring-0 md:min-h-[108px]"
               id="story-idea"
@@ -455,7 +513,7 @@ export function IdeaInputPanel({
                   <button
                     aria-expanded={isAspectRatioMenuOpen}
                     aria-haspopup="menu"
-                    className={inputToolChipClassName(videoAspectRatio !== defaultStoryCamVideoAspectRatio)}
+                    className={inputToolChipClassName(true)}
                     onClick={() => setIsAspectRatioMenuOpen((current) => !current)}
                     type="button"
                   >
@@ -545,19 +603,6 @@ export function IdeaInputPanel({
           ) : null}
         </div>
       </div>
-
-      {photoPreviewUrl ? (
-        <div className="mx-auto mt-5 max-w-[920px] overflow-hidden rounded-[1.5rem] border border-[#3b494b] bg-[#1b1b1b]">
-          <img alt="上传照片预览" className="h-40 w-full object-cover opacity-90" src={photoPreviewUrl} />
-          <div className="flex items-center justify-between gap-3 px-4 py-3 text-xs text-[#b9cacb]">
-            <span className="truncate">{photo?.name}</span>
-            <button className="text-[#ffb1c3] hover:text-white" onClick={() => selectPhoto(null)} type="button">
-              移除
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {authStatus !== "authenticated" ? (
         <p className="mx-auto mt-5 max-w-xl rounded-2xl border border-[#3b494b] bg-black/40 px-4 py-3 text-center text-sm leading-6 text-[#b9cacb]" role="status">
           {authGateMessage(authStatus)}
@@ -583,9 +628,13 @@ export function IdeaInputPanel({
 
       {isRecentProjectsOpen ? (
         <RecentProjectsDrawer
+          confirmingDeleteProjectId={confirmingDeleteProjectId}
+          deletingProjectId={deletingProjectId}
           onClose={() => setIsRecentProjectsOpen(false)}
           onContinue={continueProject}
+          onDelete={deleteRecentProject}
           projects={displayedRecentProjects}
+          recentProjectsNotice={recentProjectsNotice}
           restoringProjectId={restoringProjectId}
           status={displayedRecentProjectsStatus}
         />
@@ -733,10 +782,6 @@ function inputToolChipClassName(isSelected: boolean): string {
 }
 
 function aspectRatioButtonLabel(aspectRatio: StoryCamVideoAspectRatio): string {
-  if (aspectRatio === defaultStoryCamVideoAspectRatio) {
-    return "选择画幅";
-  }
-
   return storyCamVideoAspectRatioLabel(aspectRatio);
 }
 
@@ -809,23 +854,47 @@ function recentProjectMetaLabel(project: RecentStoryCamProject, restoringProject
   return `${storyCamVideoAspectRatioLabel(project.videoAspectRatio)} · 最后编辑：${formatProjectDate(project.updatedAt)}`;
 }
 
+function deleteRecentProjectButtonLabel(
+  project: RecentStoryCamProject,
+  deletingProjectId: string | null,
+  confirmingDeleteProjectId: string | null
+) {
+  if (deletingProjectId === project.sessionId) {
+    return "删除中";
+  }
+
+  if (confirmingDeleteProjectId === project.sessionId) {
+    return "确认删除";
+  }
+
+  return "删除";
+}
+
 function RecentProjectsDrawer({
+  confirmingDeleteProjectId,
+  deletingProjectId,
   onClose,
   onContinue,
+  onDelete,
   projects,
+  recentProjectsNotice,
   restoringProjectId,
   status
 }: RecentProjectsDrawerProps) {
   const content = renderRecentProjectsDrawerContent({
+    confirmingDeleteProjectId,
+    deletingProjectId,
     onContinue,
+    onDelete,
     projects,
+    recentProjectsNotice,
     restoringProjectId,
     status
   });
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center" role="dialog" aria-modal="true" aria-label="最近项目">
-      <div className="w-full max-w-3xl rounded-[1.5rem] border border-[#3b494b] bg-[#141717] p-5 shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col rounded-[1.5rem] border border-[#3b494b] bg-[#141717] p-5 shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div>
             <p className="storycam-eyebrow">StoryCam</p>
@@ -849,8 +918,12 @@ function RecentProjectsDrawer({
 }
 
 function renderRecentProjectsDrawerContent({
+  confirmingDeleteProjectId,
+  deletingProjectId,
   onContinue,
+  onDelete,
   projects,
+  recentProjectsNotice,
   restoringProjectId,
   status
 }: RecentProjectsDrawerContentProps): ReactNode {
@@ -867,42 +940,71 @@ function renderRecentProjectsDrawerContent({
   }
 
   return (
-    <div className="mt-5 grid gap-3">
-      {projects.map((project) => (
-        <article className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/25 p-3 sm:grid-cols-[160px_1fr]" key={project.sessionId}>
-          <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#0e1111]">
-            {project.thumbnail ? (
-              <RecentProjectThumbnailImage project={project} />
-            ) : (
-              <div className="storycam-cinematic-frame size-full rounded-none" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="truncate text-lg font-black text-[#e2e2e2]">{project.title}</h3>
-              <span className="rounded-full border border-[#00f0ff]/25 px-3 py-1 text-xs font-black text-[#00f0ff]">
-                {projectStepLabel(project.currentStep)}
-              </span>
-            </div>
-            <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{project.summary}</p>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs font-bold text-[#849495]">
-                1 组 · 约 15 秒 · {formatProjectDate(project.updatedAt)}
-              </span>
-              <Button
-                className="px-4 py-2 text-xs"
-                disabled={Boolean(restoringProjectId)}
-                onClick={() => onContinue(project)}
-                size="sm"
-                type="button"
-                variant="primaryNeon"
-              >
-                {restoringProjectId === project.sessionId ? "恢复中" : "继续创作"}
-              </Button>
-            </div>
-          </div>
-        </article>
-      ))}
+    <div className="mt-5 min-h-0">
+      {recentProjectsNotice ? (
+        <p
+          className={`mb-3 rounded-[0.875rem] border px-4 py-3 text-sm font-bold ${
+            recentProjectsNotice.kind === "success"
+              ? "border-[#00f0ff]/35 bg-[#00f0ff]/10 text-[#dbfcff]"
+              : "border-[#ff4b89]/45 bg-[#ff4b89]/10 text-[#ffd9e0]"
+          }`}
+          role="status"
+        >
+          {recentProjectsNotice.message}
+        </p>
+      ) : null}
+      <div className="max-h-[min(62vh,620px)] overflow-y-auto pr-1 [scrollbar-color:rgba(0,240,255,0.45)_rgba(255,255,255,0.06)]">
+        <div className="grid gap-3">
+          {projects.map((project) => (
+            <article className="grid gap-4 rounded-[1.25rem] border border-white/10 bg-black/25 p-3 sm:grid-cols-[160px_1fr]" key={project.sessionId}>
+              <div className="aspect-video overflow-hidden rounded-xl border border-white/10 bg-[#0e1111]">
+                {project.thumbnail ? (
+                  <RecentProjectThumbnailImage project={project} />
+                ) : (
+                  <div className="storycam-cinematic-frame size-full rounded-none" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="truncate text-lg font-black text-[#e2e2e2]">{project.title}</h3>
+                  <span className="rounded-full border border-[#00f0ff]/25 px-3 py-1 text-xs font-black text-[#00f0ff]">
+                    {projectStepLabel(project.currentStep)}
+                  </span>
+                </div>
+                <p className="mt-2 line-clamp-2 text-sm leading-6 text-[#b9cacb]">{project.summary}</p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-[#849495]">
+                    1 组 · 约 15 秒 · {formatProjectDate(project.updatedAt)}
+                  </span>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      className="border-[#ff4b89]/40 px-3 py-2 text-xs text-[#ffb1c3] hover:border-[#ff4b89]/70 hover:text-white"
+                      disabled={Boolean(restoringProjectId || deletingProjectId)}
+                      onClick={() => onDelete(project)}
+                      size="sm"
+                      type="button"
+                      variant="secondaryGlass"
+                    >
+                      <Trash2 aria-hidden="true" data-icon="inline-start" strokeWidth={2.2} />
+                      {deleteRecentProjectButtonLabel(project, deletingProjectId, confirmingDeleteProjectId)}
+                    </Button>
+                    <Button
+                      className="px-4 py-2 text-xs"
+                      disabled={Boolean(restoringProjectId || deletingProjectId)}
+                      onClick={() => onContinue(project)}
+                      size="sm"
+                      type="button"
+                      variant="primaryNeon"
+                    >
+                      {restoringProjectId === project.sessionId ? "恢复中" : "继续创作"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -991,6 +1093,12 @@ function cacheRecentProjectThumbnails(
 
     return project;
   });
+}
+
+function deleteRestoreThumbnailCache(project: RecentStoryCamProject, cache: Record<string, CachedRecentProjectThumbnail>) {
+  if (project.thumbnail) {
+    delete cache[project.thumbnail.id];
+  }
 }
 
 function authGateMessage(authStatus: AuthStatus) {

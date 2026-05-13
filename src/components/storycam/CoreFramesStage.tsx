@@ -7,7 +7,12 @@ import type {
   ExpandStoryboardGroupResponse,
   StoryboardImageState
 } from "@/features/storycam/client/storycamApi";
-import { storyCamVideoModelLabel, storyCamVideoModels, type StoryCamVideoModel } from "@/features/storycam/domain/videoSettings";
+import {
+  storyCamVideoModelLabel,
+  storyCamVideoModels,
+  type StoryCamVideoAspectRatio,
+  type StoryCamVideoModel
+} from "@/features/storycam/domain/videoSettings";
 
 type StoryboardScriptView =
   | CreateStoryboardResponse["storyboard"]["storyboardScript"]
@@ -28,6 +33,7 @@ type CoreFramesStageProps = {
   onVideoModelChange: (model: StoryCamVideoModel) => void;
   selectedIndex: number;
   storyboard: CreateStoryboardResponse;
+  videoAspectRatio: StoryCamVideoAspectRatio;
   videoModel: StoryCamVideoModel;
 };
 
@@ -77,6 +83,7 @@ export function CoreFramesStage({
   onVideoModelChange,
   selectedIndex,
   storyboard,
+  videoAspectRatio,
   videoModel
 }: CoreFramesStageProps) {
   const [previewFrameNumber, setPreviewFrameNumber] = useState<number | null>(null);
@@ -211,7 +218,11 @@ export function CoreFramesStage({
             </div>
           </div>
 
-          <div className="storycam-expansion-board storycam-core-inline-board" data-expanded={hasStartedExpansion ? "true" : "false"}>
+          <div
+            className="storycam-expansion-board storycam-core-inline-board"
+            data-aspect-ratio={videoAspectRatio}
+            data-expanded={hasStartedExpansion ? "true" : "false"}
+          >
             {renderExpansionSlots()}
             <CoreSlot
               canStartExpansion={canStartExpansion}
@@ -232,11 +243,10 @@ export function CoreFramesStage({
           <div className="storycam-core-script-header">
             <div>
               <p className="storycam-eyebrow">分镜脚本</p>
-              <h2>{selectedScript?.planSummary ?? selectedGroup.storyPurpose}</h2>
+              <h2>{selectedGroup.title}</h2>
             </div>
             <span>{frames.length} 帧</span>
           </div>
-          <p className="storycam-core-script-rhythm">{selectedScript?.rhythm ?? selectedGroup.emotionalTurn}</p>
           <ol className="storycam-script-frame-list storycam-core-script-list">
             {frames.map((frame) => (
               <li key={frame.frameNumber}>
@@ -298,6 +308,7 @@ export function CoreFramesStage({
           onMediaLoadError={onMediaLoadError}
           onNext={() => movePreview(1)}
           onPrevious={() => movePreview(-1)}
+          videoAspectRatio={videoAspectRatio}
         />
       ) : null}
     </section>
@@ -335,7 +346,7 @@ function VideoModelMenu({
         onClick={() => onOpenChange((current) => !current)}
         type="button"
       >
-        {storyCamVideoModelLabel(value)}
+        <span className="storycam-video-model-trigger-label">{storyCamVideoModelLabel(value)}</span>
         <ChevronDown aria-hidden="true" className="size-3.5" strokeWidth={2.4} />
       </button>
       {isOpen ? (
@@ -507,7 +518,8 @@ function FramePreviewModal({
   onClose,
   onMediaLoadError,
   onNext,
-  onPrevious
+  onPrevious,
+  videoAspectRatio
 }: {
   canStep: boolean;
   frame: FrameView;
@@ -515,10 +527,11 @@ function FramePreviewModal({
   onMediaLoadError?: () => void;
   onNext: () => void;
   onPrevious: () => void;
+  videoAspectRatio: StoryCamVideoAspectRatio;
 }) {
   return (
     <div aria-label={`第 ${String(frame.frameNumber).padStart(2, "0")} 帧大图`} className="storycam-frame-preview" role="dialog">
-      <div className="storycam-frame-preview-card">
+      <div className="storycam-frame-preview-card" data-aspect-ratio={videoAspectRatio}>
         <div className="storycam-frame-preview-header">
           <div>
             <p className="storycam-eyebrow">

@@ -519,7 +519,7 @@ export async function restoreCachedCurrentStoryCamSession() {
   return readRestoreSessionValue(currentSessionId)?.value ?? ({ ok: true, restored: false } satisfies RestoreStoryCamSessionResponse);
 }
 
-export async function listRecentStoryCamProjects(limit = 5, options: { signal?: AbortSignal } = {}) {
+export async function listRecentStoryCamProjects(limit = 20, options: { signal?: AbortSignal } = {}) {
   const response = await fetch(`/api/storycam-sessions/recent?limit=${encodeURIComponent(String(limit))}`, {
     cache: "no-store",
     signal: options.signal

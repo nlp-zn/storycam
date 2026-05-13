@@ -62,6 +62,18 @@ export class StoryCamMediaAssetRepository {
     return unwrapRepositoryResult("list_storage_cleanup_media_assets", data, error);
   }
 
+  async findById(userId: string, mediaId: string) {
+    const { data, error } = await this.client
+      .from("media_assets")
+      .select(mediaColumns)
+      .eq("user_id", userId)
+      .eq("id", mediaId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    return unwrapRepositoryResult<MediaAssetRow | null>("find_media_asset_by_id", data, error);
+  }
+
   async findLatestThumbnailByLinkedArtifact(userId: string, input: { linkedArtifactId: string; sessionId: string }) {
     const { data, error } = await this.client
       .from("media_assets")

@@ -150,7 +150,7 @@ test.describe("StoryCam generate clip", () => {
     expect(generateCalls).toBe(1);
 
     await page.getByRole("button", { name: "取消生成" }).click();
-    await expect(page.getByText("已取消", { exact: true })).toBeVisible();
+    await expect(page.getByText("生成已取消", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "重试" }).click();
     await expect(page.getByText("任务 job-2")).toBeVisible();
     expect(generateCalls).toBe(2);

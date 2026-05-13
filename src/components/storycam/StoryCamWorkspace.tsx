@@ -46,6 +46,7 @@ import {
 } from "@/features/storycam/client/storycamApi";
 import {
   imageGenerationPollingPolicy,
+  isTerminalGenerationJobStatus,
   mapWithConcurrencyLimit,
   nextImageGenerationPollDelayMs,
   nextVideoGenerationPollDelayMs,
@@ -297,14 +298,15 @@ export function StoryCamWorkspace() {
 
   function hydrateRestoredProject(
     restored: Exclude<Awaited<ReturnType<typeof restoreCurrentStoryCamSession>>, { restored: false }>,
-    options: { preserveCurrentPath?: boolean } = {}
+    options: { preserveCurrentPath?: boolean; targetStepIndex?: number } = {}
   ) {
     const restoredStepIndex = stepIndexForRestoredCurrentStep(restored.currentStep);
     const currentPathStepIndex = typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname);
     const targetStepIndex = restoreTargetStepIndex({
       currentPathStepIndex,
       preserveCurrentPath: options.preserveCurrentPath === true,
-      restoredStepIndex
+      restoredStepIndex,
+      targetStepIndex: options.targetStepIndex
     });
 
     setStoryWorld(restored.storyWorld);
@@ -532,11 +534,15 @@ export function StoryCamWorkspace() {
       try {
         const response = await getGenerationJob(clipJob.id);
         videoPollAttemptsRef.current[clipJob.id] = attempts + 1;
-        setClipJob((current) => (current?.id === clipJob.id ? response.job : current));
+        setClipJob((current) =>
+          current?.id === clipJob.id && !isTerminalGenerationJobStatus(current.status) ? response.job : current
+        );
       } catch {
         videoPollAttemptsRef.current[clipJob.id] = attempts + 1;
         setClipJob((current) =>
-          current?.id === clipJob.id ? { ...current, redactedError: "状态更新失败。", status: "failed" } : current
+          current?.id === clipJob.id && !isTerminalGenerationJobStatus(current.status)
+            ? { ...current, redactedError: "状态更新失败。", status: "failed" }
+            : current
         );
       }
     }, nextVideoGenerationPollDelayMs(attempts));
@@ -913,8 +919,17 @@ export function StoryCamWorkspace() {
     const restored = await restoreStoryCamSession(sessionId);
 
     if (restored.restored) {
-      hydrateRestoredProject(restored);
+      hydrateRestoredProject(restored, { targetStepIndex: 1 });
     }
+  }
+
+  function handleRecentProjectDeleted(sessionId: string) {
+    if (storyWorld?.sessionId !== sessionId) {
+      return;
+    }
+
+    clearRestoredWorkspaceState();
+    setWorkspaceNotice("这个故事已删除，可以重新开始。");
   }
 
   async function confirmStoryWorld(_nextCoreGroupTargetCount: 1 | 2 | 3 = 1) {
@@ -1692,6 +1707,7 @@ export function StoryCamWorkspace() {
       <IdeaInputPanel
         initialChoices={inputDraft.selectedChoices}
         initialIdea={inputDraft.idea}
+        onProjectDeleted={handleRecentProjectDeleted}
         onProjectSelected={restoreSelectedProject}
         onSubmitStoryWorldDraft={submitStoryWorldDraft}
       />
@@ -1711,6 +1727,7 @@ export function StoryCamWorkspace() {
           generationState={storyboardGeneration}
           onBackToStoryWorld={returnToStoryWorldFromStoryboardGeneration}
           onRetry={retryStoryboardGeneration}
+          videoAspectRatio={videoAspectRatio}
         />
       ) : activeStepIndex >= 2 && storyboard && !isStoryWorldEditorOpen ? (
         <CoreFramesStage
@@ -1727,6 +1744,7 @@ export function StoryCamWorkspace() {
           onVideoModelChange={setVideoModel}
           selectedIndex={selectedCoreGroupIndex ?? 0}
           storyboard={storyboard}
+          videoAspectRatio={videoAspectRatio}
           videoModel={videoModel}
         />
       ) : (
@@ -1754,6 +1772,7 @@ export function StoryCamWorkspace() {
       <IdeaInputPanel
         initialChoices={inputDraft.selectedChoices}
         initialIdea={inputDraft.idea}
+        onProjectDeleted={handleRecentProjectDeleted}
         onProjectSelected={restoreSelectedProject}
         onSubmitStoryWorldDraft={submitStoryWorldDraft}
       />
@@ -2018,12 +2037,14 @@ type CoreStoryboardPendingShellProps = {
   generationState: Exclude<StoryboardGenerationState, { kind: "idle" }>;
   onBackToStoryWorld: () => void;
   onRetry: () => void;
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 function CoreStoryboardPendingShell({
   generationState,
   onBackToStoryWorld,
-  onRetry
+  onRetry,
+  videoAspectRatio
 }: CoreStoryboardPendingShellProps) {
   const isPending = generationState.kind === "pending";
   const story = generationState.request.storyWorld.storyWorld;
@@ -2052,7 +2073,11 @@ function CoreStoryboardPendingShell({
             </div>
           </div>
 
-          <div className="storycam-expansion-board storycam-core-inline-board" data-expanded="false">
+          <div
+            className="storycam-expansion-board storycam-core-inline-board"
+            data-aspect-ratio={videoAspectRatio}
+            data-expanded="false"
+          >
             <article className="storycam-expansion-slot storycam-expansion-slot--center storycam-expansion-slot--pending" data-testid="storyboard-frame-01">
               <span className="storycam-frame-number">01</span>
               <div className="storycam-skeleton-block" />
@@ -2068,7 +2093,6 @@ function CoreStoryboardPendingShell({
             </div>
             <span>{isPending ? "生成中" : "未生成"}</span>
           </div>
-          <p className="storycam-core-script-rhythm">{story.script.logline}</p>
           {isPending ? (
             <div className="space-y-4">
               <span className="storycam-skeleton-line storycam-skeleton-line--wide" />
@@ -2294,7 +2318,12 @@ function restoreTargetStepIndex(input: {
   currentPathStepIndex: number | null;
   preserveCurrentPath: boolean;
   restoredStepIndex: number;
+  targetStepIndex?: number;
 }) {
+  if (typeof input.targetStepIndex === "number") {
+    return Math.min(input.targetStepIndex, input.restoredStepIndex);
+  }
+
   if (!input.preserveCurrentPath || input.currentPathStepIndex === null) {
     return input.restoredStepIndex;
   }

@@ -92,6 +92,10 @@ test.describe("StoryCam story input", () => {
 
     await page.getByRole("textbox", { name: "旅行地" }).fill("葡萄牙里斯本阿尔法玛");
     await expect(page.getByRole("button", { name: "生成故事雏形" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "9:16 竖版" })).toBeVisible();
+    await page.getByRole("button", { name: "9:16 竖版" }).click();
+    await page.getByRole("menuitemradio", { name: "16:9 横版" }).click();
+    await expect(page.getByRole("button", { name: "16:9 横版" })).toBeVisible();
 
     await page.getByTestId("story-photo-input").setInputFiles({
       buffer: Buffer.from([137, 80, 78, 71]),
@@ -109,7 +113,7 @@ test.describe("StoryCam story input", () => {
       storyModeId: "handdrawn-travel-vlog",
       travelDestination: "葡萄牙里斯本阿尔法玛",
       uploadedPhotoIds: ["media-photo-1"],
-      videoAspectRatio: "9:16"
+      videoAspectRatio: "16:9"
     });
   });
 
@@ -199,6 +203,7 @@ test.describe("StoryCam story input", () => {
     });
 
     await expect(page.getByAltText("上传照片预览")).toBeVisible();
+    await expect(page.getByTestId("story-photo-inline-preview")).toBeVisible();
     await expect(page.getByText("rain.png")).toBeVisible();
 
     await page.getByRole("button", { name: "生成故事雏形" }).click();

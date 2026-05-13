@@ -141,6 +141,113 @@ describe("final work API routes", () => {
       ]
     });
   });
+
+  it("downloads a final work MP4 through an account-scoped attachment route", async () => {
+    const { GET } = await import("@/app/api/storycam-media/[id]/download/route");
+    const client = new FakeSupabaseClient({
+      mediaRows: [finalWorkMediaRow()]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-media/media-final-1/download"), {
+      params: { id: "media-final-1" }
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Content-Disposition")).toBe('attachment; filename="storycam-final-work.mp4"');
+    expect(response.headers.get("Content-Type")).toBe("video/mp4");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    await expect(response.arrayBuffer()).resolves.toEqual(new TextEncoder().encode("clip-bytes").buffer);
+    expect(client.queries[0]?.calls).toEqual([
+      ["select", expect.any(String)],
+      ["eq", "user_id", "user-1"],
+      ["eq", "id", "media-final-1"],
+      ["is", "deleted_at", null]
+    ]);
+  });
+
+  it("requires authentication for the final work MP4 attachment route", async () => {
+    const { GET } = await import("@/app/api/storycam-media/[id]/download/route");
+    const { UnauthorizedError } = await import("@/server/auth/requireUser");
+
+    requireUserMock.mockRejectedValue(new UnauthorizedError());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-media/media-final-1/download"), {
+      params: { id: "media-final-1" }
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ error: "authentication_required" });
+    expect(createSupabaseAdminClientMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects blank media ids on the final work MP4 attachment route", async () => {
+    const { GET } = await import("@/app/api/storycam-media/[id]/download/route");
+    const client = new FakeSupabaseClient({
+      mediaRows: [finalWorkMediaRow()]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-media/%20/download"), {
+      params: { id: " " }
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_media_id",
+      redactedError: "StoryCam media was not found.",
+      redactionApplied: true
+    });
+  });
+
+  it("does not download non-final-work media from the attachment route", async () => {
+    const { GET } = await import("@/app/api/storycam-media/[id]/download/route");
+    const client = new FakeSupabaseClient({
+      mediaRows: [clipMediaRow()]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-media/media-clip-1/download"), {
+      params: { id: "media-clip-1" }
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "media_not_found",
+      redactedError: "StoryCam media was not found.",
+      redactionApplied: true
+    });
+  });
+
+  it("redacts storage failures from the final work MP4 attachment route", async () => {
+    const { GET } = await import("@/app/api/storycam-media/[id]/download/route");
+    const client = new FakeSupabaseClient({
+      downloadError: true,
+      mediaRows: [finalWorkMediaRow()]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-media/media-final-1/download"), {
+      params: { id: "media-final-1" }
+    });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      error: "download_failed",
+      redactedError: "StoryCam media download failed.",
+      redactionApplied: true
+    });
+  });
 });
 
 function jsonRequest(url: string, body: unknown) {
@@ -206,6 +313,23 @@ function clipMediaRow() {
   };
 }
 
+function finalWorkMediaRow() {
+  return {
+    byte_size: 12,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    id: "media-final-1",
+    kind: "final_work",
+    linked_artifact_id: "final-work-artifact-1",
+    mime_type: "video/mp4",
+    session_id: "session-1",
+    source: "composer",
+    storage_bucket: "storycam-generated",
+    storage_path: "users/user-1/sessions/session-1/generated/final/final.mp4",
+    user_id: "user-1"
+  };
+}
+
 function baseArtifactRow() {
   return {
     created_at: "2026-04-26T00:00:00.000Z",
@@ -226,6 +350,7 @@ function baseArtifactRow() {
 
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
+  downloadError?: boolean;
   mediaRows?: unknown[];
 };
 
@@ -252,8 +377,8 @@ class FakeSupabaseClient {
       },
       download: (path: string) =>
         Promise.resolve({
-          data: new Blob([new TextEncoder().encode("clip-bytes")]),
-          error: path ? null : { message: "missing path" }
+          data: this.options.downloadError ? null : new Blob([new TextEncoder().encode("clip-bytes")]),
+          error: this.options.downloadError || !path ? { message: "missing path" } : null
         }),
       upload: (path: string, body: Uint8Array, options: { contentType: string; upsert: boolean }) => {
         this.uploads.push({ bucket, byteSize: body.byteLength, contentType: options.contentType, path, upsert: options.upsert });
@@ -274,6 +399,7 @@ class FakeSupabaseClient {
 
 class FakeQuery {
   readonly calls: unknown[][] = [];
+  private readonly filters: Array<[string, unknown]> = [];
   private inserted: Record<string, unknown> | null = null;
 
   constructor(
@@ -294,11 +420,13 @@ class FakeQuery {
 
   eq(column: string, value: unknown) {
     this.calls.push(["eq", column, value]);
+    this.filters.push([column, value]);
     return this;
   }
 
   is(column: string, value: unknown) {
     this.calls.push(["is", column, value]);
+    this.filters.push([column, value]);
     return this;
   }
 
@@ -329,6 +457,8 @@ class FakeQuery {
               updated_at: "2026-04-26T00:00:00.000Z",
               user_id: "user-1"
             }
+          : this.table === "media_assets"
+            ? (this.listRows()[0] ?? null)
           : null,
       error: null
     });
@@ -347,7 +477,9 @@ class FakeQuery {
     }
 
     if (this.table === "media_assets") {
-      return this.options.mediaRows ?? [];
+      return (this.options.mediaRows ?? []).filter((row) =>
+        this.filters.every(([column, value]) => (row as Record<string, unknown>)[column] === value)
+      );
     }
 
     return [];

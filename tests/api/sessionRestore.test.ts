@@ -475,6 +475,71 @@ describe("GET /api/storycam-sessions/recent", () => {
       ]
     });
   });
+
+  it("skips corrupt historical projects instead of failing the whole recent list", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/recent/route");
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "corrupt-session": corruptStoryWorldArtifacts("corrupt-session"),
+        "story-session": storyWorldArtifacts("story-session")
+      },
+      sessions: [
+        sessionRow({ id: "corrupt-session", updated_at: "2026-04-28T11:00:00.000Z" }),
+        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-sessions/recent?limit=1"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      projects: [
+        {
+          currentStep: "story-world",
+          sessionId: "story-session",
+          title: "雨夜未发送"
+        }
+      ]
+    });
+  });
+
+  it("caps recent project summaries at twenty so the drawer can scroll without over-fetching", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/recent/route");
+    const sessions = Array.from({ length: 25 }, (_, index) => {
+      const sessionId = `story-session-${index + 1}`;
+
+      return sessionRow({
+        id: sessionId,
+        updated_at: `2026-04-28T10:${String(59 - index).padStart(2, "0")}:00.000Z`
+      });
+    });
+    const client = new FakeSupabaseClient({
+      artifactsBySession: Object.fromEntries(
+        sessions.map((session) => {
+          const sessionId = (session as { id: string }).id;
+
+          return [sessionId, storyWorldArtifacts(sessionId)];
+        })
+      ),
+      sessions
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-sessions/recent?limit=99"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.projects).toHaveLength(20);
+    expect(body.projects[0]).toMatchObject({ sessionId: "story-session-1" });
+    expect(body.projects[19]).toMatchObject({ sessionId: "story-session-20" });
+  });
 });
 
 describe("GET /api/storycam-sessions/[id]/restore", () => {
@@ -625,6 +690,21 @@ function storyWorldArtifacts(sessionId: string) {
       timeOfDay: "night",
       version: 1
     })
+  ];
+}
+
+function corruptStoryWorldArtifacts(sessionId: string) {
+  const [scriptRow, ...assetRows] = storyWorldArtifacts(sessionId);
+
+  return [
+    {
+      ...scriptRow,
+      data_json: {
+        ...scriptRow.data_json,
+        summary: ""
+      }
+    },
+    ...assetRows
   ];
 }
 
