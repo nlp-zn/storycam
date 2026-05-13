@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { defaultStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { ImageGenerationProvider, ProviderFailure } from "@/lib/providers/types";
-import { characterAssetSchema, sceneAssetSchema } from "@/features/storycam/domain/artifactSchemas";
+import { characterAssetSchema, sceneAssetSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import {
@@ -20,6 +21,7 @@ import {
 } from "./mediaStore";
 
 export type StoryboardRepresentativeImageInput = {
+  aspectRatio: StoryCamVideoAspectRatio;
   characterAssetIds: string[];
   coreGroupId: string;
   emotionalTurn: string;
@@ -35,6 +37,7 @@ export type StoryboardRepresentativeImageInput = {
 };
 
 export type ExpandedStoryboardImageInput = {
+  aspectRatio: StoryCamVideoAspectRatio;
   beatType: string;
   coreGroup: StoryboardRepresentativeImageInput;
   description: string;
@@ -51,12 +54,13 @@ export type StoryboardImageFrameInput = {
   frameNumber: number;
   imagePrompt: string;
   title: string;
+  visibleCharacterAssetIds?: string[];
   visualContent: string;
 };
 
 export type StoryWorldReferenceImage = {
   assetArtifactId: string;
-  kind: "character" | "scene";
+  kind: "character" | "core_storyboard" | "scene";
   mediaId: string;
   mimeType: string;
   signedUrl: string;
@@ -67,6 +71,7 @@ export type StoryWorldImageBasis = {
   characterAssetIds: string[];
   sceneAssetId: string;
   scriptArtifactId?: string;
+  storyModeId?: string;
 };
 
 export type StoryWorldVisualContext =
@@ -141,10 +146,13 @@ export async function generateCoreStoryboardRepresentativeImage(
     storyboardScript?: StoryboardScript;
     provider: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>;
     sessionId: string;
+    videoAspectRatio?: StoryCamVideoAspectRatio;
     userId: string;
   }
 ): Promise<StoryboardRepresentativeImageResult> {
-  const providerResult = await input.provider.generateImage(toProviderInput(input.coreGroup, input.sessionId, input.storyboardScript));
+  const providerResult = await input.provider.generateImage(
+    toProviderInput(input.coreGroup, input.sessionId, input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio, input.storyboardScript)
+  );
 
   if (!providerResult.ok) {
     return {
@@ -196,12 +204,14 @@ export async function generateExpandedStoryboardImage(
     coreGroup: CoreStoryboardGroup;
     provider: ImageGenerationProvider<ExpandedStoryboardImageInput, StoryboardRepresentativeImageOutput>;
     sessionId: string;
+    videoAspectRatio?: StoryCamVideoAspectRatio;
     userId: string;
   }
 ): Promise<GeneratedStoryboardImageState> {
   const providerResult = await input.provider.generateImage({
+    aspectRatio: input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio,
     beatType: input.card.beatType,
-    coreGroup: toProviderInput(input.coreGroup, input.sessionId),
+    coreGroup: toProviderInput(input.coreGroup, input.sessionId, input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio),
     description: input.card.description,
     guidance: input.card.guidance,
     imagePrompt: input.card.imagePrompt,
@@ -241,9 +251,11 @@ export function placeholderStoryboardImage(reason?: "provider_failed" | "referen
 function toProviderInput(
   coreGroup: CoreStoryboardGroup,
   sessionId: string,
+  videoAspectRatio: StoryCamVideoAspectRatio = defaultStoryCamVideoAspectRatio,
   storyboardScript?: StoryboardScript
 ): StoryboardRepresentativeImageInput {
   return {
+    aspectRatio: videoAspectRatio,
     characterAssetIds: coreGroup.characterAssetIds,
     coreGroupId: coreGroup.id,
     emotionalTurn: coreGroup.emotionalTurn,
@@ -253,6 +265,7 @@ function toProviderInput(
           frameNumber: storyboardScript.frames[0].frameNumber,
           imagePrompt: storyboardScript.frames[0].imagePrompt,
           title: storyboardScript.frames[0].title,
+          visibleCharacterAssetIds: storyboardScript.frames[0].visibleCharacterAssetIds,
           visualContent: storyboardScript.frames[0].visualContent
         }
       : undefined,
@@ -267,21 +280,24 @@ function toProviderInput(
 export function toStoryboardRepresentativeProviderInput(
   coreGroup: CoreStoryboardGroup,
   sessionId: string,
+  videoAspectRatio: StoryCamVideoAspectRatio,
   storyboardScript?: StoryboardScript,
   visualContext?: Extract<StoryWorldVisualContext, { ok: true }>
 ) {
-  return withVisualContext(toProviderInput(coreGroup, sessionId, storyboardScript), visualContext);
+  return withVisualContext(toProviderInput(coreGroup, sessionId, videoAspectRatio, storyboardScript), visualContext);
 }
 
 export function toExpandedStoryboardProviderInput(input: {
   card: ExpandedStoryboardCard;
   coreGroup: CoreStoryboardGroup;
   sessionId: string;
+  videoAspectRatio?: StoryCamVideoAspectRatio;
   visualContext?: Extract<StoryWorldVisualContext, { ok: true }>;
 }) {
   return {
+    aspectRatio: input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio,
     beatType: input.card.beatType,
-    coreGroup: withVisualContext(toProviderInput(input.coreGroup, input.sessionId), input.visualContext),
+    coreGroup: withVisualContext(toProviderInput(input.coreGroup, input.sessionId, input.videoAspectRatio ?? defaultStoryCamVideoAspectRatio), input.visualContext),
     description: input.card.description,
     frame:
       input.card.frameNumber && input.card.imagePrompt
@@ -289,6 +305,7 @@ export function toExpandedStoryboardProviderInput(input: {
             frameNumber: input.card.frameNumber,
             imagePrompt: input.card.imagePrompt,
             title: input.card.title,
+            visibleCharacterAssetIds: input.card.visibleCharacterAssetIds,
             visualContent: input.card.description
           }
         : undefined,
@@ -386,9 +403,80 @@ export async function loadStoryWorldVisualContext(
     storyWorldBasis: {
       characterAssetIds: characterRows.map((row) => row.id),
       sceneAssetId: sceneRow.id,
-      scriptArtifactId: scriptRow.id
+      scriptArtifactId: scriptRow.id,
+      storyModeId: storyScriptSchema.safeParse(scriptRow.data_json).data?.storyModeId
     }
   };
+}
+
+export async function withCoreStoryboardReferenceImage(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    coreStoryboardGroupArtifactId: string;
+    providerReferenceSignedUrlTtlSeconds?: number;
+    sessionId: string;
+    visualContext: StoryWorldVisualContext;
+  }
+): Promise<StoryWorldVisualContext> {
+  if (!input.visualContext.ok) {
+    return input.visualContext;
+  }
+
+  try {
+    const coreReferenceImage = await loadCoreStoryboardReferenceImage(client, userId, {
+      coreStoryboardGroupArtifactId: input.coreStoryboardGroupArtifactId,
+      providerReferenceSignedUrlTtlSeconds: input.providerReferenceSignedUrlTtlSeconds,
+      sessionId: input.sessionId
+    });
+
+    if (!coreReferenceImage || input.visualContext.referenceImages.some((image) => image.mediaId === coreReferenceImage.mediaId)) {
+      return input.visualContext;
+    }
+
+    return {
+      ...input.visualContext,
+      inputArtifactVersionsJson: {
+        ...input.visualContext.inputArtifactVersionsJson,
+        [`media:${coreReferenceImage.mediaId}`]: coreReferenceImage.mediaId
+      },
+      referenceImages: [...input.visualContext.referenceImages, coreReferenceImage]
+    };
+  } catch (error) {
+    if (error instanceof StoryCamMediaStoreError && error.code === "provider_reference_url_not_public") {
+      return { ok: false, reason: "reference_images_unsupported" };
+    }
+
+    throw error;
+  }
+}
+
+export async function loadCoreStoryboardReferenceImage(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    coreStoryboardGroupArtifactId: string;
+    providerReferenceSignedUrlTtlSeconds?: number;
+    sessionId: string;
+  }
+): Promise<StoryWorldReferenceImage | null> {
+  const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const media = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+    linkedArtifactId: input.coreStoryboardGroupArtifactId,
+    sessionId: input.sessionId
+  });
+
+  if (!media) {
+    return null;
+  }
+
+  return toReferenceImageFromMedia(client, {
+    assetArtifactId: input.coreStoryboardGroupArtifactId,
+    kind: "core_storyboard",
+    media,
+    providerReferenceSignedUrlTtlSeconds:
+      input.providerReferenceSignedUrlTtlSeconds ?? storyCamProviderReferenceSignedUrlTtlSeconds
+  });
 }
 
 function findCharacterArtifactRows(rows: StoryCamArtifactRow[], requiredIds: string[]) {
@@ -413,18 +501,35 @@ async function toReferenceImage(
     providerReferenceSignedUrlTtlSeconds: number;
   }
 ): Promise<StoryWorldReferenceImage> {
-  return {
+  return toReferenceImageFromMedia(client, {
     assetArtifactId: artifact.id,
     kind: artifact.type === "character_asset" ? "character" : "scene",
-    mediaId: media.id,
-    mimeType: media.mime_type,
+    media,
+    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds
+  });
+}
+
+async function toReferenceImageFromMedia(
+  client: SupabaseClient<Database>,
+  input: {
+    assetArtifactId: string;
+    kind: StoryWorldReferenceImage["kind"];
+    media: MediaAssetRow;
+    providerReferenceSignedUrlTtlSeconds: number;
+  }
+): Promise<StoryWorldReferenceImage> {
+  return {
+    assetArtifactId: input.assetArtifactId,
+    kind: input.kind,
+    mediaId: input.media.id,
+    mimeType: input.media.mime_type,
     signedUrl: await createStoryCamProviderReferenceSignedUrl(
       client,
       storyCamGeneratedBucket,
-      media.storage_path,
-      options.providerReferenceSignedUrlTtlSeconds
+      input.media.storage_path,
+      input.providerReferenceSignedUrlTtlSeconds
     ),
-    signedUrlExpiresIn: options.providerReferenceSignedUrlTtlSeconds
+    signedUrlExpiresIn: input.providerReferenceSignedUrlTtlSeconds
   };
 }
 

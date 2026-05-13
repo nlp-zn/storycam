@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardFrame, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -12,6 +13,7 @@ import {
   loadStoryWorldVisualContext,
   toExpandedStoryboardProviderInput,
   toStoryboardRepresentativeProviderInput,
+  withCoreStoryboardReferenceImage,
   type ExpandedStoryboardImageInput,
   type GeneratedStoryboardImageState,
   type StoryboardRepresentativeImageInput,
@@ -47,6 +49,7 @@ export type ExpansionServiceOutput = {
     imagePrompt?: string;
     sortOrder: number;
     title: string;
+    visibleCharacterAssetIds?: string[];
     version: number;
   }>;
   expandedStoryboardImages: GeneratedStoryboardImageState[];
@@ -85,6 +88,7 @@ export async function createExpandedStoryboardCards(
   if (!session) {
     throw new ExpansionRequestError("session_not_found");
   }
+  const videoAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 
   const coreGroupArtifact = await loadCoreGroupArtifact(artifacts, userId, session.id, input.coreStoryboardGroupId);
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
@@ -94,6 +98,12 @@ export async function createExpandedStoryboardCards(
     coreGroup,
     providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
     sessionId: session.id
+  });
+  const expandedVisualContext = await withCoreStoryboardReferenceImage(client, userId, {
+    coreStoryboardGroupArtifactId: coreGroupArtifact.id,
+    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
+    sessionId: session.id,
+    visualContext
   });
   const dependsOnJson: Json = {
     [coreGroupArtifact.id]: coreGroupArtifact.version,
@@ -120,8 +130,8 @@ export async function createExpandedStoryboardCards(
     cards.map(async (card, index) => {
       const linkedArtifact = requireArtifactRow(expandedStoryboardCards[index]);
 
-      if (!visualContext.ok) {
-        return placeholderStoryboardImage(visualContext.reason);
+      if (!expandedVisualContext.ok) {
+        return placeholderStoryboardImage(expandedVisualContext.reason);
       }
 
       if (!imageProvider?.supportsReferenceImages) {
@@ -133,10 +143,11 @@ export async function createExpandedStoryboardCards(
           card,
           coreGroup,
           sessionId: session.id,
-          visualContext
+          videoAspectRatio,
+          visualContext: expandedVisualContext
         }),
         inputArtifactVersionsJson: {
-          ...visualContext.inputArtifactVersionsJson,
+          ...expandedVisualContext.inputArtifactVersionsJson,
           [coreGroupArtifact.id]: coreGroupArtifact.version,
           [storyboardScriptArtifact.id]: storyboardScriptArtifact.version,
           [linkedArtifact.id]: linkedArtifact.version
@@ -164,6 +175,7 @@ export async function createExpandedStoryboardCards(
         imagePrompt: card.imagePrompt,
         sortOrder: card.sortOrder,
         title: card.title,
+        visibleCharacterAssetIds: card.visibleCharacterAssetIds,
         version: card.version
       })),
       expandedStoryboardImages: images,
@@ -192,62 +204,105 @@ export async function regenerateStoryboardFrameImage(
   if (!session) {
     throw new ExpansionRequestError("session_not_found");
   }
+  const videoAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 
   if (!Number.isInteger(frameNumber) || frameNumber < 1 || frameNumber > 9) {
     throw new ExpansionRequestError("invalid_input");
   }
 
-  const coreGroupArtifact = await loadCoreGroupArtifact(artifacts, userId, session.id, input.coreStoryboardGroupId);
-  const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
-  const storyboardScriptArtifact = await loadStoryboardScriptArtifact(artifacts, userId, session.id, coreGroupArtifact.id);
-  const storyboardScript = storyboardScriptSchema.parse(storyboardScriptArtifact.data_json);
-  const frame = storyboardScript.frames[frameNumber - 1];
-  const visualContext = await loadStoryWorldVisualContext(client, userId, {
-    coreGroup,
-    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
-    sessionId: session.id
-  });
+  try {
+    const coreGroupArtifact = await loadCoreGroupArtifact(artifacts, userId, session.id, input.coreStoryboardGroupId);
+    const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
+    const storyboardScriptArtifact = await loadStoryboardScriptArtifact(artifacts, userId, session.id, coreGroupArtifact.id);
+    const storyboardScript = storyboardScriptSchema.parse(storyboardScriptArtifact.data_json);
+    const frame = storyboardScript.frames[frameNumber - 1];
+    const visualContext = await loadStoryWorldVisualContext(client, userId, {
+      coreGroup,
+      providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
+      sessionId: session.id
+    });
 
-  if (!frame) {
-    throw new ExpansionRequestError("frame_not_found");
-  }
+    if (!frame) {
+      throw new ExpansionRequestError("frame_not_found");
+    }
 
-  if (!visualContext.ok) {
-    return {
-      ok: true,
-      value: {
-        frameNumber,
-        image: placeholderStoryboardImage(visualContext.reason),
-        sessionId: session.id
-      }
-    };
-  }
+    if (!visualContext.ok) {
+      return storyboardFramePlaceholderOutput(frameNumber, session.id, visualContext.reason);
+    }
 
-  if (!imageProvider?.supportsReferenceImages) {
-    return {
-      ok: true,
-      value: {
-        frameNumber,
-        image: placeholderStoryboardImage("reference_images_unsupported"),
-        sessionId: session.id
-      }
-    };
-  }
+    if (!imageProvider?.supportsReferenceImages) {
+      return storyboardFramePlaceholderOutput(frameNumber, session.id, "reference_images_unsupported");
+    }
 
-  if (frameNumber === 1) {
-    const result = await submitImageGenerationJob(client, userId, {
-      forceNew: true,
-      idempotencyKeySuffix: randomUUID(),
-      imageInput: toStoryboardRepresentativeProviderInput(coreGroup, session.id, storyboardScript, visualContext),
-      inputArtifactVersionsJson: {
-        ...visualContext.inputArtifactVersionsJson,
+    if (frameNumber === 1) {
+      const result = await submitImageGenerationJob(client, userId, {
+        forceNew: true,
+        idempotencyKeySuffix: randomUUID(),
+        imageInput: toStoryboardRepresentativeProviderInput(coreGroup, session.id, videoAspectRatio, storyboardScript, visualContext),
+        inputArtifactVersionsJson: {
+          ...visualContext.inputArtifactVersionsJson,
+          [coreGroupArtifact.id]: coreGroupArtifact.version,
+          [storyboardScriptArtifact.id]: storyboardScriptArtifact.version
+        },
+        linkedArtifactId: coreGroupArtifact.id,
+        provider: imageProvider,
+        sessionId: session.id,
+        type: "storyboard_image"
+      });
+
+      return {
+        ok: true,
+        value: {
+          frameNumber,
+          image: result.image,
+          sessionId: session.id
+        }
+      };
+    }
+
+    const expandedVisualContext = await withCoreStoryboardReferenceImage(client, userId, {
+      coreStoryboardGroupArtifactId: coreGroupArtifact.id,
+      providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
+      sessionId: session.id,
+      visualContext
+    });
+
+    if (!expandedVisualContext.ok) {
+      return storyboardFramePlaceholderOutput(frameNumber, session.id, expandedVisualContext.reason);
+    }
+
+    const cardArtifact = await findOrCreateExpandedCardArtifact(client, userId, {
+      artifacts,
+      coreGroup,
+      coreGroupArtifact,
+      dependsOnJson: {
         [coreGroupArtifact.id]: coreGroupArtifact.version,
         [storyboardScriptArtifact.id]: storyboardScriptArtifact.version
       },
-      linkedArtifactId: coreGroupArtifact.id,
+      frame,
+      sessionId: session.id
+    });
+    const card = expandedStoryboardCardSchema.parse(cardArtifact.data_json);
+    const result = await submitImageGenerationJob(client, userId, {
+      forceNew: true,
+      idempotencyKeySuffix: randomUUID(),
+      imageInput: toExpandedStoryboardProviderInput({
+        card,
+        coreGroup,
+        sessionId: session.id,
+        videoAspectRatio,
+        visualContext: expandedVisualContext
+      }),
+      inputArtifactVersionsJson: {
+        ...expandedVisualContext.inputArtifactVersionsJson,
+        [coreGroupArtifact.id]: coreGroupArtifact.version,
+        [storyboardScriptArtifact.id]: storyboardScriptArtifact.version,
+        [cardArtifact.id]: cardArtifact.version
+      },
+      linkedArtifactId: cardArtifact.id,
       provider: imageProvider,
       sessionId: session.id,
-      type: "storyboard_image"
+      type: "expanded_storyboard_image"
     });
 
     return {
@@ -258,47 +313,26 @@ export async function regenerateStoryboardFrameImage(
         sessionId: session.id
       }
     };
+  } catch (error) {
+    if (error instanceof ExpansionRequestError) {
+      throw error;
+    }
+
+    return storyboardFramePlaceholderOutput(frameNumber, session.id, "storage_failed");
   }
+}
 
-  const cardArtifact = await findOrCreateExpandedCardArtifact(client, userId, {
-    artifacts,
-    coreGroup,
-    coreGroupArtifact,
-    dependsOnJson: {
-      [coreGroupArtifact.id]: coreGroupArtifact.version,
-      [storyboardScriptArtifact.id]: storyboardScriptArtifact.version
-    },
-    frame,
-    sessionId: session.id
-  });
-  const card = expandedStoryboardCardSchema.parse(cardArtifact.data_json);
-  const result = await submitImageGenerationJob(client, userId, {
-    forceNew: true,
-    idempotencyKeySuffix: randomUUID(),
-    imageInput: toExpandedStoryboardProviderInput({
-      card,
-      coreGroup,
-      sessionId: session.id,
-      visualContext
-    }),
-    inputArtifactVersionsJson: {
-      ...visualContext.inputArtifactVersionsJson,
-      [coreGroupArtifact.id]: coreGroupArtifact.version,
-      [storyboardScriptArtifact.id]: storyboardScriptArtifact.version,
-      [cardArtifact.id]: cardArtifact.version
-    },
-    linkedArtifactId: cardArtifact.id,
-    provider: imageProvider,
-    sessionId: session.id,
-    type: "expanded_storyboard_image"
-  });
-
+function storyboardFramePlaceholderOutput(
+  frameNumber: number,
+  sessionId: string,
+  reason: "provider_failed" | "reference_images_unsupported" | "storage_failed" | "waiting_for_asset_images"
+): { ok: true; value: RegenerateStoryboardFrameImageOutput } {
   return {
     ok: true,
     value: {
       frameNumber,
-      image: result.image,
-      sessionId: session.id
+      image: placeholderStoryboardImage(reason),
+      sessionId
     }
   };
 }
@@ -419,13 +453,14 @@ function frameToExpandedCard(coreGroup: CoreStoryboardGroup, frame: StoryboardFr
     coreGroupId: coreGroup.id,
     description: frame.visualContent,
     frameNumber: frame.frameNumber,
-    guidance: `${frame.narrativePurpose} ${frame.technicalNotes}`,
+    guidance: `${frame.narrativePurpose} ${frame.technicalNotes} 节奏：${frame.timeRange}。声音意图：${frame.sound}`,
     id: `${coreGroup.id}-frame-${frame.frameNumber}`,
     imagePrompt: frame.imagePrompt,
     sessionId,
     sortOrder,
     state: "ready",
     title: frame.title,
+    visibleCharacterAssetIds: frame.visibleCharacterAssetIds,
     version: 1
   });
 }

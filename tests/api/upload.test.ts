@@ -69,6 +69,27 @@ describe("POST /api/uploads", () => {
     expect(client.queries[1]?.table).toBe("media_assets");
   });
 
+  it("rejects uploads to sessions outside the authenticated user scope", async () => {
+    const { POST } = await import("@/app/api/uploads/route");
+    const client = new FakeSupabaseClient({ existingSession: null });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(uploadRequest(new File(["hello"], "photo.jpg", { type: "image/jpeg" }), { sessionId: "session-other" }));
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "session_not_found" });
+    expect(client.uploads).toEqual([]);
+    expect(client.queries[0]?.calls).toEqual([
+      ["select", expect.any(String)],
+      ["eq", "id", "session-other"],
+      ["eq", "user_id", "user-1"],
+      ["is", "deleted_at", null]
+    ]);
+    expect(client.queries.some((query) => query.table === "media_assets")).toBe(false);
+  });
+
   it("rejects non-image uploads before writing storage", async () => {
     const { POST } = await import("@/app/api/uploads/route");
     const client = new FakeSupabaseClient();
@@ -126,9 +147,15 @@ function uploadRequest(file: File, options: { sessionId?: string | null } = {}) 
   });
 }
 
+type FakeSupabaseClientOptions = {
+  existingSession?: Record<string, unknown> | null;
+};
+
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
   readonly uploads: Array<{ bucket: string; contentType: string; path: string; upsert: boolean }> = [];
+
+  constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
 
   asSupabaseClient() {
     return this;
@@ -147,24 +174,47 @@ class FakeSupabaseClient {
   };
 
   from(table: string) {
-    const query = new FakeQuery(table);
+    const query = new FakeQuery(table, this.options);
     this.queries.push(query);
     return query;
   }
 }
 
 class FakeQuery {
+  readonly calls: unknown[][] = [];
   private inserted: Record<string, unknown> | null = null;
 
-  constructor(readonly table: string) {}
+  constructor(
+    readonly table: string,
+    private readonly options: FakeSupabaseClientOptions
+  ) {}
 
   insert(value: Record<string, unknown>) {
     this.inserted = value;
+    this.calls.push(["insert", value]);
     return this;
   }
 
-  select() {
+  select(columns: string) {
+    this.calls.push(["select", columns]);
     return this;
+  }
+
+  eq(column: string, value: unknown) {
+    this.calls.push(["eq", column, value]);
+    return this;
+  }
+
+  is(column: string, value: unknown) {
+    this.calls.push(["is", column, value]);
+    return this;
+  }
+
+  maybeSingle() {
+    return Promise.resolve({
+      data: this.row(),
+      error: null
+    });
   }
 
   single() {
@@ -194,12 +244,18 @@ class FakeQuery {
     }
 
     if (this.table === "storycam_sessions") {
+      if (!this.inserted && this.options.existingSession !== undefined) {
+        return this.options.existingSession;
+      }
+
+      const requestedSessionId = this.calls.find((call) => call[0] === "eq" && call[1] === "id")?.[2];
+
       return {
         core_group_target_count: 1,
         created_at: "2026-04-26T00:00:00.000Z",
         deleted_at: null,
         generation_mode: "mock",
-        id: "session-created-1",
+        id: this.inserted ? "session-created-1" : requestedSessionId ?? "session-1",
         planned_duration_seconds: 12,
         status: "draft",
         updated_at: "2026-04-26T00:00:00.000Z",

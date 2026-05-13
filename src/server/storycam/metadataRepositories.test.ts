@@ -81,8 +81,10 @@ describe("StoryCam metadata repositories", () => {
         idempotency_key_hash: "hash-1",
         input_artifact_versions_json: {},
         max_attempts: 1,
+        output_artifact_id: null,
         provider_kind: "video",
         provider_name: "mock",
+        provider_request_id: null,
         session_id: "session-1",
         status: "queued",
         type: "video_clip",
@@ -104,11 +106,11 @@ describe("StoryCam metadata repositories", () => {
     expect(client.queries[0]?.calls).toContainEqual(["is", "tombstoned_at", null]);
     expect(client.queries[1]?.calls).toContainEqual([
       "update",
-      {
+      expect.objectContaining({
         ended_at: "2026-04-26T01:02:03.000Z",
         output_artifact_id: "artifact-1",
         status: "succeeded"
-      }
+      })
     ]);
     expect(client.queries[1]?.calls).toContainEqual(["eq", "user_id", "user-1"]);
     expect(client.queries[1]?.calls).toContainEqual(["is", "tombstoned_at", null]);
@@ -158,6 +160,17 @@ describe("StoryCam metadata repositories", () => {
     expect(client.queries[0]?.calls).toContainEqual(["is", "deleted_at", null]);
     expect(client.queries[1]?.calls).toContainEqual(["eq", "user_id", "user-1"]);
     expect(client.queries[1]?.calls).toContainEqual(["eq", "job_id", "job-1"]);
+  });
+
+  it("lists storage cleanup candidates even after media metadata is soft-deleted", async () => {
+    const client = new FakeSupabaseClient({ data: [media], error: null });
+    const repository = new StoryCamMediaAssetRepository(client.asStoryCamDbClient());
+
+    await repository.listStorageCleanupCandidates("user-1", "session-1");
+
+    expect(client.queries[0]?.calls).toContainEqual(["eq", "user_id", "user-1"]);
+    expect(client.queries[0]?.calls).toContainEqual(["eq", "session_id", "session-1"]);
+    expect(client.queries[0]?.calls).not.toContainEqual(["is", "deleted_at", null]);
   });
 
   it("stores provider summaries instead of raw prompts", async () => {

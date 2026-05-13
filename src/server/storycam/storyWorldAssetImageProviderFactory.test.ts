@@ -41,6 +41,7 @@ describe("story-world asset image prompt", () => {
       asset: characterAsset(),
       assetArtifactId: "character-1",
       assetKind: "character",
+      aspectRatio: "16:9",
       script: storyScript(),
       sessionId: "session-1"
     });
@@ -56,11 +57,50 @@ describe("story-world asset image prompt", () => {
     expect(prompt.prompt).toContain("plain white or warm off-white studio background");
   });
 
+  it("uses style and uploaded photo references for handdrawn travel characters", () => {
+    const prompt = buildStoryWorldAssetImagePrompt({
+      asset: {
+        ...characterAsset(),
+        referenceMediaIds: ["photo-1"],
+        relationshipToUserStory: "由用户照片转译出的手绘旅行主角"
+      },
+      assetArtifactId: "character-1",
+      assetKind: "character",
+      aspectRatio: "9:16",
+      referenceImages: [
+        {
+          kind: "style_reference",
+          mediaId: "storycam-handdrawn-travel-character-style",
+          signedUrl: "data:image/jpeg;base64,c3R5bGU="
+        },
+        {
+          kind: "uploaded_photo",
+          mediaId: "photo-1",
+          signedUrl: "https://storycam.example/uploads/photo.jpg"
+        }
+      ],
+      script: {
+        ...storyScript(),
+        storyModeId: "handdrawn-travel-vlog",
+        visualStyle: "手绘角色叠加真实旅行地摄影感背景"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(prompt.images).toEqual(["data:image/jpeg;base64,c3R5bGU=", "https://storycam.example/uploads/photo.jpg"]);
+    expect(prompt.prompt).toContain("根据 Image 1 的简单粗硬画笔画风");
+    expect(prompt.prompt).toContain("绘制 Image 2 中人物转译后的全身手绘旅行角色");
+    expect(prompt.prompt).toContain("Image 1 只用于简单粗硬黑色线条");
+    expect(prompt.prompt).toContain("Image 2 如存在，只用于发型、眼镜、衣着轮廓、姿态和旅行气质");
+    expect(prompt.prompt).toContain("不要真人复刻");
+  });
+
   it("asks scene generation for one multi-panel environment asset board from scene panels", () => {
     const prompt = buildStoryWorldAssetImagePrompt({
       asset: sceneAsset(),
       assetArtifactId: "scene-1",
       assetKind: "scene",
+      aspectRatio: "16:9",
       script: storyScript(),
       sessionId: "session-1"
     });
@@ -80,12 +120,44 @@ describe("story-world asset image prompt", () => {
     expect(prompt.prompt).not.toContain("grounded realistic space");
   });
 
+  it("turns handdrawn travel scenes into a real destination route board without people", () => {
+    const prompt = buildStoryWorldAssetImagePrompt({
+      asset: {
+        ...sceneAsset(),
+        location: "葡萄牙里斯本阿尔法玛",
+        name: "里斯本阿尔法玛旅行路线"
+      },
+      assetArtifactId: "scene-1",
+      assetKind: "scene",
+      aspectRatio: "9:16",
+      script: {
+        ...storyScript(),
+        storyModeId: "handdrawn-travel-vlog",
+        visualStyle: "手绘角色叠加真实旅行地摄影感背景"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(prompt.aspectRatio).toBe("9:16");
+    expect(prompt.prompt).toContain("vertical 9:16 portrait asset board");
+    expect(prompt.prompt).toContain("not a horizontal 16:9 canvas");
+    expect(prompt.prompt).toContain("real travel destination route board");
+    expect(prompt.prompt).toContain("photographic travel-location background reference");
+    expect(prompt.prompt).toContain("Scene visual style: real travel-location photography background reference");
+    expect(prompt.prompt).toContain("Do not cartoonize, illustrate, sketch, paint, or turn the destination into comic/anime style");
+    expect(prompt.prompt).toContain("Keep every environment panel photographic, real-world, destination-specific");
+    expect(prompt.prompt).toContain("葡萄牙里斯本阿尔法玛");
+    expect(prompt.prompt).toContain("Environment-only rule: no people");
+    expect(prompt.prompt).not.toContain("Use the shared StoryCam visual style: 手绘角色叠加真实旅行地摄影感背景");
+  });
+
   it("falls back to an inferred shared visual style for older scripts", () => {
     const { visualStyle: _visualStyle, ...oldScript } = storyScript();
     const prompt = buildStoryWorldAssetImagePrompt({
       asset: sceneAsset(),
       assetArtifactId: "scene-1",
       assetKind: "scene",
+      aspectRatio: "16:9",
       characterAssets: [characterAsset()],
       script: oldScript,
       sessionId: "session-1"
@@ -118,6 +190,7 @@ function storyScript(): StoryScript {
     beats: ["雨夜便利店屋檐下，主角停住脚步。"],
     id: "script-1",
     logline: "雨夜里，一个没说出口的暗恋故事。",
+    qualityChecks: [],
     sessionId: "session-1",
     state: "ready",
     summary: "主角在雨夜便利店屋檐下看见街对面的人，握紧透明伞。",

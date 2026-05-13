@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
   characterAssetSchema,
+  directorBriefSchema,
   sceneAssetSchema,
   scenePanelShotTypes,
   storyScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
+import { defaultDirectorBrief, runStoryCamDirectorQualityChecks } from "@/features/storycam/domain/directorQualityChecks";
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
 import {
   storyWorldProviderOutputSchema,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { normalizeStoryCamVisualStyle } from "@/lib/storycam/visualStylePolicy";
+import { handdrawnTravelVlogVisualStyle, isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
 import { type StoryCamGenerateObject } from "@/server/ai/vercelAiClient";
 import { createOpenRouterTextProvider, type OpenRouterStructuredPrompt } from "./textProvider";
 
@@ -28,6 +31,7 @@ const draftTextSchema = z.string().trim().min(1).catch("");
 const draftTextListSchema = (maxItems: number) => z.array(draftTextSchema).max(maxItems).catch([]);
 const emptyDraftScript = {
   beats: [],
+  directorBrief: undefined,
   logline: "",
   summary: "",
   title: "",
@@ -36,6 +40,7 @@ const emptyDraftScript = {
 const draftScriptSchema = z
   .object({
     beats: draftTextListSchema(8),
+    directorBrief: directorBriefSchema.optional().catch(undefined),
     logline: draftTextSchema,
     summary: draftTextSchema,
     title: draftTextSchema,
@@ -132,8 +137,19 @@ export function createOpenRouterStoryWorldProvider(
 }
 
 export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput): OpenRouterStructuredPrompt<StoryWorldProviderInput> {
-  const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "像私人回忆";
+  const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "留白多一点";
   const photoReferences = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
+  const handdrawnTravelRules = isHanddrawnTravelVlogMode(input.storyModeId)
+    ? [
+        "",
+        "手绘旅行 VLOG 模式额外要求：",
+        `A. 旅行地：${input.travelDestination ?? "用户指定旅行地"}`,
+        "B. 必须只生成 1 个可见主角人物资产：由用户上传照片转译出的手绘旅行者；其他人只能作为离屏声音、物件变化或空间反应，不得可见。",
+        "C. 人物稳定视觉描述要说明：参考用户照片的发型、眼镜、穿搭轮廓、站姿和气质，但必须是手绘小人/漫画角色，不是真人相似脸。",
+        "D. 场景资产是一个真实旅行地路线资产板，scenePanels 生成 4-6 个同一目的地内的真实地点小切图：入口、街道/建筑、地标/观景、光线、细节或转场。",
+        "E. 剧本是轻剧情 VLOG：一次走路、停下、回头、拍照、发现小细节或情绪停顿，不是纯打卡合集。"
+      ]
+    : [];
 
   return {
     prompt: [
@@ -143,25 +159,34 @@ export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput):
       `拍法倾向：${choices}`,
       `上传照片引用数量：${photoReferences.length}`,
       photoReferences.length ? `照片媒体 ID：${photoReferences.join(", ")}` : "照片媒体 ID：无",
+      input.storyModeId ? `故事模式：${input.storyModeId}` : "故事模式：默认",
+      input.travelDestination ? `旅行地：${input.travelDestination}` : "",
       "",
       "输出要求：",
       "1. 把粗糙文本整理成一个 8-15 秒私人短片可承载的短剧本。",
       "2. 这是剧本整理阶段，不是分镜拆解阶段；下一阶段 core storyboard 才会根据剧本生成分镜脚本、镜头组和主分镜图。",
       "3. script.summary 和 script.beats 只写短剧本层面的剧情、角色动作、对白/可听声音、关键物件和环境变化。",
       "4. script.beats 是剧情节点/故事段落，不是镜头列表、分镜表或拍摄方案；每条用一句可读的剧情动作描述。",
+      "4a. 生成时先做视听化微调：把心理描写和抽象情绪转为可见动作、物件、空间变化和可听声音。",
+      "4b. script.directorBrief 必须包含 tone、visualMotifs、dialogueStrategy、soundStrategy、microRhythm、shotDensity、shotSizeFocus、transitionStrategy、userFacingSummary。",
+      "4c. directorBrief.microRhythm 必须按 15 秒微型节奏描述：0-3秒建立状态，3-8秒动作推进，8-12秒反应/转折，12-15秒留白收束。",
       "5. 不要写镜头编号、景别、机位、运镜、构图、剪辑、转场指令，也不要出现“镜头”“画面”“特写”“推近”“切到”“第 X 镜”等分镜术语。",
       "6. script.visualStyle 必须定义为漫画电影/动画分镜风格；可以吸收用户的情绪、时代、类型片倾向，但必须转译为非写实真人的虚构漫画角色和动画场景。",
       "7. 只生成 1-3 个主角级/关键对手戏人物资产，不要为背景人群、路人、短暂提及人物建资产。",
+      "7a. 凡是会正面出镜、持续互动或承担情感关系的角色，都必须同时生成人物资产；剧本后续不能依赖没有资产的可见人物来完成情绪。",
+      "7b. 宠物故事里，如果主人会出现在门口、抚摸、团聚或与宠物同框，宠物和主人都必须同时生成人物资产；如果不建主人资产，就只能用离屏声音、门、灯光、物件变化表达主人。",
       "8. 场景资产必须且只能生成 1 个；把剧本需要的全部环境角度放进这个 scene 的 scenePanels。",
       "9. scenePanels 生成 4-6 个小切图描述，覆盖主场景、关键物件、光线、空的动作空间或转场角度。",
       "10. scenePanels 只能描述无人环境、关键物件、光线、空间动线和可供角色后续入画的位置；不要写可见人物、人物倒影、人物剪影、手、身体局部或人群。",
       "11. 人物稳定视觉描述要包含外观、衣着、可重复道具或动作习惯。",
       "12. 地点资产要写清空间关系、光线、时间和关键物件。",
-      "13. 不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。"
+      "13. 不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。",
+      ...handdrawnTravelRules
     ].join("\n"),
     system: [
       "你是 StoryCam 的私人故事剧本整理器，把普通用户的一句话变成可拍摄的故事世界。",
       "参考山音导演方法的前置剧本梳理：先判断叙事目的和情绪基调，再把粗糙文本整理成场景结构和核心事件；不要提前进入节奏规划、镜头组或分镜拆解。",
+      "你需要在内部完成剧本视听化微调和 15 秒导演简报，但不要把专业表格暴露给用户。",
       "写作红线：不要写心理描写，不要用括号暗示，不要说教，不要把专业分镜术语暴露给用户。",
       "Story World 的 beats 是剧情节点，不是分镜；专业镜头语言只允许在后续 core storyboard provider 内部使用。",
       "台词和描述要口语、克制、具体；画面内容只写可见元素，声音只写可听元素。",
@@ -177,19 +202,44 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
   const draftScript = draft.script ?? emptyDraftScript;
   const draftCharacterAssets = draft.characterAssets ?? [];
   const draftSceneAssets = draft.sceneAssets ?? [];
+  const isHanddrawnTravel = isHanddrawnTravelVlogMode(input.storyModeId);
   const title = nonEmptyText(draftScript.title, "私人短片");
   const logline = nonEmptyText(draftScript.logline, input.idea);
   const summary = nonEmptyText(draftScript.summary, logline);
   const beats = nonEmptyList(draftScript.beats, [summary]);
-  const visualStyle = normalizeStoryCamVisualStyle(nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title })));
-  const characterDrafts = draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)];
+  const visualStyle = normalizeStoryCamVisualStyle(
+    isHanddrawnTravel
+      ? handdrawnTravelVlogVisualStyle
+      : nonEmptyText(draftScript.visualStyle, inferFallbackVisualStyle(input, { logline, summary, title }))
+  );
+  const directorBrief =
+    draftScript.directorBrief ??
+    defaultDirectorBrief({
+      idea: input.idea,
+      lightweightChoices: input.lightweightChoices,
+      summary,
+      title
+    });
+  const characterDrafts = (draftCharacterAssets.length ? draftCharacterAssets : [createFallbackCharacterDraft(input, summary)]).slice(
+    0,
+    isHanddrawnTravel ? 1 : 3
+  );
   const sceneDrafts = draftSceneAssets.length ? [draftSceneAssets[0]] : [createFallbackSceneDraft(input, summary)];
   const script = storyScriptSchema.parse({
     beats,
+    directorBrief,
     id: `script-${input.sessionId}`,
     logline,
+    qualityChecks: runStoryCamDirectorQualityChecks({
+      script: {
+        beats,
+        directorBrief,
+        summary
+      }
+    }),
     sessionId: input.sessionId,
     state: "ready",
+    ...(input.storyModeId ? { storyModeId: input.storyModeId } : {}),
     summary,
     title,
     version: 1,
@@ -206,20 +256,28 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       relationshipToUserStory: nonEmptyText(asset.relationshipToUserStory, "承载用户故事里的核心情绪"),
       role: nonEmptyText(asset.role, index === 0 ? "主角" : "关系人物"),
       sessionId: input.sessionId,
-      stableVisualDescription: nonEmptyText(asset.stableVisualDescription, "虚构漫画角色外观，衣着朴素，动作克制，便于连续镜头保持一致"),
+      stableVisualDescription: nonEmptyText(
+        asset.stableVisualDescription,
+        isHanddrawnTravel
+          ? "由上传照片转译出的手绘旅行者，保留发型、眼镜、穿搭轮廓、站姿和气质，但不是写实真人相似脸"
+          : "虚构漫画角色外观，衣着朴素，动作克制，便于连续镜头保持一致"
+      ),
       state: "ready",
       version: 1,
       ...(asset.wardrobe ? { wardrobe: asset.wardrobe } : {})
     })
   );
-  const sceneAssets = sceneDrafts.map((asset, index) =>
-    sceneAssetSchema.parse({
+  const sceneAssets = sceneDrafts.map((asset, index) => {
+    const fallbackName = fallbackSceneAssetName(input, index, isHanddrawnTravel);
+    const location = sceneAssetLocation(input, asset, isHanddrawnTravel);
+
+    return sceneAssetSchema.parse({
       atmosphere: nonEmptyText(asset.atmosphere, "安静、私人、带一点未说出口的情绪"),
       id: `scene-${input.sessionId}-${index + 1}`,
       keyObjects: nonEmptyList(asset.keyObjects, ["灯光", "门口", "随身物件"]),
       light: nonEmptyText(asset.light, "自然环境光混合一处可见实用光源"),
-      location: nonEmptyText(asset.location, "与故事记忆相关的具体空间"),
-      name: nonEmptyText(asset.name, index === 0 ? "故事发生的地方" : `地点 ${index + 1}`),
+      location,
+      name: nonEmptyText(asset.name, fallbackName),
       referenceMediaIds,
       scenePanels: scenePanelsForDraft(asset, input, summary),
       sessionId: input.sessionId,
@@ -227,14 +285,38 @@ function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: OpenRou
       state: "ready",
       timeOfDay: nonEmptyText(asset.timeOfDay, "day"),
       version: 1
-    })
-  );
+    });
+  });
 
   return storyWorldProviderOutputSchema.parse({
     characterAssets,
     sceneAssets,
     script
   });
+}
+
+function sceneAssetLocation(
+  input: StoryWorldProviderInput,
+  asset: OpenRouterStoryWorldSceneDraft,
+  isHanddrawnTravel: boolean
+): string {
+  if (isHanddrawnTravel) {
+    return nonEmptyText(input.travelDestination, nonEmptyText(asset.location, "用户指定旅行地"));
+  }
+
+  return nonEmptyText(asset.location, "与故事记忆相关的具体空间");
+}
+
+function fallbackSceneAssetName(input: StoryWorldProviderInput, index: number, isHanddrawnTravel: boolean): string {
+  if (isHanddrawnTravel) {
+    return `${input.travelDestination ?? "旅行地"}旅行路线`;
+  }
+
+  if (index === 0) {
+    return "故事发生的地方";
+  }
+
+  return `地点 ${index + 1}`;
 }
 
 function nonEmptyText(value: string | undefined, fallback: string) {

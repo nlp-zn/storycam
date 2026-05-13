@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { clipPromptPacketSchema, generatedClipSchema } from "@/features/storycam/domain/artifactSchemas";
+import { clipPromptPacketSchema, finalWorkSchema, generatedClipSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { ClipPromptPacket } from "@/features/storycam/domain/artifacts";
+import {
+  defaultStoryCamVideoModel,
+  parseStoryCamVideoModel,
+  storyCamSeedanceOutputResolution,
+  type StoryCamVideoOutputResolution,
+  type StoryCamVideoModel
+} from "@/features/storycam/domain/videoSettings";
 import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { ProviderResult, VideoGenerationProvider } from "@/lib/providers/types";
 import type { Database, GenerationJobRow } from "@/server/db/types";
@@ -8,6 +15,9 @@ import { createClipPromptPacket, ClipPromptPacketRequestError } from "./clipProm
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import {
+  findReadyImageByArtifact,
+  generatingImage,
+  placeholderImage,
   resolveImageGenerationJob,
   type AsyncImageProviderOutput,
   type ImageJobState
@@ -32,11 +42,32 @@ export type GenerateClipRequestBody = {
   idempotencyKey?: unknown;
   providerSendConfirmed?: unknown;
   sessionId?: unknown;
+  videoModel?: unknown;
 };
 
 export type GenerationJobSummary = {
   attempts: number;
   id: string;
+  outputFinalWork?: {
+    finalWork: {
+      id: string;
+      state: string;
+      type: string;
+      version: number;
+    };
+    media: {
+      byteSize: number;
+      id: string;
+      kind: "final_work";
+      mimeType: string;
+    };
+    preview: {
+      durationSeconds: number;
+      mimeType: string;
+      signedUrl: string;
+      signedUrlExpiresIn: number;
+    };
+  };
   outputArtifactId?: string;
   outputPreview?: {
     durationSeconds: number;
@@ -59,6 +90,7 @@ export type GenerationJobServiceVideoInput = {
   prompt: string;
   ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "adaptive";
   referenceImageUrls?: string[];
+  resolution?: StoryCamVideoOutputResolution;
   watermark?: boolean;
 };
 export type GenerationJobServiceVideoOutput = {
@@ -91,6 +123,7 @@ type ParsedGenerateClipRequest = {
   idempotencyKey: string;
   providerSendConfirmed: true;
   sessionId: string;
+  videoModel: StoryCamVideoModel;
 };
 
 export class GenerationJobRequestError extends Error {
@@ -105,7 +138,7 @@ export async function createGenerateClipJob(
   userId: string,
   coreStoryboardGroupId: string,
   body: GenerateClipRequestBody,
-  videoProvider?: GenerationJobServiceVideoProvider,
+  videoProviders?: Partial<Record<StoryCamVideoModel, GenerationJobServiceVideoProvider>>,
   options: {
     providerReferenceSignedUrlTtlSeconds?: number;
   } = {}
@@ -140,6 +173,7 @@ export async function createGenerateClipJob(
       [packetArtifact.id]: packetArtifact.version,
       ...packetResult.value.clipPromptPacketPayload.inputArtifactVersions
     };
+    const videoProvider = videoProviders?.[input.videoModel];
     const providerName = videoProvider?.providerName ?? "mock";
     let providerRequest: ProviderResult<{ providerRequestId: string }> | undefined;
     let providerRequestId: string | undefined;
@@ -383,8 +417,8 @@ export async function getGenerationJob(
   client: SupabaseClient<Database>,
   userId: string,
   jobId: string,
-  imageProvider?: GenerationJobServiceImageProvider,
-  videoProvider?: GenerationJobServiceVideoProvider
+  _imageProvider?: GenerationJobServiceImageProvider,
+  _videoProviders?: Partial<Record<StoryCamVideoModel, GenerationJobServiceVideoProvider>>
 ): Promise<{ ok: true; value: { image?: ImageJobState; job: GenerationJobSummary } }> {
   if (!jobId) {
     throw new GenerationJobRequestError("invalid_input");
@@ -396,18 +430,10 @@ export async function getGenerationJob(
     throw new GenerationJobRequestError("job_not_found");
   }
 
-  const image = isImageJobType(job.type)
-    ? await resolveImageGenerationJob(client, userId, {
-        job,
-        provider: imageProvider
-      })
-    : undefined;
-  const videoResolved = job.type === "video_clip" ? await resolveVideoGenerationJob(client, userId, { job, provider: videoProvider }) : undefined;
-
-  const refreshedJob = await new StoryCamGenerationJobRepository(client).findById(userId, jobId);
-
-  const summarySource = refreshedJob ?? videoResolved ?? job;
+  const image = isImageJobType(job.type) ? await readImageGenerationJobState(client, userId, job) : undefined;
+  const summarySource = job;
   const outputPreview = await createVideoClipOutputPreview(client, userId, summarySource);
+  const outputFinalWork = await createFinalWorkOutputPreview(client, userId, summarySource);
 
   return {
     ok: true,
@@ -415,10 +441,30 @@ export async function getGenerationJob(
       ...(image ? { image } : {}),
       job: {
         ...toJobSummary(summarySource),
+        ...(outputFinalWork ? { outputFinalWork } : {}),
         ...(outputPreview ? { outputPreview } : {})
       }
     }
   };
+}
+
+async function readImageGenerationJobState(client: SupabaseClient<Database>, userId: string, job: GenerationJobRow): Promise<ImageJobState> {
+  const existingMedia = job.output_artifact_id
+    ? await findReadyImageByArtifact(client, userId, {
+        linkedArtifactId: job.output_artifact_id,
+        sessionId: job.session_id
+      })
+    : null;
+
+  if (existingMedia) {
+    return existingMedia;
+  }
+
+  if (job.status === "failed" || job.status === "canceled" || job.status === "expired") {
+    return placeholderImage(job.redacted_error ?? undefined, "provider_failed");
+  }
+
+  return generatingImage(job.id);
 }
 
 async function createVideoClipOutputPreview(client: SupabaseClient<Database>, userId: string, job: GenerationJobRow) {
@@ -452,7 +498,52 @@ async function createVideoClipOutputPreview(client: SupabaseClient<Database>, us
   };
 }
 
-async function resolveVideoGenerationJob(
+async function createFinalWorkOutputPreview(client: SupabaseClient<Database>, userId: string, job: GenerationJobRow) {
+  if (job.type !== "final_work" || job.status !== "succeeded" || !job.output_artifact_id) {
+    return undefined;
+  }
+
+  const artifacts =
+    (await new StoryCamArtifactRepository(client).listBySession(userId, { sessionId: job.session_id, type: "final_work" })) ?? [];
+  const artifact = artifacts.find((row) => row.id === job.output_artifact_id && row.state === "ready");
+
+  if (!artifact) {
+    return undefined;
+  }
+
+  const finalWork = finalWorkSchema.parse(artifact.data_json);
+  const mediaRows = (await new StoryCamMediaAssetRepository(client).listBySession(userId, job.session_id)) ?? [];
+  const media = mediaRows.find((row) => row.id === finalWork.mediaAssetId && row.kind === "final_work");
+
+  if (!media) {
+    return undefined;
+  }
+
+  assertStoryCamPrivateBucket(media.storage_bucket);
+
+  return {
+    finalWork: {
+      id: artifact.id,
+      state: artifact.state,
+      type: artifact.type,
+      version: artifact.version
+    },
+    media: {
+      byteSize: media.byte_size,
+      id: media.id,
+      kind: "final_work" as const,
+      mimeType: media.mime_type
+    },
+    preview: {
+      durationSeconds: finalWork.durationSeconds,
+      mimeType: media.mime_type,
+      signedUrl: await createStoryCamSignedUrl(client, media.storage_bucket, media.storage_path, storyCamSignedUrlTtlSeconds),
+      signedUrlExpiresIn: storyCamSignedUrlTtlSeconds
+    }
+  };
+}
+
+export async function resolveVideoGenerationJob(
   client: SupabaseClient<Database>,
   userId: string,
   input: {
@@ -580,8 +671,9 @@ async function toVideoProviderInput(
     durationSeconds: Math.min(15, packet.plannedDurationSeconds ?? 15),
     generateAudio: true,
     prompt: packet.providerPrompt ?? packet.redactedPromptSummary,
-    ratio: "16:9",
+    ratio: packet.aspectRatio,
     referenceImageUrls: referenceImageUrls.filter((url): url is string => Boolean(url)),
+    resolution: packet.resolution ?? storyCamSeedanceOutputResolution,
     watermark: false
   };
 }
@@ -652,8 +744,23 @@ function parseGenerateClipRequest(coreStoryboardGroupId: string, body: GenerateC
     generationMode,
     idempotencyKey: body.idempotencyKey,
     providerSendConfirmed: body.providerSendConfirmed,
-    sessionId
+    sessionId,
+    videoModel: parseOptionalVideoModel(body.videoModel)
   };
+}
+
+function parseOptionalVideoModel(value: unknown): StoryCamVideoModel {
+  if (value === undefined) {
+    return defaultStoryCamVideoModel;
+  }
+
+  const videoModel = parseStoryCamVideoModel(value);
+
+  if (!videoModel) {
+    throw new GenerationJobRequestError("invalid_input");
+  }
+
+  return videoModel;
 }
 
 function requireGenerationJobRow(job: GenerationJobRow | null) {

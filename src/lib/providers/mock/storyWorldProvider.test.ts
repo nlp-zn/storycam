@@ -17,7 +17,13 @@ describe("mock story world provider", () => {
       providerName: "mock"
     });
     expect(result.ok && result.value.script).toMatchObject({
+      directorBrief: expect.objectContaining({
+        microRhythm: expect.stringContaining("15"),
+        userFacingSummary: expect.any(String),
+        visualMotifs: expect.arrayContaining(["雨声"])
+      }),
       id: "script-rainy-kdrama-crush",
+      qualityChecks: expect.arrayContaining([expect.stringContaining("可见")]),
       title: "雨夜未发送",
       visualStyle: expect.stringContaining("漫画电影/动画分镜风格")
     });

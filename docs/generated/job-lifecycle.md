@@ -1,19 +1,21 @@
-# Job Lifecycle
+# Job Lifecycle Snapshot
 
-Status: planned contract, to be regenerated from `GenerationJob` implementation once code exists.
+Status: implemented snapshot.
+
+Sources: `src/server/storycam/generationJobService.ts`, `generationJobRepository.ts`, `imageGenerationJobService.ts`, `videoGenerationService.ts`, `finalWorkService.ts`, and related tests.
 
 ## Job Types
 
 ```ts
 type GenerationJobType =
-  | "story_world"
   | "story_world_asset_image"
-  | "storyboard"
   | "storyboard_image"
   | "expanded_storyboard_image"
   | "video_clip"
   | "final_work";
 ```
+
+Text story-world/storyboard requests may return immediately or create artifacts through service logic; image, video, and final-work generation are the main job-backed workflows.
 
 ## Job Statuses
 
@@ -28,66 +30,85 @@ type JobStatus =
   | "expired";
 ```
 
-## State Transitions
+## State Rules
 
 ```text
 queued
   -> running
-  -> succeeded
-  -> failed
-  -> expired
+  -> succeeded | failed | expired
 
-queued
+queued | running
   -> cancel_requested
   -> canceled
-
-running
-  -> cancel_requested
-  -> canceled
-
-running
-  -> expired
 ```
-
-Invalid transitions:
-
-- `succeeded -> running`
-- `failed -> succeeded`
-- `canceled -> succeeded`
-- `expired -> succeeded`
-
-Retry creates a new attempt or job according to service policy; it must not mutate a terminal job into success.
-
-## Idempotency
-
-Job creation routes require `idempotencyKey`.
 
 Rules:
 
+- Terminal jobs must not become successful later.
+- Retry creates a new attempt or job; it must not mutate a terminal failed/canceled/expired job into success.
+- Deleted sessions tombstone active jobs and discard late provider results.
+- Provider errors are normalized and redacted before storage/logging/client display.
+- Browser polling is read-only; the worker owns production progress after job creation.
+
+## Worker Claiming
+
+The worker claims jobs through `claim_storycam_generation_jobs`:
+
+- runnable statuses are `queued`, `running`, and `cancel_requested`,
+- `run_after <= now()` gates delayed provider polling,
+- stale locks can be reclaimed after the configured lock TTL,
+- claims set `locked_by`, `locked_at`, and a short future `run_after`,
+- `queued` jobs move to `running`, set `started_at`, and increment `attempts`,
+- the SQL implementation uses `FOR UPDATE SKIP LOCKED` to avoid duplicate concurrent claims.
+
+Completion methods clear `locked_by` and `locked_at`. Provider-pending jobs are released
+with a future `run_after`. Workers must only mutate non-terminal, non-tombstoned jobs and
+must discard late provider success after cancel/tombstone.
+
+## Idempotency
+
+Job creation routes require an idempotency key.
+
 - Store only `idempotency_key_hash`.
-- Duplicate active request returns existing job.
-- Idempotency scope includes current user, session, route, and parent artifact.
+- Duplicate active requests return the existing account-scoped job.
+- Scope includes current user, session, route/workflow, and relevant parent artifact or group.
+- Idempotency must not cross users or deleted sessions.
 
-## Tombstone And Late Results
+## Image Jobs
 
-If a session or job is canceled/deleted:
+Story-world asset, core storyboard, and expanded storyboard image jobs:
 
-1. Set `tombstoned_at`.
-2. Try provider cancel when supported.
-3. Keep local metadata for audit/debug.
-4. Discard provider results that arrive after tombstone.
-5. Do not create output artifacts from late results.
+- may start as placeholders while upstream reference media is missing or still generating,
+- poll async provider state when using Inference.sh,
+- download completed provider output server-side,
+- store generated image media in private Storage,
+- link output media/artifacts by user/session,
+- degrade to redacted placeholder/failure state when provider output is invalid or unsupported.
 
-## Timeout
+## Video Jobs
 
-Timeout behavior:
+Seedance video clip jobs:
 
-- `queued` jobs can expire if never picked up.
-- `running` jobs can expire if provider exceeds configured timeout.
-- Expired video jobs keep the clip prompt packet for retry.
-- Running image jobs are resolved by polling the image provider task and storing ready thumbnail media.
-- Running Seedance video jobs are resolved by polling the provider task id, downloading `content.video_url`, storing generated clip media, and marking the job succeeded.
-- User-facing rescue path for unstable video output is `重拍这一段`.
+- require a confirmed core storyboard group,
+- assemble an internal clip prompt packet from stored artifacts,
+- submit a provider task server-side,
+- poll by provider task id or normalize webhook-shaped payloads,
+- download `content.video_url` before provider URL expiry,
+- store generated clip media in private Storage,
+- discard late success if the job/session was canceled or tombstoned.
+
+The user-facing rescue path for bad or failed video output is `重拍这个片段`.
+
+## Final Work Jobs
+
+Final work creation:
+
+- remains account-scoped,
+- starts as a durable `final_work` generation job from `POST /api/final-work`,
+- is claimed and composed by the background worker, not by the browser request,
+- may compose even a single generated clip into a final work artifact,
+- stores preview/export media privately,
+- does not create public sharing links in Phase 1.
 
 ## Job Record
 
@@ -108,9 +129,14 @@ type GenerationJob = {
   inputArtifactVersions: Record<string, number>;
   outputArtifactId?: string;
   errorCode?: string;
+  providerErrorCategory?: string;
+  providerHttpStatus?: number;
   redactedError?: string;
   startedAt?: string;
   endedAt?: string;
+  lockedBy?: string;
+  lockedAt?: string;
+  runAfter: string;
   tombstonedAt?: string;
 };
 ```

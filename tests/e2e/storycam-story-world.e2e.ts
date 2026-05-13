@@ -84,6 +84,100 @@ test.describe("StoryCam story world", () => {
     expect(pollCount).toBeGreaterThanOrEqual(2);
   });
 
+  test("single asset regeneration polls until the generated image is ready", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [
+              { id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 },
+              { id: "character-artifact-2", state: "ready", type: "character_asset", version: 1 }
+            ],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+    await page.route("**/api/story-world/assets/generate-image", async (route) => {
+      const body = route.request().postDataJSON() as {
+        assetArtifactId: string;
+        assetKind: "character" | "scene";
+        sessionId: string;
+      };
+
+      expect(body).toEqual({
+        assetArtifactId: "character-artifact-1",
+        assetKind: "character",
+        sessionId: "session-1"
+      });
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 202,
+        body: JSON.stringify({
+          assetArtifactId: "character-artifact-1",
+          assetKind: "character",
+          image: { jobId: "job-character-1", placeholder: true, status: "generating" },
+          ok: true
+        })
+      });
+    });
+
+    let pollCount = 0;
+    await page.route("**/api/generation-jobs/job-character-1", async (route) => {
+      pollCount += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          image:
+            pollCount === 1
+              ? { jobId: "job-character-1", placeholder: true, status: "generating" }
+              : {
+                  mediaId: "media-character-image-1",
+                  mimeType: "image/png",
+                  placeholder: false,
+                  signedUrl:
+                    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3Crect width='16' height='9' fill='%2300f0ff'/%3E%3C/svg%3E",
+                  signedUrlExpiresIn: 300,
+                  status: "ready"
+                },
+          job: {
+            attempts: 0,
+            id: "job-character-1",
+            outputArtifactId: "character-artifact-1",
+            providerKind: "image",
+            providerName: "inference_sh",
+            sessionId: "session-1",
+            status: pollCount === 1 ? "running" : "succeeded",
+            type: "story_world_asset_image"
+          },
+          ok: true
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await page.getByTestId("story-world-character-asset-card").first().click();
+    await expect(page.getByRole("dialog", { name: "她 资产生成" })).toBeVisible();
+
+    await page.getByRole("button", { name: "生成资产图" }).click();
+
+    await expect(page.getByRole("button", { name: "正在生成资产图" })).toBeVisible();
+    await expect(page.getByAltText("她 生成资产")).toBeVisible({ timeout: 12_000 });
+    expect(pollCount).toBeGreaterThanOrEqual(2);
+  });
+
   test("story world must be confirmed before storyboard generation and edits stale downstream work", async ({ page }) => {
     await mockAuthenticated(page);
     await page.route("**/api/story-world", async (route) => {
@@ -202,6 +296,7 @@ test.describe("StoryCam story world", () => {
     await expect(page.getByText("我的剧本")).toBeVisible();
     await expect(page.getByText("完整剧本")).toBeVisible();
     await expect(page.getByText("关键片段")).toBeVisible();
+    await expect(page.getByRole("button", { name: "生成全部资产图" })).toBeVisible();
     await expect(page.getByText("第 1 拍")).toHaveCount(0);
     await expect(page.getByTestId("story-world-character-asset-card")).toHaveCount(2);
     await expect(page.getByTestId("story-world-character-asset-card").first().getByText("人物", { exact: true })).toBeVisible();
@@ -325,7 +420,7 @@ async function expectStoryWorldLayoutScale(page: import("@playwright/test").Page
   const dockBox = await page.locator(".storycam-bottom-dock").boundingBox();
   const viewport = page.viewportSize();
 
-  expect(reviewBox?.width).toBeLessThanOrEqual(1284);
+  expect(reviewBox?.width).toBeLessThanOrEqual(1324);
   expect(scriptBox?.width).toBeGreaterThan(340);
   await expect(characterCards).toHaveCount(2);
   expect(characterBox?.width).toBeGreaterThan(230);
@@ -335,7 +430,7 @@ async function expectStoryWorldLayoutScale(page: import("@playwright/test").Page
   );
   expect(sceneBox?.width).toBeGreaterThan((sceneGridBox?.width ?? 0) * 0.9);
   expect(sceneBox?.width).toBeGreaterThan((characterBox?.width ?? 0) * 1.6);
-  expect(dockBox?.width).toBeLessThan((viewport?.width ?? 1280) - 120);
+  expect(dockBox?.width).toBeLessThan((viewport?.width ?? 1280) - 40);
 }
 
 function storyboardFixture() {

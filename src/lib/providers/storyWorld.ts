@@ -17,6 +17,8 @@ export type StoryWorldProviderInput = {
   idea: string;
   lightweightChoices?: string[];
   sessionId: string;
+  storyModeId?: string;
+  travelDestination?: string;
   uploadedPhotoRefs?: UploadedPhotoReference[];
 };
 

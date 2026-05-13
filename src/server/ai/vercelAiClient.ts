@@ -25,6 +25,7 @@ export type StoryCamGeneratedImage = {
 
 export type StoryCamGenerateImageInput = {
   aspectRatio?: `${number}:${number}`;
+  images?: string[];
   model: ImageModel;
   prompt: string;
   seed?: number;
@@ -87,10 +88,17 @@ export const storyCamGenerateObject: StoryCamGenerateObject = async (input) => {
 };
 
 export const storyCamGenerateImage: StoryCamGenerateImage = async (input) => {
+  const prompt = input.images?.length
+    ? {
+        images: input.images,
+        text: input.prompt
+      }
+    : input.prompt;
+
   const result = await generateImage({
     aspectRatio: input.aspectRatio,
     model: input.model,
-    prompt: input.prompt,
+    prompt,
     seed: input.seed,
     size: input.size
   });

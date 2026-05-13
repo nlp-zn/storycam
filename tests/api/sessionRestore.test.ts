@@ -34,6 +34,7 @@ describe("GET /api/storycam-sessions/current", () => {
     const response = await GET();
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       error: "authentication_required"
     });
@@ -51,6 +52,7 @@ describe("GET /api/storycam-sessions/current", () => {
     const response = await GET();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       ok: true,
       restored: false
@@ -65,7 +67,7 @@ describe("GET /api/storycam-sessions/current", () => {
       },
       sessions: [
         sessionRow({ id: "empty-session", updated_at: "2026-04-28T11:00:00.000Z" }),
-        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
+        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z", video_aspect_ratio: "9:16" })
       ]
     });
 
@@ -76,6 +78,7 @@ describe("GET /api/storycam-sessions/current", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(body).toMatchObject({
       coreGroupTargetCount: 1,
       currentStep: "story-world",
@@ -83,6 +86,7 @@ describe("GET /api/storycam-sessions/current", () => {
       restored: true,
       sessionId: "story-session",
       storyWorldConfirmed: false,
+      videoAspectRatio: "9:16",
       storyboard: null,
       storyWorld: {
         artifacts: {
@@ -90,6 +94,7 @@ describe("GET /api/storycam-sessions/current", () => {
           sceneAssets: [{ id: "scene-artifact-1", type: "scene_asset", version: 1 }],
           script: { id: "script-artifact-1", type: "script", version: 1 }
         },
+        videoAspectRatio: "9:16",
         sessionId: "story-session",
         storyWorld: {
           characterAssets: [expect.objectContaining({ name: "她" })],
@@ -98,6 +103,9 @@ describe("GET /api/storycam-sessions/current", () => {
         }
       }
     });
+    expect(body.storyWorld.storyWorld.script.qualityChecks).toEqual(["剧本已转成可见动作和可听声音。"]);
+    expect(body.storyWorld.storyWorld.script).not.toHaveProperty("directorBrief");
+    expect(JSON.stringify(body)).not.toContain("shotDensity");
   });
 
   it("restores storyboard groups and private image signed urls without exposing storage paths", async () => {
@@ -192,6 +200,62 @@ describe("GET /api/storycam-sessions/current", () => {
     });
     expect(serialized).not.toContain("storage_path");
     expect(serialized).not.toContain("storage_bucket");
+  });
+
+  it("restores running storyboard image jobs without falling back to a resubmittable placeholder", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/current/route");
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "storyboard-session": [
+          ...storyWorldArtifacts("storyboard-session"),
+          storyboardScriptArtifact("storyboard-script-artifact-1", "core-artifact-1", "storyboard-session"),
+          coreGroupArtifact("core-artifact-1", "storyboard-session")
+        ]
+      },
+      generationJobsBySession: {
+        "storyboard-session": [
+          generationJobRow({
+            id: "storyboard-image-job-1",
+            output_artifact_id: "core-artifact-1",
+            provider_kind: "image",
+            session_id: "storyboard-session",
+            status: "running",
+            type: "storyboard_image"
+          })
+        ]
+      },
+      sessions: [
+        sessionRow({
+          core_group_target_count: 1,
+          id: "storyboard-session",
+          planned_duration_seconds: 15,
+          updated_at: "2026-04-28T10:00:00.000Z"
+        })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      storyboard: {
+        storyboard: {
+          coreStoryboardGroups: [
+            expect.objectContaining({
+              representativeImage: {
+                jobId: "storyboard-image-job-1",
+                placeholder: true,
+                status: "generating"
+              }
+            })
+          ]
+        }
+      }
+    });
   });
 
   it("restores generated clip and final work progress so later steps stay reachable", async () => {
@@ -332,7 +396,7 @@ describe("GET /api/storycam-sessions/recent", () => {
       },
       sessions: [
         sessionRow({ id: "empty-session", updated_at: "2026-04-28T12:00:00.000Z" }),
-        sessionRow({ core_group_target_count: 2, id: "storyboard-session", updated_at: "2026-04-28T11:00:00.000Z" }),
+        sessionRow({ core_group_target_count: 2, id: "storyboard-session", updated_at: "2026-04-28T11:00:00.000Z", video_aspect_ratio: "9:16" }),
         sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
       ]
     });
@@ -358,7 +422,8 @@ describe("GET /api/storycam-sessions/recent", () => {
             signedUrl: "signed://storycam-generated/users%2Fuser-1%2Fsessions%2Fstoryboard-session%2Fgenerated%2Fprivate-core.png"
           }),
           title: "雨夜未发送",
-          updatedAt: "2026-04-28T11:00:00.000Z"
+          updatedAt: "2026-04-28T11:00:00.000Z",
+          videoAspectRatio: "9:16"
         },
         {
           currentStep: "story-world",
@@ -372,6 +437,108 @@ describe("GET /api/storycam-sessions/recent", () => {
     });
     expect(serialized).not.toContain("storage_path");
     expect(serialized).not.toContain("storage_bucket");
+  });
+
+  it("looks past many newer empty drafts when building recent project summaries", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/recent/route");
+    const emptySessions = Array.from({ length: 12 }, (_, index) =>
+      sessionRow({
+        id: `empty-session-${index + 1}`,
+        updated_at: `2026-04-28T12:${String(index).padStart(2, "0")}:00.000Z`
+      })
+    );
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "story-session": storyWorldArtifacts("story-session")
+      },
+      sessions: [
+        ...emptySessions,
+        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-sessions/recent?limit=1"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      projects: [
+        {
+          currentStep: "story-world",
+          sessionId: "story-session",
+          title: "雨夜未发送"
+        }
+      ]
+    });
+  });
+
+  it("skips corrupt historical projects instead of failing the whole recent list", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/recent/route");
+    const client = new FakeSupabaseClient({
+      artifactsBySession: {
+        "corrupt-session": corruptStoryWorldArtifacts("corrupt-session"),
+        "story-session": storyWorldArtifacts("story-session")
+      },
+      sessions: [
+        sessionRow({ id: "corrupt-session", updated_at: "2026-04-28T11:00:00.000Z" }),
+        sessionRow({ id: "story-session", updated_at: "2026-04-28T10:00:00.000Z" })
+      ]
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-sessions/recent?limit=1"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      projects: [
+        {
+          currentStep: "story-world",
+          sessionId: "story-session",
+          title: "雨夜未发送"
+        }
+      ]
+    });
+  });
+
+  it("caps recent project summaries at twenty so the drawer can scroll without over-fetching", async () => {
+    const { GET } = await import("@/app/api/storycam-sessions/recent/route");
+    const sessions = Array.from({ length: 25 }, (_, index) => {
+      const sessionId = `story-session-${index + 1}`;
+
+      return sessionRow({
+        id: sessionId,
+        updated_at: `2026-04-28T10:${String(59 - index).padStart(2, "0")}:00.000Z`
+      });
+    });
+    const client = new FakeSupabaseClient({
+      artifactsBySession: Object.fromEntries(
+        sessions.map((session) => {
+          const sessionId = (session as { id: string }).id;
+
+          return [sessionId, storyWorldArtifacts(sessionId)];
+        })
+      ),
+      sessions
+    });
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await GET(new Request("https://storycam.test/api/storycam-sessions/recent?limit=99"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.projects).toHaveLength(20);
+    expect(body.projects[0]).toMatchObject({ sessionId: "story-session-1" });
+    expect(body.projects[19]).toMatchObject({ sessionId: "story-session-20" });
   });
 });
 
@@ -399,6 +566,7 @@ describe("GET /api/storycam-sessions/[id]/restore", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toMatchObject({
       currentStep: "story-world",
       restored: true,
@@ -425,6 +593,7 @@ describe("GET /api/storycam-sessions/[id]/restore", () => {
     });
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       error: "not_found",
       redactedError: "StoryCam project was not found.",
@@ -444,6 +613,7 @@ function sessionRow(overrides: Record<string, unknown> = {}) {
     status: "draft",
     updated_at: "2026-04-28T09:00:00.000Z",
     user_id: "user-1",
+    video_aspect_ratio: "16:9",
     ...overrides
   };
 }
@@ -471,8 +641,20 @@ function storyWorldArtifacts(sessionId: string) {
   return [
     artifactRow("script-artifact-1", "script", sessionId, {
       beats: ["她站在屋檐下看着未发送短信。"],
+      directorBrief: {
+        dialogueStrategy: "少台词，以动作和停顿表达。",
+        microRhythm: "0-3秒建立雨夜等待，3-8秒推进删短信动作，8-12秒用门铃触发反应，12-15秒留在玻璃倒影。",
+        shotDensity: "慢进入，门铃后轻微加速，最后停住。",
+        shotSizeFocus: "中景到近景，再回到空镜。",
+        soundStrategy: "雨声持续，门铃作为转折，低声配乐托底。",
+        tone: "雨夜、私人、克制",
+        transitionStrategy: "用声音先行和动作反应连接。",
+        userFacingSummary: "这一段会先安静等待，再让门铃把情绪推到玻璃倒影里。",
+        visualMotifs: ["雨声", "玻璃倒影", "未发送短信"]
+      },
       id: "script-story",
       logline: "她在雨夜便利店门口，把一条没有发出的告白短信删了又写。",
+      qualityChecks: ["剧本已转成可见动作和可听声音。"],
       sessionId,
       state: "ready",
       summary: "冷白灯、雨水和玻璃反光让两个人短暂同框。",
@@ -508,6 +690,21 @@ function storyWorldArtifacts(sessionId: string) {
       timeOfDay: "night",
       version: 1
     })
+  ];
+}
+
+function corruptStoryWorldArtifacts(sessionId: string) {
+  const [scriptRow, ...assetRows] = storyWorldArtifacts(sessionId);
+
+  return [
+    {
+      ...scriptRow,
+      data_json: {
+        ...scriptRow.data_json,
+        summary: ""
+      }
+    },
+    ...assetRows
   ];
 }
 

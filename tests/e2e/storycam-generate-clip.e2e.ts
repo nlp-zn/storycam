@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam generate clip", () => {
-  test("clip generation requires one-sentence confirmation and supports cancel and retry", async ({ page }) => {
+  test("clip generation starts immediately and supports cancel and retry", async ({ page }) => {
     let generateCalls = 0;
 
     await mockAuthenticated(page);
@@ -81,6 +81,7 @@ test.describe("StoryCam generate clip", () => {
           confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
           jobId: `job-${generateCalls}`,
           ok: true,
+          outputArtifactId: `clip-artifact-${generateCalls}`,
           status: "queued"
         })
       });
@@ -140,16 +141,16 @@ test.describe("StoryCam generate clip", () => {
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
     await page.getByRole("button", { name: "用这一组生成片段" }).click();
 
-    await expect(page.getByText("用「未发送短信」生成一个约 15 秒的私人片段。")).toBeVisible();
-    expect(generateCalls).toBe(0);
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByText("用「未发送短信」生成一个约 15 秒的私人片段。")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "确认发送生成片段" })).toHaveCount(0);
     await expect(page.getByText("redactedPromptSummary")).toHaveCount(0);
-
-    await page.getByRole("button", { name: "确认发送生成片段" }).click();
+    await expect(page.getByRole("heading", { name: "生成片段" })).toBeVisible();
     await expect(page.getByText("任务 job-1")).toBeVisible();
     expect(generateCalls).toBe(1);
 
     await page.getByRole("button", { name: "取消生成" }).click();
-    await expect(page.getByText("已取消", { exact: true })).toBeVisible();
+    await expect(page.getByText("生成已取消", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "重试" }).click();
     await expect(page.getByText("任务 job-2")).toBeVisible();
     expect(generateCalls).toBe(2);
@@ -288,7 +289,6 @@ test.describe("StoryCam generate clip", () => {
     await page.getByRole("button", { name: "生成故事雏形" }).click();
     await page.getByRole("button", { name: "对，生成核心分镜" }).click();
     await page.getByRole("button", { name: "用这一组生成片段" }).click();
-    await page.getByRole("button", { name: "确认发送生成片段" }).click();
     await expect(page.getByText("任务 job-delete")).toBeVisible();
 
     await lateRequestStarted;
@@ -303,7 +303,196 @@ test.describe("StoryCam generate clip", () => {
     await expect(page.getByText("clip-artifact-late")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "片段已生成" })).toHaveCount(0);
   });
+
+  test("cancels a late clip job when the user returns before task creation finishes", async ({ page }) => {
+    const clipGate = deferred<void>();
+    let cancelCalls = 0;
+
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+    await page.route("**/api/storyboard", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+            expandedStoryboardCards: expandedStoryboardCardRefs(),
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
+          },
+          durationPlan: {
+            clipDurationTargets: [15],
+            coreGroupTargetCount: 1,
+            plannedDurationSeconds: 15
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyboard: storyboardFixture()
+        })
+      });
+    });
+    await page.route("**/api/storyboard-groups/*/generate-clip", async (route) => {
+      await clipGate.promise;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
+          jobId: "job-late",
+          ok: true,
+          outputArtifactId: "clip-artifact-late",
+          status: "succeeded"
+        })
+      });
+    });
+    await page.route("**/api/generation-jobs/job-late/cancel", async (route) => {
+      cancelCalls += 1;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          jobId: "job-late",
+          ok: true,
+          status: "canceled"
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+    await page.getByRole("button", { name: "用这一组生成片段" }).click();
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+
+    await page.getByRole("button", { name: "返回核心分镜" }).click();
+    clipGate.resolve();
+
+    await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
+    await expect.poll(() => cancelCalls).toBe(1);
+    await expect(page.getByText("任务 job-late")).toHaveCount(0);
+  });
+
+  test("shows clip creation skeleton and keeps failures local in the clip layout", async ({ page }) => {
+    const clipGate = deferred<void>();
+    let generateCalls = 0;
+
+    await mockAuthenticated(page);
+    await page.route("**/api/story-world", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            characterAssets: [{ id: "character-artifact-1", state: "ready", type: "character_asset", version: 1 }],
+            sceneAssets: [{ id: "scene-artifact-1", state: "ready", type: "scene_asset", version: 1 }],
+            script: { id: "script-artifact-1", state: "ready", type: "script", version: 1 }
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyWorld: storyWorldFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          artifacts: {
+            coreStoryboardGroups: [{ id: "core-artifact-1", state: "ready", type: "core_storyboard_group", version: 1 }],
+            expandedStoryboardCards: expandedStoryboardCardRefs(),
+            storyboardScript: { id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 },
+            storyboardScripts: [{ id: "storyboard-artifact-1", state: "ready", type: "storyboard_script", version: 1 }]
+          },
+          durationPlan: {
+            clipDurationTargets: [15],
+            coreGroupTargetCount: 1,
+            plannedDurationSeconds: 15
+          },
+          ok: true,
+          sessionId: "session-1",
+          storyboard: storyboardFixture()
+        })
+      });
+    });
+
+    await page.route("**/api/storyboard-groups/*/generate-clip", async (route) => {
+      generateCalls += 1;
+
+      if (generateCalls === 1) {
+        await clipGate.promise;
+      }
+
+      if (generateCalls === 2) {
+        await route.fulfill({
+          contentType: "application/json",
+          status: 500,
+          body: JSON.stringify({ error: "clip_failed" })
+        });
+        return;
+      }
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 201,
+        body: JSON.stringify({
+          confirmationSummary: "Use \"未发送短信\" to generate one private 15 second clip.",
+          jobId: `job-${generateCalls}`,
+          ok: true,
+          outputArtifactId: `clip-artifact-${generateCalls}`,
+          status: generateCalls === 1 ? "succeeded" : "queued"
+        })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByLabel("你的这一幕").fill("我想把暗恋拍成韩剧雨夜，停在便利店门口");
+    await page.getByRole("button", { name: "生成故事雏形" }).click();
+    await page.getByRole("button", { name: "对，生成核心分镜" }).click();
+    await page.getByRole("button", { name: "用这一组生成片段" }).click();
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.getByTestId("clip-generation-pending-frame")).toBeVisible();
+    await expect(page.getByText("正在把这组分镜发送给视频生成服务，完成后会在这里继续显示进度。")).toBeVisible();
+    await expect(page.getByRole("button", { name: "片段生成中" })).toBeDisabled();
+    expect(generateCalls).toBe(1);
+
+    clipGate.resolve();
+    await expect(page.getByText("任务 job-1")).toBeVisible();
+
+    await page.getByRole("button", { name: "重拍这个片段" }).click();
+    await expect(page.getByText("片段生成任务创建失败，可以重试或返回核心分镜。")).toBeVisible();
+    await page.getByRole("button", { name: "重试生成" }).click();
+    await expect(page.getByText("任务 job-3")).toBeVisible();
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
+}
 
 function storyWorldFixture() {
   return {

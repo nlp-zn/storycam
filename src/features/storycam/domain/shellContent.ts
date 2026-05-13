@@ -1,27 +1,156 @@
-export const directorChoices = ["更遗憾一点", "像私人回忆", "少说话", "加旁白"] as const;
+import { handdrawnTravelVlogModeId } from "./storyModes";
+
+export const directorChoices = ["留白多一点", "像旧照片", "雨夜韩剧感", "靠小动作推进"] as const;
 
 export const storyModeEntries = [
   {
+    id: "personal-memory",
     label: "私人记忆",
-    status: "当前主线",
-    text: "把一句真实念头拍成 10-15 秒私人短片。"
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
+    sampleIdea: "我想把暗恋拍成韩剧雨夜",
+    text: "把一句真实念头拍成 10-15 秒私人短片。",
+    directorChoices,
+    defaultChoices: ["留白多一点"]
   },
   {
+    id: "pet-theater",
     label: "宠物小剧场",
-    status: "暂不完整支持",
-    text: "可先记录想法，后续补齐宠物稳定角色和动作。"
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
+    sampleIdea: "我想拍一只小狗等主人回家的十秒小剧场",
+    text: "让宠物变成这一幕里的主角。",
+    directorChoices: ["低机位跟随", "日常观察感", "温暖回家感", "轻喜剧反应"],
+    defaultChoices: ["低机位跟随"]
   },
   {
+    id: "novel-character",
     label: "小说角色",
-    status: "暂不完整支持",
-    text: "适合角色气质预演，第一版不做完整连载。"
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
+    sampleIdea: "我想让我的小说女主第一次走进雨夜城市",
+    text: "把角色出场拍成短短一段预告。",
+    directorChoices: ["初登场感", "世界观更强", "预告片节奏", "英雄式剪影"],
+    defaultChoices: ["初登场感"]
   },
   {
+    id: "emotion-short",
     label: "情绪短片",
-    status: "暂不完整支持",
-    text: "可尝试氛围方向，视频生成仍以主线流程为准。"
+    preferredAspectRatio: "16:9",
+    requiresPhoto: false,
+    requiresTravelDestination: false,
+    sampleIdea: "我想把一种说不出口的难过拍成风里的短片",
+    text: "把一种情绪变成可看见的画面。",
+    directorChoices: ["空镜多一点", "像一阵风", "声音先走", "情绪慢慢压上来"],
+    defaultChoices: ["空镜多一点"]
+  },
+  {
+    id: handdrawnTravelVlogModeId,
+    label: "手绘旅行 VLOG",
+    preferredAspectRatio: "9:16",
+    requiresPhoto: true,
+    requiresTravelDestination: true,
+    sampleIdea: "我想把自己画成手绘角色，放进一段旅行 VLOG",
+    text: "用一张照片生成手绘角色，放进真实旅行地。",
+    directorChoices: ["手绘角色感", "真实旅行地", "轻剧情 VLOG", "自然走拍"],
+    defaultChoices: ["手绘角色感"]
   }
 ] as const;
+
+type DiscoveryEntry = {
+  category: string;
+  duration: string;
+  format: "landscape" | "portrait";
+  imageSrc: string;
+  title: string;
+  videoSrc: string | null;
+};
+
+export const discoveryEntries: readonly DiscoveryEntry[] = [
+  {
+    title: "雨夜未发送",
+    category: "私人记忆",
+    duration: "00:32",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/rainy-night-unsent.png",
+    videoSrc: "/storycam/discovery/videos/rainy-night-unsent.mp4"
+  },
+  {
+    title: "宠物回家之前",
+    category: "宠物小剧场",
+    duration: "00:41",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/pet-before-home.png",
+    videoSrc: "/storycam/discovery/videos/pet-before-home.mp4"
+  },
+  {
+    title: "小说角色初登场",
+    category: "小说角色",
+    duration: "00:28",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/novel-character-arrival.png",
+    videoSrc: "/storycam/discovery/videos/novel-character-arrival.mp4"
+  },
+  {
+    title: "旧房间里的光",
+    category: "情绪短片",
+    duration: "00:36",
+    format: "portrait",
+    imageSrc: "/storycam/discovery/old-room-light.png",
+    videoSrc: "/storycam/discovery/videos/old-room-light-portrait.mp4"
+  },
+  {
+    title: "竹林里的背影",
+    category: "小说角色",
+    duration: "00:35",
+    format: "portrait",
+    imageSrc: "/storycam/discovery/sadness-in-wind.png",
+    videoSrc: "/storycam/discovery/videos/bamboo-shadow-portrait.mp4"
+  },
+  {
+    title: "只差一句话",
+    category: "私人记忆",
+    duration: "00:25",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/one-line-away.png",
+    videoSrc: "/storycam/discovery/videos/one-line-away.mp4"
+  },
+  {
+    title: "把难过留在风里",
+    category: "情绪短片",
+    duration: "00:34",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/sadness-in-wind.png",
+    videoSrc: "/storycam/discovery/videos/sadness-in-wind.mp4"
+  },
+  {
+    title: "玩具城市漫游",
+    category: "幻想日常",
+    duration: "00:30",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/pet-before-home.png",
+    videoSrc: "/storycam/discovery/videos/toy-city.mp4"
+  },
+  {
+    title: "清晨的秘密基地",
+    category: "私人记忆",
+    duration: "00:29",
+    format: "landscape",
+    imageSrc: "/storycam/discovery/old-room-light.png",
+    videoSrc: "/storycam/discovery/videos/morning-hideout.mp4"
+  },
+  {
+    title: "她在镜前停顿",
+    category: "情绪短片",
+    duration: "00:27",
+    format: "portrait",
+    imageSrc: "/storycam/discovery/one-line-away.png",
+    videoSrc: "/storycam/discovery/videos/mirror-pause-portrait.mp4"
+  }
+];
 
 export const storyAssets = [
   {
@@ -62,7 +191,5 @@ export const workflowStages = [
   "输入创意",
   "故事世界",
   "核心分镜",
-  "片段生成",
-  "片段确认",
-  "导出"
+  "片段生成"
 ] as const;

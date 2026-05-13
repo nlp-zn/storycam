@@ -60,7 +60,7 @@ describe("mock storyboard provider", () => {
 
     expect(result.ok && result.value.coreStoryboardGroups).toHaveLength(1);
     expect(result.ok && result.value.coreStoryboardGroups[0]).toMatchObject({
-      characterAssetIds: ["character-rainy-crush-lead"],
+      characterAssetIds: ["character-rainy-crush-lead", "character-rainy-crush-counterpart"],
       estimatedClipDurationSeconds: 15,
       sceneAssetId: "scene-rainy-convenience-store",
       storyPurpose: expect.any(String),
@@ -84,7 +84,8 @@ describe("mock storyboard provider", () => {
     expect(result.ok && result.value.storyboardScripts[0]?.frames[0]).toMatchObject({
       beatType: "core",
       canvasPosition: "center",
-      frameNumber: 1
+      frameNumber: 1,
+      visibleCharacterAssetIds: ["character-rainy-crush-lead", "character-rainy-crush-counterpart"]
     });
     expect(result.ok && result.value.storyboardScripts[0]?.frames[8]).toMatchObject({
       canvasPosition: "bottom-right",
@@ -103,6 +104,7 @@ describe("mock storyboard provider", () => {
           beats: [],
           id: "bad",
           logline: "",
+          qualityChecks: [],
           sessionId: "session-1",
           state: "ready",
           summary: "",

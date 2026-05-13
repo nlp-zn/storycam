@@ -1,5 +1,10 @@
+import { spawnSync } from "node:child_process";
+import type { StoryCamVideoModel } from "@/features/storycam/domain/videoSettings";
+
 export type GenerationMode = "mock" | "real";
 export type TextProvider = "deepseek" | "mock" | "openrouter";
+export type StoryWorldTextProvider = TextProvider;
+export type StoryboardTextProvider = "mock" | "openrouter";
 export type MultimodalProvider = "mock" | "openrouter";
 export type ImageProvider = "inference_sh" | "mock" | "openrouter";
 export type VideoProvider = "mock" | "seedance_2_0";
@@ -11,6 +16,7 @@ type ConfigIssueCode =
   | "INVALID_ENV"
   | "INVALID_URL"
   | "INVALID_PROVIDER_FOR_MODE"
+  | "MISSING_RUNTIME"
   | "MISSING_ENV";
 
 type ConfigIssue = {
@@ -39,10 +45,17 @@ export type StoryCamConfig = {
   generation: {
     mode: GenerationMode;
     textProvider: TextProvider;
+    storyWorldTextProvider?: StoryWorldTextProvider;
+    storyboardTextProvider?: StoryboardTextProvider;
     multimodalProvider: MultimodalProvider;
     imageProvider: ImageProvider;
     videoProvider: VideoProvider;
     finalWorkProvider: FinalWorkProvider;
+  };
+  quotas?: {
+    dailyFinalWorkJobLimit: number;
+    dailyImageJobLimit: number;
+    dailyVideoJobLimit: number;
   };
   openrouter?: {
     apiKey: string;
@@ -63,7 +76,7 @@ export type StoryCamConfig = {
   };
   seedance?: {
     apiKey: string;
-    model: string;
+    models: Record<StoryCamVideoModel, string>;
   };
 };
 
@@ -80,11 +93,15 @@ export class StoryCamConfigError extends Error {
 const defaultProviders = {
   STORYCAM_GENERATION_MODE: "mock",
   STORYCAM_TEXT_PROVIDER: "mock",
+  STORYCAM_STORY_WORLD_TEXT_PROVIDER: undefined,
+  STORYCAM_STORYBOARD_TEXT_PROVIDER: undefined,
   STORYCAM_MULTIMODAL_PROVIDER: "mock",
   STORYCAM_IMAGE_PROVIDER: "mock",
   STORYCAM_VIDEO_PROVIDER: "mock",
   STORYCAM_FINAL_WORK_PROVIDER: "mock"
 } as const;
+
+let ffmpegReadyCache: boolean | undefined;
 
 export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const issues: ConfigIssue[] = [];
@@ -113,6 +130,20 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     "STORYCAM_TEXT_PROVIDER",
     ["mock", "openrouter", "deepseek"],
     defaultProviders.STORYCAM_TEXT_PROVIDER,
+    issues
+  );
+  const storyWorldTextProvider = enumValue<StoryWorldTextProvider>(
+    env,
+    "STORYCAM_STORY_WORLD_TEXT_PROVIDER",
+    ["mock", "openrouter", "deepseek"],
+    textProvider,
+    issues
+  );
+  const storyboardTextProvider = enumValue<StoryboardTextProvider>(
+    env,
+    "STORYCAM_STORYBOARD_TEXT_PROVIDER",
+    ["mock", "openrouter"],
+    textProvider === "openrouter" ? "openrouter" : "mock",
     issues
   );
   const multimodalProvider = enumValue<MultimodalProvider>(
@@ -150,15 +181,32 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     rejectNonMockProvider("STORYCAM_FINAL_WORK_PROVIDER", finalWorkProvider, issues);
   }
 
-  const needsRequiredOpenRouter = textProvider === "openrouter" || multimodalProvider === "openrouter";
+  if (mode === "real") {
+    rejectMockProductionProvider("STORYCAM_STORY_WORLD_TEXT_PROVIDER", storyWorldTextProvider, issues);
+    rejectMockProductionProvider("STORYCAM_STORYBOARD_TEXT_PROVIDER", storyboardTextProvider, issues);
+    rejectMockProductionProvider("STORYCAM_MULTIMODAL_PROVIDER", multimodalProvider, issues);
+    rejectNonProviderValue("STORYCAM_IMAGE_PROVIDER", imageProvider, "inference_sh", issues);
+    rejectNonProviderValue("STORYCAM_VIDEO_PROVIDER", videoProvider, "seedance_2_0", issues);
+    rejectNonProviderValue("STORYCAM_FINAL_WORK_PROVIDER", finalWorkProvider, "ffmpeg", issues);
+    if (finalWorkProvider === "ffmpeg" && !isFfmpegRuntimeReady()) {
+      issues.push({
+        code: "MISSING_RUNTIME",
+        variable: "STORYCAM_FINAL_WORK_PROVIDER",
+        message: "ffmpeg must be available at runtime when STORYCAM_GENERATION_MODE=real."
+      });
+    }
+  }
+
+  const needsRequiredOpenRouter =
+    storyWorldTextProvider === "openrouter" || storyboardTextProvider === "openrouter" || multimodalProvider === "openrouter";
   const needsOpenRouter = needsRequiredOpenRouter || imageProvider === "openrouter";
   const openrouterApiKey = needsRequiredOpenRouter
     ? required(env, "OPENROUTER_API_KEY", issues)
     : optional(env, "OPENROUTER_API_KEY");
-  const openrouterTextModel = textProvider === "openrouter"
+  const openrouterTextModel = storyWorldTextProvider === "openrouter" || storyboardTextProvider === "openrouter"
     ? required(env, "OPENROUTER_TEXT_MODEL", issues)
     : undefined;
-  const openrouterTextFallbackModels = textProvider === "openrouter"
+  const openrouterTextFallbackModels = storyWorldTextProvider === "openrouter" || storyboardTextProvider === "openrouter"
     ? optionalCsv(env, "OPENROUTER_TEXT_FALLBACK_MODELS")
     : [];
   const openrouterMultimodalModel = multimodalProvider === "openrouter"
@@ -166,7 +214,7 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     : undefined;
   const openrouterImageModel = imageProvider === "openrouter" ? optional(env, "OPENROUTER_IMAGE_MODEL") : undefined;
 
-  const needsDeepSeek = textProvider === "deepseek";
+  const needsDeepSeek = storyWorldTextProvider === "deepseek";
   const deepseekApiKey = needsDeepSeek ? required(env, "DEEPSEEK_API_KEY", issues) : optional(env, "DEEPSEEK_API_KEY");
   const deepseekTextModel = needsDeepSeek
     ? optional(env, "DEEPSEEK_TEXT_MODEL") ?? "deepseek-v4-pro"
@@ -177,18 +225,24 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
   const deepseekTextFallbackModels = needsDeepSeek ? optionalCsv(env, "DEEPSEEK_TEXT_FALLBACK_MODELS") : [];
 
   const needsInferenceSh = imageProvider === "inference_sh";
-  const inferenceShApiKey = needsInferenceSh ? optional(env, "INFERENCE_API_KEY") : undefined;
-  const inferenceShImageApp = needsInferenceSh ? optional(env, "INFERENCE_IMAGE_APP") : undefined;
+  const inferenceShApiKey = providerValue(env, "INFERENCE_API_KEY", needsInferenceSh, mode, issues);
+  const inferenceShImageApp = providerValue(env, "INFERENCE_IMAGE_APP", needsInferenceSh, mode, issues);
 
   const needsSeedance = videoProvider === "seedance_2_0";
   const seedanceApiKey = needsSeedance ? required(env, "SEEDANCE_API_KEY", issues) : undefined;
   const seedanceModel = needsSeedance ? required(env, "SEEDANCE_MODEL", issues) : undefined;
+  const seedanceFastModel = needsSeedance
+    ? optional(env, "SEEDANCE_FAST_MODEL") ?? "doubao-seedance-2-0-fast-260128"
+    : undefined;
   const providerReferenceSignedUrlTtlSeconds = optionalPositiveInteger(
     env,
     "STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS",
     3600,
     issues
   );
+  const dailyImageJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_IMAGE_JOB_LIMIT", 30, issues);
+  const dailyVideoJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_VIDEO_JOB_LIMIT", 5, issues);
+  const dailyFinalWorkJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT", 5, issues);
 
   if (issues.length > 0) {
     throw new StoryCamConfigError(issues);
@@ -203,7 +257,15 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
         ...(openrouterImageModel ? { imageModel: openrouterImageModel } : {})
       }
     : undefined;
-  const seedance = seedanceApiKey && seedanceModel ? { apiKey: seedanceApiKey, model: seedanceModel } : undefined;
+  const seedance = seedanceApiKey && seedanceModel && seedanceFastModel
+    ? {
+        apiKey: seedanceApiKey,
+        models: {
+          seedance_2_0: seedanceModel,
+          seedance_2_0_fast: seedanceFastModel
+        }
+      }
+    : undefined;
   const deepseek = needsDeepSeek && deepseekApiKey && deepseekTextModel && deepseekTextBaseUrl
     ? {
         apiKey: deepseekApiKey,
@@ -228,10 +290,17 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     generation: {
       mode,
       textProvider,
+      storyWorldTextProvider,
+      storyboardTextProvider,
       multimodalProvider,
       imageProvider,
       videoProvider,
       finalWorkProvider
+    },
+    quotas: {
+      dailyFinalWorkJobLimit,
+      dailyImageJobLimit,
+      dailyVideoJobLimit
     },
     ...(openrouter ? { openrouter } : {}),
     ...(deepseek ? { deepseek } : {}),
@@ -276,6 +345,24 @@ function optional(env: Env, variable: string): string | undefined {
   return env[variable]?.trim() || undefined;
 }
 
+function providerValue(
+  env: Env,
+  variable: string,
+  needed: boolean,
+  mode: GenerationMode,
+  issues: ConfigIssue[]
+): string | undefined {
+  if (!needed) {
+    return undefined;
+  }
+
+  if (mode === "real") {
+    return required(env, variable, issues);
+  }
+
+  return optional(env, variable);
+}
+
 function enumValue<T extends string>(
   env: Env,
   variable: string,
@@ -301,6 +388,26 @@ function rejectNonMockProvider(variable: string, value: string, issues: ConfigIs
       code: "INVALID_PROVIDER_FOR_MODE",
       variable,
       message: `${variable} must be mock when STORYCAM_GENERATION_MODE=mock.`
+    });
+  }
+}
+
+function rejectMockProductionProvider(variable: string, value: string, issues: ConfigIssue[]) {
+  if (value === "mock") {
+    issues.push({
+      code: "INVALID_PROVIDER_FOR_MODE",
+      variable,
+      message: `${variable} must not be mock when STORYCAM_GENERATION_MODE=real.`
+    });
+  }
+}
+
+function rejectNonProviderValue(variable: string, value: string, expected: string, issues: ConfigIssue[]) {
+  if (value !== expected) {
+    issues.push({
+      code: "INVALID_PROVIDER_FOR_MODE",
+      variable,
+      message: `${variable} must be ${expected} when STORYCAM_GENERATION_MODE=real.`
     });
   }
 }
@@ -331,6 +438,12 @@ function optionalPositiveInteger(env: Env, variable: string, fallback: number, i
   }
 
   return value;
+}
+
+function isFfmpegRuntimeReady() {
+  ffmpegReadyCache ??= spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0;
+
+  return ffmpegReadyCache;
 }
 
 function isValidUrl(value: string) {

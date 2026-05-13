@@ -6,6 +6,7 @@ import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/se
 import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
 import { createConfiguredStoryboardProvider } from "@/server/storycam/storyboardProviderFactory";
 import { createStoryboard, StoryboardRequestError } from "@/server/storycam/storyboardService";
+import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +15,9 @@ export async function POST(request: Request) {
     const provider = createConfiguredStoryboardProvider(config);
     const imageProvider = createConfiguredStoryboardImageProvider(config);
     const requestBody = await parseStoryboardJson(request);
-    const result = await createStoryboard(createSupabaseAdminClient(), user.id, requestBody, provider, imageProvider, {
+    const client = createSupabaseAdminClient();
+    await assertStoryCamDailyJobQuota(client, user.id, config, "image");
+    const result = await createStoryboard(client, user.id, requestBody, provider, imageProvider, {
       providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
     });
     const responseHeaders = {
@@ -78,6 +81,10 @@ export async function POST(request: Request) {
         },
         { status: 500 }
       );
+    }
+
+    if (error instanceof StoryCamQuotaError) {
+      return quotaErrorResponse(error);
     }
 
     console.error("storyboard route failed", redactForLog(error));

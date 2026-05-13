@@ -1,10 +1,12 @@
 import { z } from "zod";
 import {
   characterAssetSchema,
+  directorBriefSchema,
   sceneAssetSchema,
   scenePanelShotTypes,
   storyScriptSchema
 } from "@/features/storycam/domain/artifactSchemas";
+import { runStoryCamDirectorQualityChecks } from "@/features/storycam/domain/directorQualityChecks";
 import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors";
 import {
   storyWorldProviderOutputSchema,
@@ -13,6 +15,11 @@ import {
 } from "@/lib/providers/storyWorld";
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { normalizeStoryCamVisualStyle } from "@/lib/storycam/visualStylePolicy";
+import {
+  handdrawnTravelVlogPhotoReferenceNote,
+  handdrawnTravelVlogVisualStyle,
+  isHanddrawnTravelVlogMode
+} from "@/features/storycam/domain/storyModes";
 import { createOpenRouterFetch } from "@/server/ai/openrouterProxyFetch";
 
 export type DeepSeekStoryWorldProviderOptions = {
@@ -66,6 +73,7 @@ const deepSeekStoryWorldDraftSchema = z.object({
   ).length(1),
   script: z.object({
     beats: z.array(draftTextSchema).min(1).max(8),
+    directorBrief: directorBriefSchema,
     logline: draftTextSchema,
     summary: draftTextSchema,
     title: draftTextSchema,
@@ -120,8 +128,16 @@ export function createDeepSeekStoryWorldProvider(
 }
 
 export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWorldRequestInput) {
-  const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "像私人回忆";
+  const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "留白多一点";
   const photoReferences = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
+  const handdrawnTravelSystemRules = isHanddrawnTravelVlogMode(input.storyModeId)
+    ? [
+        "手绘旅行 VLOG 模式：必须只生成 1 个可见主角人物资产，由用户上传照片转译成手绘旅行者；其他人只能离屏表达。",
+        "手绘旅行 VLOG 模式：人物描述参考照片里的发型、眼镜、穿搭轮廓、站姿和气质，但必须是手绘小人/漫画角色，不是真人相似脸。",
+        "手绘旅行 VLOG 模式：场景资产是用户指定真实旅行地的路线资产板，scenePanels 必须是同一目的地内 4-6 个真实旅行地小切图。",
+        "手绘旅行 VLOG 模式：剧本是轻剧情 VLOG，围绕走路、停下、拍照、发现细节或情绪停顿推进，不是纯打卡合集。"
+      ]
+    : [];
 
   return {
     max_tokens: 4096,
@@ -133,13 +149,19 @@ export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWo
           "这是剧本整理阶段，不是分镜拆解阶段；下一阶段 core storyboard 才会根据剧本生成分镜脚本、镜头组和主分镜图。",
           "script.summary 和 script.beats 只能写短剧本层面的剧情、角色动作、对白/可听声音、关键物件和环境变化。",
           "script.beats 是剧情节点/故事段落，不是镜头列表、分镜表或拍摄方案；每条用一句可读的剧情动作描述。",
+          "同时对剧本做视听化微调：把心理和抽象情绪转成可见动作、关键物件、空间变化和可听声音。",
+          "script.directorBrief 必须生成内部导演简报，字段包括 tone、visualMotifs、dialogueStrategy、soundStrategy、microRhythm、shotDensity、shotSizeFocus、transitionStrategy、userFacingSummary。",
+          "directorBrief.microRhythm 必须按 15 秒微型节奏描述：0-3秒建立状态，3-8秒动作推进，8-12秒反应/转折，12-15秒留白收束。",
           "不要写镜头编号、景别、机位、运镜、构图、剪辑、转场指令，也不要出现“镜头”“画面”“特写”“推近”“切到”“第 X 镜”等分镜术语。",
           "script.visualStyle 必须定义为漫画电影/动画分镜风格；可以吸收用户的情绪、时代、类型片倾向，但必须转译为非写实真人的虚构漫画角色和动画场景。",
           "人物资产只输出主角级或关键对手戏人物，最多 3 个；不要为背景人群、路人、短暂提及人物建资产。",
+          "凡是会正面出镜、持续互动或承担情感关系的角色，都必须同时生成人物资产；剧本后续不能依赖没有资产的可见人物来完成情绪。",
+          "宠物故事里，如果主人会出现在门口、抚摸、团聚或与宠物同框，宠物和主人都必须同时生成人物资产；如果不建主人资产，就只能用离屏声音、门、灯光、物件变化表达主人。",
           "场景资产必须且只能输出 1 个。这个唯一场景要用 scenePanels 覆盖剧本需要的 4-6 个小切图：主场景、关键物件、光线、动作空间或转场角度。",
           "scenePanels 只能描述无人环境、关键物件、光线、空间动线和可供角色后续入画的位置；不要写可见人物、人物倒影、人物剪影、手、身体局部或人群。",
           "不要输出内部 id、sessionId、state、version、provider、prompt 或分镜表。",
-          "产品主线是私人漫画电影，不生成写实真人短剧，不做真实人物或名人相似脸。"
+          "产品主线是私人漫画电影，不生成写实真人短剧，不做真实人物或名人相似脸。",
+          ...handdrawnTravelSystemRules
         ].join("\n"),
         role: "system" as const
       },
@@ -150,6 +172,8 @@ export function buildDeepSeekStoryWorldRequest({ input, model }: DeepSeekStoryWo
           `拍法倾向：${choices}`,
           `上传照片引用数量：${photoReferences.length}`,
           photoReferences.length ? `照片媒体 ID：${photoReferences.join(", ")}` : "照片媒体 ID：无",
+          input.storyModeId ? `故事模式：${input.storyModeId}` : "故事模式：默认",
+          input.travelDestination ? `旅行地：${input.travelDestination}` : "",
           "只通过 submit_story_world 的 arguments 返回结构化内容。"
         ].join("\n"),
         role: "user" as const
@@ -265,19 +289,36 @@ function parseToolArguments(toolArguments: string) {
 
 function normalizeStoryWorldDraft(input: StoryWorldProviderInput, draft: DeepSeekStoryWorldDraft): StoryWorldProviderOutput {
   const referenceMediaIds = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
+  const isHanddrawnTravel = isHanddrawnTravelVlogMode(input.storyModeId);
   const script = storyScriptSchema.parse({
     beats: draft.script.beats,
+    directorBrief: draft.script.directorBrief,
     id: `script-${input.sessionId}`,
     logline: draft.script.logline,
+    qualityChecks: runStoryCamDirectorQualityChecks({
+      script: {
+        beats: draft.script.beats,
+        directorBrief: draft.script.directorBrief,
+        summary: draft.script.summary
+      }
+    }),
     sessionId: input.sessionId,
     state: "ready",
+    ...(input.storyModeId ? { storyModeId: input.storyModeId } : {}),
     summary: draft.script.summary,
     title: draft.script.title,
     version: 1,
-    visualStyle: normalizeStoryCamVisualStyle(draft.script.visualStyle)
+    visualStyle: normalizeStoryCamVisualStyle(
+      isHanddrawnTravel ? handdrawnTravelVlogVisualStyle : draft.script.visualStyle
+    )
   });
-  const characterAssets = draft.characterAssets.map((asset, index) => normalizeCharacterAsset(input, asset, index, referenceMediaIds));
-  const sceneAssets = draft.sceneAssets.map((asset, index) => normalizeSceneAsset(input, asset, index, referenceMediaIds));
+  const characterAssets = draft.characterAssets
+    .slice(0, isHanddrawnTravel ? 1 : 3)
+    .map((asset, index) => normalizeCharacterAsset(input, asset, index, referenceMediaIds, isHanddrawnTravel));
+  const sceneReferenceMediaIds = isHanddrawnTravel ? [] : referenceMediaIds;
+  const sceneAssets = draft.sceneAssets.map((asset, index) =>
+    normalizeSceneAsset(input, asset, index, sceneReferenceMediaIds, isHanddrawnTravel)
+  );
 
   return storyWorldProviderOutputSchema.parse({
     characterAssets,
@@ -290,10 +331,13 @@ function normalizeCharacterAsset(
   input: StoryWorldProviderInput,
   asset: DeepSeekStoryWorldCharacterDraft,
   index: number,
-  referenceMediaIds: string[]
+  referenceMediaIds: string[],
+  isHanddrawnTravel = false
 ) {
   return characterAssetSchema.parse({
-    consistencyNotes: asset.consistencyNotes,
+    consistencyNotes: isHanddrawnTravel
+      ? [...asset.consistencyNotes, handdrawnTravelVlogPhotoReferenceNote]
+      : asset.consistencyNotes,
     emotionalBaseline: asset.emotionalBaseline,
     id: `character-${input.sessionId}-${index + 1}`,
     name: asset.name,
@@ -302,7 +346,9 @@ function normalizeCharacterAsset(
     relationshipToUserStory: asset.relationshipToUserStory,
     role: asset.role,
     sessionId: input.sessionId,
-    stableVisualDescription: asset.stableVisualDescription,
+    stableVisualDescription: isHanddrawnTravel
+      ? `${asset.stableVisualDescription}；由上传照片转译出的手绘旅行者，只保留发型、眼镜、穿搭轮廓、站姿和气质，不生成写实真人相似脸。`
+      : asset.stableVisualDescription,
     state: "ready",
     version: 1,
     wardrobe: asset.wardrobe
@@ -313,14 +359,15 @@ function normalizeSceneAsset(
   input: StoryWorldProviderInput,
   asset: DeepSeekStoryWorldSceneDraft,
   index: number,
-  referenceMediaIds: string[]
+  referenceMediaIds: string[],
+  isHanddrawnTravel = false
 ) {
   return sceneAssetSchema.parse({
     atmosphere: asset.atmosphere,
     id: `scene-${input.sessionId}-${index + 1}`,
     keyObjects: asset.keyObjects,
     light: asset.light,
-    location: asset.location,
+    location: isHanddrawnTravel ? input.travelDestination ?? asset.location : asset.location,
     name: asset.name,
     referenceMediaIds,
     scenePanels: asset.scenePanels,
@@ -398,7 +445,8 @@ const deepSeekStoryWorldJsonSchema = {
         ],
         type: "object" as const
       },
-      description: "1 to 3 character assets.",
+      description:
+        "1 to 3 character assets. Include every key character that will be visibly on screen, repeatedly interact, or carry the emotional relationship; for pet stories, include both pet and owner when the owner appears on screen.",
       type: "array" as const
     },
     sceneAssets: {
@@ -448,16 +496,44 @@ const deepSeekStoryWorldJsonSchema = {
           items: stringSchema,
           type: "array" as const
         },
+        directorBrief: {
+          additionalProperties: false,
+          description:
+            "Internal StoryCam director brief. Keep it concise and do not expose professional terms in script.summary or script.beats.",
+          properties: {
+            dialogueStrategy: stringSchema,
+            microRhythm: stringSchema,
+            shotDensity: stringSchema,
+            shotSizeFocus: stringSchema,
+            soundStrategy: stringSchema,
+            tone: stringSchema,
+            transitionStrategy: stringSchema,
+            userFacingSummary: stringSchema,
+            visualMotifs: stringArraySchema("1 to 6 recurring visible or audible motifs.")
+          },
+          required: [
+            "tone",
+            "visualMotifs",
+            "dialogueStrategy",
+            "soundStrategy",
+            "microRhythm",
+            "shotDensity",
+            "shotSizeFocus",
+            "transitionStrategy",
+            "userFacingSummary"
+          ],
+          type: "object" as const
+        },
         logline: stringSchema,
         summary: stringSchema,
         title: stringSchema,
         visualStyle: {
           description:
-            "One concise shared visual style for both character and scene asset images. Infer from user intent; may be live-action realistic, manga, animation, picture book, film, etc.",
+            "One concise shared visual style for both character and scene asset images. It must stay in StoryCam's comic film / animation storyboard direction, not live-action realism.",
           type: "string" as const
         }
       },
-      required: ["title", "logline", "summary", "visualStyle", "beats"],
+      required: ["title", "logline", "summary", "visualStyle", "beats", "directorBrief"],
       type: "object" as const
     }
   },

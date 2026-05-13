@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ZodError } from "zod";
+import {
+  defaultStoryCamVideoAspectRatio,
+  parseStoryCamVideoAspectRatio,
+  type StoryCamVideoAspectRatio
+} from "@/features/storycam/domain/videoSettings";
 import {
   characterAssetSchema,
   coreStoryboardGroupSchema,
@@ -16,7 +22,8 @@ import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamSignedUrlTtlSeconds, type StoryCamPrivateBucket } from "./mediaStore";
 import { StoryCamSessionRepository } from "./sessionRepository";
-import { placeholderStoryboardImage, type GeneratedStoryboardImageState } from "./storyboardImageService";
+import { generatingStoryboardImage, placeholderStoryboardImage, type GeneratedStoryboardImageState } from "./storyboardImageService";
+import { toPublicStoryWorld, type PublicStoryWorldProviderOutput } from "./storyWorldService";
 
 type ArtifactRef = {
   id: string;
@@ -51,6 +58,7 @@ export type RestoreStoryCamSessionOutput =
       storyboard: RestoredStoryboard | null;
       storyWorld: RestoredStoryWorld;
       storyWorldConfirmed: boolean;
+      videoAspectRatio: StoryCamVideoAspectRatio;
     };
 
 export type RecentStoryCamProject = {
@@ -61,6 +69,7 @@ export type RecentStoryCamProject = {
   thumbnail: RestoredMedia | null;
   title: string;
   updatedAt: string;
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 export type ListRecentStoryCamProjectsOutput = {
@@ -85,10 +94,11 @@ type RestoredStoryWorld = {
   ok: true;
   sessionId: string;
   storyWorld: {
-    characterAssets: unknown[];
-    sceneAssets: unknown[];
-    script: unknown;
+    characterAssets: PublicStoryWorldProviderOutput["characterAssets"];
+    sceneAssets: PublicStoryWorldProviderOutput["sceneAssets"];
+    script: PublicStoryWorldProviderOutput["script"];
   };
+  videoAspectRatio: StoryCamVideoAspectRatio;
 };
 
 type RestoredStoryboard = {
@@ -154,11 +164,13 @@ type StoryWorldBundle = {
   scriptRow: StoryCamArtifactRow;
 };
 
+const recentProjectSummaryBatchSize = 5;
+
 export async function restoreCurrentStoryCamSession(
   client: SupabaseClient<Database>,
   userId: string
 ): Promise<RestoreStoryCamSessionOutput> {
-  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, 10)) ?? [];
+  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, 50)) ?? [];
 
   for (const session of sessions) {
     const restored = await restoreSession(client, userId, session);
@@ -197,28 +209,66 @@ export async function restoreStoryCamSessionById(
 export async function listRecentStoryCamProjects(
   client: SupabaseClient<Database>,
   userId: string,
-  limit = 5
+  limit = 20
 ): Promise<ListRecentStoryCamProjectsOutput> {
-  const projectLimit = Math.min(5, Math.max(1, Math.floor(limit)));
-  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, Math.max(projectLimit * 2, 10))) ?? [];
-  const projects: RecentStoryCamProject[] = [];
-
-  for (const session of sessions) {
-    if (projects.length >= projectLimit) {
-      break;
-    }
-
-    const summary = await summarizeSession(client, userId, session);
-
-    if (summary) {
-      projects.push(summary);
-    }
-  }
+  const projectLimit = recentProjectLimit(limit);
+  const candidateLimit = Math.max(projectLimit * 10, 50);
+  const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, candidateLimit)) ?? [];
 
   return {
     ok: true,
-    projects
+    projects: await summarizeRecentProjectCandidates(client, userId, sessions, projectLimit)
   };
+}
+
+async function summarizeRecentProjectCandidates(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessions: StoryCamSessionRow[],
+  projectLimit: number
+): Promise<RecentStoryCamProject[]> {
+  const projects: RecentStoryCamProject[] = [];
+
+  for (let index = 0; index < sessions.length && projects.length < projectLimit; index += recentProjectSummaryBatchSize) {
+    const batch = sessions.slice(index, index + recentProjectSummaryBatchSize);
+    const summaries = await Promise.all(batch.map((session) => safeSummarizeSession(client, userId, session)));
+
+    for (const summary of summaries) {
+      if (summary) {
+        projects.push(summary);
+      }
+
+      if (projects.length >= projectLimit) {
+        break;
+      }
+    }
+  }
+
+  return projects;
+}
+
+async function safeSummarizeSession(
+  client: SupabaseClient<Database>,
+  userId: string,
+  session: StoryCamSessionRow
+): Promise<RecentStoryCamProject | null> {
+  try {
+    return await summarizeSession(client, userId, session);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function recentProjectLimit(limit: number) {
+  if (!Number.isFinite(limit)) {
+    return 20;
+  }
+
+  return Math.min(20, Math.max(1, Math.floor(limit)));
 }
 
 async function restoreSession(
@@ -236,8 +286,9 @@ async function restoreSession(
   }
 
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
-  const storyWorld = await restoreStoryWorld(client, session.id, storyWorldBundle, mediaRows);
-  const storyboard = await restoreStoryboard(client, session, storyWorldBundle, artifactRows, mediaRows);
+  const videoAspectRatio = restoreSessionAspectRatio(session);
+  const storyWorld = await restoreStoryWorld(client, session.id, storyWorldBundle, mediaRows, videoAspectRatio);
+  const storyboard = await restoreStoryboard(client, userId, session, storyWorldBundle, artifactRows, mediaRows);
   const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
   const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
   const coreGroupTargetCount = toCoreGroupTargetCount(session.core_group_target_count) ?? storyboard?.durationPlan.coreGroupTargetCount ?? 1;
@@ -252,7 +303,8 @@ async function restoreSession(
     sessionId: session.id,
     storyboard,
     storyWorld,
-    storyWorldConfirmed: Boolean(storyboard)
+    storyWorldConfirmed: Boolean(storyboard),
+    videoAspectRatio
   };
 }
 
@@ -271,7 +323,7 @@ async function summarizeSession(
   }
 
   const mediaRows = (await mediaAssets.listBySession(userId, session.id)) ?? [];
-  const storyboard = await restoreStoryboard(client, session, storyWorldBundle, artifactRows, mediaRows);
+  const storyboard = await restoreStoryboard(client, userId, session, storyWorldBundle, artifactRows, mediaRows);
   const clipJob = storyboard ? await restoreLatestClipJob(client, userId, session.id, artifactRows, mediaRows) : undefined;
   const finalWork = storyboard ? await restoreLatestFinalWork(client, artifactRows, mediaRows) : undefined;
   const script = storyScriptSchema.parse(storyWorldBundle.scriptRow.data_json);
@@ -284,8 +336,13 @@ async function summarizeSession(
     summary: script.summary,
     thumbnail: await restoreProjectThumbnail(client, storyboard, storyWorldBundle, mediaRows),
     title: script.title,
-    updatedAt: session.updated_at
+    updatedAt: session.updated_at,
+    videoAspectRatio: restoreSessionAspectRatio(session)
   };
+}
+
+function restoreSessionAspectRatio(session: StoryCamSessionRow) {
+  return parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
 }
 
 function findRestorableStoryWorldBundle(rows: StoryCamArtifactRow[]): StoryWorldBundle | null {
@@ -347,7 +404,8 @@ async function restoreStoryWorld(
   client: SupabaseClient<Database>,
   sessionId: string,
   bundle: StoryWorldBundle,
-  mediaRows: MediaAssetRow[]
+  mediaRows: MediaAssetRow[],
+  videoAspectRatio: StoryCamVideoAspectRatio
 ): Promise<RestoredStoryWorld> {
   const assetRows = [...bundle.characterRows, ...bundle.sceneRows];
 
@@ -360,16 +418,18 @@ async function restoreStoryWorld(
     },
     ok: true,
     sessionId,
-    storyWorld: {
+    storyWorld: toPublicStoryWorld({
       characterAssets: bundle.characterRows.map((row) => characterAssetSchema.parse(row.data_json)),
       sceneAssets: bundle.sceneRows.map((row) => sceneAssetSchema.parse(row.data_json)),
       script: storyScriptSchema.parse(bundle.scriptRow.data_json)
-    }
+    }),
+    videoAspectRatio
   };
 }
 
 async function restoreStoryboard(
   client: SupabaseClient<Database>,
+  userId: string,
   session: StoryCamSessionRow,
   bundle: StoryWorldBundle,
   rows: StoryCamArtifactRow[],
@@ -410,12 +470,13 @@ async function restoreStoryboard(
   const storyboardScripts = scriptRows.map((row) => storyboardScriptSchema.parse(row.data_json));
   const storyboardScriptRefs = scriptRows.map(toArtifactRef);
   const storyboardScriptRef = storyboardScriptRefs[0];
+  const imageJobs = await restoreStoryboardImageJobs(client, userId, session.id);
   const expandedStoryboardCardRefs = matchingCoreRows.flatMap((coreRow) => restoreExpandedStoryboardCardRefs(coreRow, rows));
   const coreGroupViews = await Promise.all(
     matchingCoreRows.map(async (row, index) => ({
       ...coreStoryboardGroupSchema.parse(row.data_json),
-      expandedStoryboardImages: await restoreExpandedStoryboardImages(client, row, rows, mediaRows),
-      representativeImage: await restoreStoryboardImage(client, row.id, mediaRows),
+      expandedStoryboardImages: await restoreExpandedStoryboardImages(client, row, rows, mediaRows, imageJobs),
+      representativeImage: await restoreStoryboardImage(client, row.id, mediaRows, imageJobs, "storyboard_image"),
       scriptArtifact: storyboardScriptRefs[index] ?? storyboardScriptRef
     }))
   );
@@ -451,12 +512,14 @@ async function restoreAssetImages(client: SupabaseClient<Database>, assetRows: S
 async function restoreStoryboardImage(
   client: SupabaseClient<Database>,
   linkedArtifactId: string,
-  mediaRows: MediaAssetRow[]
+  mediaRows: MediaAssetRow[],
+  imageJobs: GenerationJobRow[] = [],
+  imageJobType?: GenerationJobRow["type"]
 ): Promise<GeneratedStoryboardImageState> {
   const media = await restoreMedia(client, linkedArtifactId, mediaRows);
 
   if (!media) {
-    return placeholderStoryboardImage();
+    return restoreStoryboardImageJobState(linkedArtifactId, imageJobs, imageJobType) ?? placeholderStoryboardImage();
   }
 
   return {
@@ -473,7 +536,8 @@ async function restoreExpandedStoryboardImages(
   client: SupabaseClient<Database>,
   coreRow: StoryCamArtifactRow,
   rows: StoryCamArtifactRow[],
-  mediaRows: MediaAssetRow[]
+  mediaRows: MediaAssetRow[],
+  imageJobs: GenerationJobRow[]
 ) {
   const cards = rows
     .filter((row) => row.type === "expanded_storyboard_card" && row.state === "ready" && row.parent_artifact_id === coreRow.id)
@@ -484,7 +548,39 @@ async function restoreExpandedStoryboardImages(
     })
     .slice(0, 8);
 
-  return Promise.all(cards.map((card) => restoreStoryboardImage(client, card.id, mediaRows)));
+  return Promise.all(cards.map((card) => restoreStoryboardImage(client, card.id, mediaRows, imageJobs, "expanded_storyboard_image")));
+}
+
+async function restoreStoryboardImageJobs(client: SupabaseClient<Database>, userId: string, sessionId: string) {
+  const jobs = (await new StoryCamGenerationJobRepository(client).listBySession(userId, sessionId)) ?? [];
+
+  return jobs.filter((job) => job.type === "storyboard_image" || job.type === "expanded_storyboard_image");
+}
+
+function restoreStoryboardImageJobState(
+  linkedArtifactId: string,
+  imageJobs: GenerationJobRow[],
+  imageJobType?: GenerationJobRow["type"]
+): GeneratedStoryboardImageState | null {
+  const job = imageJobs
+    .filter((candidate) => {
+      if (candidate.output_artifact_id !== linkedArtifactId) {
+        return false;
+      }
+
+      return imageJobType ? candidate.type === imageJobType : true;
+    })
+    .sort((a, b) => timestamp(b.updated_at) - timestamp(a.updated_at))[0];
+
+  if (!job) {
+    return null;
+  }
+
+  if (job.status === "queued" || job.status === "running" || job.status === "cancel_requested") {
+    return generatingStoryboardImage(job.id);
+  }
+
+  return placeholderStoryboardImage("provider_failed");
 }
 
 async function restoreLatestClipJob(

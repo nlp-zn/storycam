@@ -1,20 +1,49 @@
-# StoryCam Agent Map
+# StoryCam Agent Constitution
 
-This file is a short navigation map for agents. Do not turn it into a handbook. Put durable project knowledge in `docs/` and keep this file small.
+This file is the short constitution for agents working in StoryCam. Keep it small.
+Put durable project knowledge in `docs/`; put only navigation, principles, and hard
+rules here. If a rule needs examples, tables, or versioned details, it probably belongs
+in `docs/` with a link from this file.
 
 ## Start Here
 
-1. Read `docs/README.md` to find the current source of truth.
-2. Read `ARCHITECTURE.md` before backend, data, provider, storage, or job work.
+1. Read `docs/README.md` for the current source-of-truth map.
+2. Read `docs/ARCHITECTURE.md` before backend, data, provider, storage, or job work.
 3. Read `docs/product-specs/index.md` before product behavior changes.
-4. Read `docs/exec-plans/active/` before implementation work.
-5. Read `docs/SECURITY.md` before touching auth, Supabase, storage, provider keys, logs, uploads, or sharing.
-6. Read `docs/references/providers.md` and `docs/references/local-dev.md` before changing provider wiring, env behavior, or real-provider smoke paths.
-7. Read `docs/FRONTEND.md` and `docs/DESIGN.md` before UI work.
+4. Read `docs/SECURITY.md` before auth, storage, provider keys, logs, uploads, restore, or sharing work.
+5. Read `docs/references/providers.md` and `docs/references/local-dev.md` before provider wiring, env behavior, smoke tests, or local auth changes.
+6. Read `docs/FRONTEND.md`, `docs/DESIGN.md`, and `docs/design-docs/index.md` before UI work.
+7. Read `docs/PR_REVIEW.md` before reviewing, shipping, or changing gates.
+8. Check `docs/exec-plans/active/` before large changes. If none exists, create a short plan first.
 
-## Project North Star
+## Constitution
 
-StoryCam is an AI private story-theater product for ordinary users. It is not an industrial short-drama production backend.
+1. Think before coding.
+   State assumptions when they matter. If the request has multiple plausible meanings,
+   surface the tradeoff instead of silently choosing one. Push back when the simpler
+   path is better for StoryCam.
+
+2. Simplicity first.
+   Build the smallest thing that satisfies the goal. Do not add speculative features,
+   abstractions, switches, configuration, or fallback paths. If the solution looks
+   larger than the problem, simplify it before editing more files.
+
+3. Surgical changes.
+   Touch only what the request requires. Match local style. Do not refactor adjacent
+   code, rewrite comments, reformat unrelated files, or delete pre-existing dead code
+   unless the user asked for that cleanup. Every changed line should trace back to the
+   task.
+
+4. Goal-driven execution.
+   Convert work into verifiable success criteria, then loop until the checks match the
+   goal. For bugs, prefer a reproducing test or deterministic proof. For UI, verify
+   the actual surface, not just the component code.
+
+## Product North Star
+
+StoryCam is an AI private story-theater product for ordinary users. It is not an
+industrial short-drama production backend, a professional shot-table tool, or a public
+content marketplace.
 
 The MVP loop is:
 
@@ -22,38 +51,41 @@ The MVP loop is:
 private idea + optional photos
   -> script + character assets + scene assets
   -> user confirms story world
-  -> storyboard script + 1-3 core storyboard groups
+  -> one core storyboard group
   -> optional expansion cards
-  -> one Seedance 2.0 clip per confirmed core group
+  -> one generated clip for the confirmed core group
   -> final work composition
   -> account-scoped save and preview
 ```
 
-## Current Technical Baseline
+## Non-Negotiables
 
-- Web-first: Next.js App Router + TypeScript + Tailwind.
-- Auth: Supabase Auth, Google login first.
-- Database: Supabase Postgres with RLS.
-- Media: Supabase Storage private buckets.
-- AI orchestration: Vercel AI SDK.
-- Text/multimodal/image models: OpenRouter through provider adapters.
-- Step 2 story-world text uses AI SDK structured JSON output with OpenRouter fallback models; see `docs/references/providers.md`.
-- Video: Seedance 2.0 through `VideoGenerationProvider`.
-- First version does not include public sharing, payment, marketplace, public feed, or mobile-only UX.
-
-## Working Rules
-
-- Keep canonical decisions in `docs/`.
-- Do not treat `~/.gstack/` output as canonical project documentation.
-- Do not skip story/script/character/scene confirmation.
+- Do not skip story, script, character, scene, or storyboard confirmation.
 - Core storyboard groups are clip groups, not decorative stills.
 - Expanded storyboard cards guide their parent group; they do not trigger video calls by default.
-- Do not expose Shanyin-style professional shot tables to ordinary users.
+- Keep provider calls server-side. The browser must not call model or media providers directly.
+- Do not expose Shanyin-style professional shot tables, prompt packets, raw provider payloads, signed URLs, or model parameters to ordinary users.
 - Do not log raw private input, full prompts, provider secrets, signed URLs, or unredacted provider errors.
-- Do not silently accept a fixed mock story-world response when testing real text generation; check `diagnostics.textProvider` or `x-storycam-text-provider`.
-- Remember shell-exported env vars override `.env.local`; stale `STORYCAM_TEXT_PROVIDER=mock` keeps Step 2 on mock even after restart.
-- When docs and code disagree, update the docs or the code in the same change. Drift is a bug.
+- Mock mode must be explicit. When testing real generation, verify provider diagnostics from `docs/references/providers.md` instead of trusting a plausible response body.
+- Remember shell-exported env vars override `.env.local`; stale provider env can keep a flow on mock after restart.
+- Do not treat `~/.gstack/` output as canonical project documentation.
 
-## Agent Readability
+## Quality Gates
 
-Prefer small, indexed, cross-linked docs over long instruction blobs. If you add a new durable decision, put it in the right document and link it from the nearest index.
+- Use the smallest deterministic check that proves the change; reserve full gates for review, ship, PR, or merge. See `docs/PR_REVIEW.md` for the test selection strategy.
+- "PR gate", "ship review", "pre-PR check", "review before PR", "push 前检查", and similar requests mean: run the StoryCam PR Gate from `docs/PR_REVIEW.md`.
+- PR Gate is review-only. Do not commit, push, or open a PR during PR Gate.
+- "ship", "gstack-ship", "可以 push 并提 PR", "开 PR 到 dev", and similar publishing requests mean: run the StoryCam Ship Gate from `docs/PR_REVIEW.md`.
+- Ship Gate may commit, push, and create a PR only after the final gate decision is GO.
+- PR Gate and Ship Gate must produce three separate reviewer reports: `code-reviewer`, `security-auditor`, and `test-engineer`.
+- Run the reviewers in parallel when subagents are available and the user explicitly requested the gate. Otherwise run them sequentially, keeping reports separate.
+- Final gate output must include GO/NO-GO, deterministic checks, reviewer verdicts, blockers, fixes, accepted risks, coverage gaps, verification evidence, and rollback notes.
+- Do not hide AI review inside git hooks or CI. Hooks and CI run deterministic checks; AI review runs only when the user asks for the gate.
+
+## Documentation Rule
+
+When docs and code disagree, fix the drift in the same change. Add long-lived context to
+the right file under `docs/`, update the nearest index, and keep `AGENTS.md` short.
+Do not duplicate long technical lists here; link to the canonical doc instead. If a
+new durable rule makes this file sprawl, move the detail to `docs/` and leave only the
+constitutional constraint or navigation pointer here.

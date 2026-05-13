@@ -18,20 +18,20 @@ This reference summarizes the ideas StoryCam is adopting from OpenAI's harness e
 
 ```text
 AGENTS.md
-ARCHITECTURE.md
-docs/
-  design-docs/
-  exec-plans/
-  generated/
-  product-specs/
-  references/
-  DESIGN.md
-  FRONTEND.md
-  PLANS.md
-  PRODUCT_SENSE.md
-  QUALITY_SCORE.md
-  RELIABILITY.md
-  SECURITY.md
+README.md
+docs/ARCHITECTURE.md
+docs/design-docs/
+docs/exec-plans/
+docs/generated/
+docs/product-specs/
+docs/references/
+docs/DESIGN.md
+docs/FRONTEND.md
+docs/PLANS.md
+docs/PRODUCT_SENSE.md
+docs/QUALITY_SCORE.md
+docs/RELIABILITY.md
+docs/SECURITY.md
 ```
 
 ## Practical Consequences

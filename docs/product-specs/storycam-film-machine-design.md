@@ -11,7 +11,7 @@
 1. StoryCam 第一版是 Web 产品，优先适配桌面和平板 Web，不做移动端-only App。
 2. StoryCam 面向普通个人表达用户，不面向 MCN、短剧公司或工业化生产团队。
 3. MVP 必须至少生成一个真实视频片段。只有剧本、图片或分镜图，不足以证明产品魔法。
-4. canonical MVP 创作闭环必须保留：输入想法 -> 生成剧本、人物资产、场景资产 -> 生成角色/场景资产图并由用户确认 story-world -> 基于剧本和资产生成 1 份 9 帧分镜脚本和 1 个核心分镜组 -> 基于资产图和第 1 帧脚本生成核心分镜图 -> 可选点击中心主图扩展 8 帧 -> 基于 9 帧脚本和已生成分镜图组装 Seedance 2.0 clip prompt packet 并生成一个视频片段 -> 用户确认片段 -> 系统建议拼接 -> 最终作品。
+4. canonical MVP 创作闭环必须保留：输入想法 -> 生成剧本、人物资产、场景资产 -> 生成角色/场景资产图并由用户确认 story-world -> 基于剧本和资产生成 1 份 9 帧分镜脚本和 1 个核心分镜组 -> 基于资产图和第 1 帧脚本生成核心分镜图 -> 可选点击中心主图扩展 8 帧 -> 基于 9 帧脚本和已生成分镜图组装 Seedance 2.0 clip prompt packet 并生成一个视频片段 -> 在片段生成页内预览、重拍、自动保存最终作品并导出 MP4。
 5. 核心分镜组是视频生成的产品单位。扩展分镜卡默认只是父分镜组的指导材料，不会每张卡单独触发一次视频调用。
 6. Phase 1 可以比完整产品更窄：一条引导式私人记忆预告片路径、一个确认的核心分镜组、一个真实片段，然后保存到账号、预览或继续拍。
 7. Shanyin Director Master 是内部导演脑参考，不把专业工作流直接暴露给普通用户。
@@ -47,7 +47,7 @@ v1 默认视觉路线是“私人漫画电影 / 动画分镜”，不是写实�
 - 每个生成阶段的输入、输出、用户确认点和失败救援路径。
 - 哪些阶段需要文本理解、多模态理解、图像生成、视频生成或视频合成能力。
 - Seedance 2.0 作为第一版真实视频片段生成的主假设。
-- 用户可见语言、隐私边界、provider-send confirmation、MVP 单核心分镜组规则。
+- 用户可见语言、隐私边界、视频 provider 边界提示、MVP 单核心分镜组规则。
 
 留到 PLAN / 工程文档里：
 
@@ -106,7 +106,7 @@ StoryCam 不是：
 | --- | --- | --- |
 | `input` | 是 | 用户的私人想法、记忆、情绪、关系、角色幻想或上传上下文。 |
 | `script` | 是 | 一段可读短剧本，用来让用户判断 StoryCam 是否理解了自己的想法；其中 `beats` 是剧情节点/故事段落，不是镜头列表、分镜表或拍摄方案。 |
-| `character_assets[]` | 是 | 1-3 张主角级/关键对手戏人物卡，包含角色、关系、稳定视觉描述、情绪、服装、道具和一致性说明。 |
+| `character_assets[]` | 是 | 1-3 张主角级/关键对手戏人物卡，覆盖剧本中会正面出镜、持续互动或承担情感关系的可见关键角色，包含角色、关系、稳定视觉描述、情绪、服装、道具和一致性说明。 |
 | `scene_assets[]` | 是 | 固定 1 张场景卡，包含地点、时间、光线、氛围、关键物件、空间逻辑，以及 4-6 个场景小切图描述，用一张多切图场景资产图覆盖剧本所需环境参考。 |
 | `storyboard_script` | 部分可见 | 轻量拍摄计划，用普通用户语言表达；专业分镜表留在内部。 |
 | `core_storyboard_groups[]` | 是 | MVP 新建流程固定 1 个确认后的电影感核心时刻，作为一个 15 秒内视频片段。旧数据可能保留多组。 |
@@ -124,7 +124,7 @@ StoryCam 不是：
   -> 剧本 + 人物资产 + 场景资产
   -> 用户确认故事世界
   -> 1 份 9 帧分镜脚本 + 1 个核心分镜组
-  -> 用户打开 9 帧画布并可选点击中心图扩展 8 帧
+  -> 用户在内联 9 帧工作台点击中心图扩展 8 帧
   -> 确认后的组成为 clip prompt packet
   -> 生成一个 Seedance 2.0 视频片段
   -> 用户确认片段
@@ -145,7 +145,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 - 用户文本想法。
 - 轻导演选项。
 - Phase 1 允许上传的照片。
-- 可选模板入口：暗恋雨夜、宠物、小说角色、情绪短片。
+- 可选模板入口：暗恋雨夜、宠物、小说角色、情绪短片、手绘旅行 VLOG。
 
 产出：
 
@@ -157,10 +157,14 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 约束：
 
 - `script.summary` 和 `script.beats` 只表达短剧本层面的剧情、角色动作、对白/可听声音、关键物件和环境变化；不要提前输出景别、机位、运镜、构图、剪辑、镜头编号或 Shanyin-style 分镜表。
+- `script.directorBrief` 是内部导演简报，字段包括 `tone`、`visualMotifs[]`、`dialogueStrategy`、`soundStrategy`、`microRhythm`、`shotDensity`、`shotSizeFocus`、`transitionStrategy`、`userFacingSummary`；前台不展示专业字段，只用于分镜、扩展卡和视频 prompt。
+- `script.directorBrief.microRhythm` 默认按 15 秒微型节奏描述：建立状态、动作推进、反应/转折、留白收束。
 - 人物资产只覆盖主角级/关键对手戏人物，最多 3 个；背景人群、路人、短暂提及人物不单独建资产。
+- 会正面出镜、持续互动或承担情感关系的角色必须有人物资产；宠物故事里如果主人会出现在门口、抚摸、团聚或同框，宠物和主人都必须建资产，否则主人只能用离屏声音、门、灯光或物件变化表达。
 - 场景资产固定只有 1 个。这个唯一场景用 `scenePanels` 描述 4-6 个小切图，包括主场景、关键物件、光线、动作空间或转场角度。
 - `script.visualStyle` 作为人物资产图和场景资产图共享的视觉风格锚点，应从用户输入和剧本语境推断，可以是写实电影感、漫画、动画、绘本、胶片等，不固定成某一种风格。
 - 场景资产图必须是无人环境资产板，不画人物、人物倒影、剪影、身体局部或人群；角色一致性只由人物资产和后续分镜/视频阶段负责。
+- `手绘旅行 VLOG` 模式要求用户上传 1 张本人照片并指定旅行地；故事世界固定为轻剧情 VLOG，生成 1 个由照片转译出的手绘旅行主角资产，以及 1 张同一真实旅行地内含 4-6 个无人小切图的路线场景资产板。
 
 需要的 AI 能力：
 
@@ -188,7 +192,10 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 - 1 份 `storyboard_script`
 - 1 个 `core_storyboard_groups[]`
 - 每份 `storyboard_script` 包含固定 9 帧结构化分镜：第 1 帧是核心分镜主图，后 8 帧用于扩展画布。
+- `storyboard_script` 和 `core_storyboard_groups[]` 可以先于核心分镜代表图返回；UI 必须先展示分镜脚本，再在原画布内等待第 1 帧主图生成。
 - 分镜脚本是已确认 `script` 的内部改编，必须继承 `character_assets[]` 和 `scene_assets[]`，不得另造人物、地点、服装、道具或空间逻辑。
+- 每帧分镜必须记录本帧允许出镜的 `visibleCharacterAssetIds`；分镜图生成只能渲染这些人物资产，未列入资产的主人、路人、人影、手、背影或剪影必须改为离屏效果。
+- 分镜脚本必须应用内部 Shanyin-style 切镜连接逻辑：相邻帧避免连续同景别或相邻景别，也避免连续同角度，风景/旅行段落避免连续同类风景图；通过动作-反应、递进、因果或对比组，以及全景/近景/大特写/中远景/全景空镜等跨级景别节奏组织画面。
 
 核心分镜组数量规则：
 
@@ -205,7 +212,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 模型选择边界：
 
 - 具体文本模型和 prompt 编排在 PLAN 中确定。
-- 核心分镜代表图由对应组 `storyboard_script.frames[0].imagePrompt` 指导，但视觉基础必须是已生成的角色资产图和场景资产图。
+- 核心分镜代表图由对应组 `storyboard_script.frames[0].imagePrompt` 指导，但视觉基础必须是已生成的角色资产图和场景资产图，并且只能渲染该帧 `visibleCharacterAssetIds` 指定的人物资产。
 - 如果角色/场景资产图尚未 ready，核心分镜图保持等待占位，不提交纯文本生图任务。
 
 ### 3. 扩展分镜生成
@@ -227,10 +234,11 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 - 根据父核心组的 9 帧脚本生成进入、动作、反应、氛围、转场、情绪点等卡片。
 - 保持人物、场景、情绪连续。
 - 把 Shanyin 的镜头组逻辑转译为普通用户能看懂的“这一段会这样拍”。
+- 扩展分镜图应承接脚本里的景别/角度节奏；同一地标连续出现时必须改变景别、角度、动作/反应角色或画面信息量，避免把相邻镜头硬凑在一起。
 
 模型选择边界：
 
-- 扩展卡来自已生成的结构化分镜脚本；每张卡的图片使用该帧原始 `imagePrompt`，并必须引用同一组角色/场景资产图作为视觉基础。
+- 扩展卡来自已生成的结构化分镜脚本；每张卡的图片使用该帧原始 `imagePrompt`，并必须引用同一组角色/场景资产图作为视觉基础，只允许该帧 `visibleCharacterAssetIds` 中的人物出镜。
 - 不支持资产图参考的生图 provider 不允许降级为纯文本分镜图。
 - 扩展卡默认不触发视频生成。
 
@@ -251,7 +259,7 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 
 - 结构化组装和校验，不一定需要 AI。
 - 必须记录上游 artifact versions。
-- 必须生成用户可见的一句话 provider-send confirmation，而不是展示完整 packet。
+- 可以生成一句话 provider boundary summary 供任务状态或审计使用，但客户端不展示完整 packet。
 
 ### 5. 视频片段生成
 
@@ -299,12 +307,12 @@ StoryCam 的生成不是一次黑盒调用，而是分阶段把用户输入变�
 Phase 1 要做的是最小但真实的产品魔法路径：
 
 1. 固定第一条样例路径：`我想把暗恋拍成韩剧雨夜`。
-2. 同时保留宠物、小说角色、情绪短片入口，但可以暂时不支持完整生成。
+2. 同时保留宠物、小说角色、情绪短片、手绘旅行 VLOG 入口；手绘旅行 VLOG 首版要求 1 张本人照片和 1 个用户指定旅行地。
 3. 用户可以输入自己的想法，也可以上传照片；产品可以温和地偏向“私人记忆预告片”格式。
 4. 生成并确认一个紧凑故事世界：默认更像短剧本，同时包含人物和地点资产。
 5. 固定生成 1 个 15 秒内核心分镜组。
-6. 可选打开 9 帧画布，并点击中心主图展开 8 张指导卡/图。
-7. 在真实视频生成前展示一句话 provider-send 确认。
+6. 在核心分镜页的内联 9 帧工作台点击中心主图，展开 8 张指导卡/图。
+7. 点击 `用这一组生成片段` 后立即进入片段生成页，并在目标页内用普通语言表达视频服务边界。
 8. 通过异步 job 生成真实 Seedance 2.0 clip。
 9. 如果 Seedance 2.0 输出质量不稳定，第一救援路径是重拍这一段。
 10. 真实合成 final video。
@@ -329,7 +337,7 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 1. 在视频生成前，让用户看见故事正在成形。
 2. UI 使用普通用户语言，专业电影术语保留在内部。
 3. 让视频生成单位足够清楚：一个核心分镜组生成一个片段。
-4. 任何私人故事数据发送给外部视频 provider 前，必须让用户明确确认。
+4. 任何私人故事数据发送给外部视频 provider 前，必须完成故事世界确认与 8 张扩展分镜要求，并在片段生成页给出普通语言的边界提示。
 5. 优先做一条窄而有魔法感的路径，而不是宽而未完成的工作台。
 6. 失败、重试、取消和救援路径是一等产品状态，不是工程附属品。
 7. 不伪造真实视频成功。mock mode 用来跑通本地流程，不代表产品验证成功。
@@ -349,13 +357,12 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 - 想法输入框。
 - 照片上传入口，Phase 1 允许上传人物、宠物、场景或记忆照片。
 - 轻导演选项：
-  - `更遗憾一点`
-  - `更甜一点`
-  - `像私人回忆`
-  - `少说话，多画面`
-  - `加一句旁白`
-  - `停在没说出口`
-  - `给一点希望`
+  - 私人记忆：`留白多一点`、`像旧照片`、`雨夜韩剧感`、`靠小动作推进`
+  - 宠物小剧场：`低机位跟随`、`日常观察感`、`温暖回家感`、`轻喜剧反应`
+  - 小说角色：`初登场感`、`世界观更强`、`预告片节奏`、`英雄式剪影`
+  - 情绪短片：`空镜多一点`、`像一阵风`、`声音先走`、`情绪慢慢压上来`
+  - 手绘旅行 VLOG：`手绘角色感`、`真实旅行地`、`轻剧情 VLOG`、`自然走拍`
+- 手绘旅行 VLOG 的紧凑旅行地输入；该模式未上传照片或未填写旅行地时，不允许提交。
 - 主 CTA：`生成故事雏形`
 - 信任标记：`默认私密，只有你确认后才会发送生成视频`
 
@@ -384,6 +391,12 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 ### 2. 故事世界确认
 
 用户目标：判断 StoryCam 是否理解了感觉、人物和地点。
+
+进入规则：
+
+- 点击 `生成故事雏形` 后立即进入 `/storycam/story-world`。
+- 剧本、人物和地点尚未返回时，在故事世界板块内显示局部生成中状态，不停留在输入页等待。
+- 生成失败时仍停留在故事世界板块，提供 `重试生成` 和 `返回修改`。
 
 可见区域：
 
@@ -421,6 +434,8 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 
 必须覆盖的状态：
 
+- 故事世界生成中
+- 故事世界生成失败
 - 故事世界 ready
 - 用户编辑了剧本
 - 用户锁定某个人物或场景资产
@@ -468,7 +483,7 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 
 主动作：
 
-- `打开 9 帧画布`
+- `等待分镜完成`
 - `用这一组生成片段`
 
 次要动作：
@@ -481,6 +496,9 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 - 用户理解每个核心分镜组都可以生成一个 clip。
 - UI 不暗示每张 storyboard card 都会单独生成视频。
 - 系统不为了凑数生成多组；MVP 新建流程始终只生成 1 组。
+- 用户确认故事世界后立即进入核心分镜板块；分镜脚本和主分镜图尚未返回时，在核心分镜原布局内显示局部生成中骨架。
+- 如果分镜脚本已返回但第 1 帧主图还在提交或生成中，右侧脚本先展示真实内容，中心主图保留等待/生成状态。
+- 核心分镜生成失败时仍停留在核心分镜板块，提供 `重试生成` 和 `返回故事世界`。
 
 ### 4. 扩展画布
 
@@ -489,8 +507,8 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 画布行为：
 
 - 被选中的核心分镜组固定在中心。
-- 初次打开画布只显示中心第 1 帧。
-- 用户点击中心主图后，周围 8 个 slot 以动效展开并开始生成扩展分镜图。
+- 初次进入画布时只显示中心第 1 帧；周围 8 个扩展 slot 在用户点击中心主图后才出现。
+- 用户点击中心主图后，周围 8 个 slot 开始生成扩展分镜图。
 - 默认扩展 8 张卡/图。
 - 中心主图 + 周围 8 张扩展图，共 9 个固定槽位。
 - 未生成 slot 展示稳定 waiting/loading 状态。
@@ -537,34 +555,40 @@ Phase 1 不把第一个 clip 直接当作最终完成状态跳过合成；即使
 - 扩展卡默认仍是父核心分镜组的子对象。
 - 用户可以跳过扩展，直接生成片段。
 
-### 5. 视频服务发送确认
+### 5. 视频服务边界
 
-用户目标：在真实视频生成前，知道会发送什么。
+用户目标：点击生成片段后立即进入目标页，并知道片段生成已经进入外部视频服务边界。
 
-必须出现的文案：
+可使用的边界文案：
 
 > 下一步会把这段故事设定发送给视频生成服务生成片段。发送内容包括故事摘要、人物/地点描述和这一段的分镜说明，不包含隐藏日志。
 
-确认粒度：
+边界表达：
 
-- Phase 1 使用一句话确认即可。
+- Phase 1 不再使用二次发送确认；点击 `用这一组生成片段` 后立即进入 `/storycam/clip-generation` 并创建视频任务。
+- 片段任务尚未创建完成时，在片段生成页原布局内显示局部生成中骨架。
+- 创建任务 pending 时，同一局部框内展示普通语言边界提示，例如“正在把这组分镜发送给视频生成服务，完成后会在这里继续显示进度。”
 - 不需要展示完整字段摘要。
 - 不展示完整 prompt packet。
 - 不展示 Shanyin-style 内部 shot data。
+- 可以展示普通用户可理解的输出规格，例如 `720p`、`16:9` / `9:16`、片段时长和 `Seedance 2.0` / `Seedance 2.0 Fast`。
+- 输出画幅在输入页选择，进入故事生成后锁定；分镜图、clip prompt 和最终视频请求都必须使用会话锁定画幅。
+- 视频模型在片段生成前选择，影响本次视频任务的 provider variant，不影响已确认的故事世界和分镜文本。
 
 主 CTA：
 
-- `发送并生成片段`
+- `片段生成中`
+- `导出 MP4`
 
 次要动作：
 
-- `再改一下`
-- `取消`
+- `返回核心分镜`
+- `重试生成`
 - `删除这个故事`
 
 验收标准：
 
-- 未经明确确认，不启动真实视频 provider 调用。
+- 未补齐 8 张扩展分镜图前，不启动真实视频 provider 调用。
 - 用户能看到普通语言描述的 provider boundary。
 - Provider API key 和原始 provider payload 永远不出现在客户端。
 
@@ -601,9 +625,11 @@ Job 行为：
 - 用户能看到进度，并有救援路径。
 - 失败时保留已完成的故事工作，并允许重试或重生成。
 
-### 7. 片段确认
+### 7. 片段生成页内预览与确认
 
 用户目标：判断生成片段是否接近自己的想象。
+
+片段生成、预览、重拍、最终作品保存和 MP4 导出都在 `/storycam/clip-generation` 完成。旧的 `clip-review` 和 `export` 仅作为历史状态兼容，不作为独立可导航流程步骤。
 
 可见问题：
 
@@ -611,8 +637,9 @@ Job 行为：
 
 主动作：
 
-- `保存`
-- `拼成最终作品`
+- 片段 ready 后自动保存最终作品。
+- 保存失败时显示 `重试保存`。
+- 保存成功后显示 `导出 MP4`，点击后应直接下载文件，不跳转到浏览器原生视频页。
 
 次要动作：
 
@@ -628,7 +655,7 @@ Job 行为：
 - 产品能收集轻量反馈，但不把用户变成 QA 操作员。
 - 如果片段质量不稳定或不符合预期，第一救援路径是重拍这一段。
 
-### 8. 拼接建议和最终作品
+### 8. 拼接建议、最终作品和导出
 
 用户目标：不用打开复杂编辑器，也能让 StoryCam 完成作品。
 
@@ -648,12 +675,13 @@ Job 行为：
 
 主 CTA：
 
-- `生成最终作品`
+- 片段 ready 后自动保存最终作品。
+- 最终作品保存成功后显示 `导出 MP4`，通过账号鉴权的同源下载完成文件保存，不暴露原始 Storage 路径或 signed URL。
 
 次要动作：
 
 - `更像预告片`
-- `更像私人回忆`
+- `更像旧照片`
 - `更快一点`
 - `更慢一点`
 - `调整顺序`
@@ -663,7 +691,7 @@ Job 行为：
 - 最终目标仍是 10-15 秒。
 - 用户不需要时间线编辑器也能完成。
 - 拼接建议保持轻量、用户可理解。
-- 第一版真实视频生成成功后只支持保存到用户账号和预览，不支持分享链接。
+- 第一版真实视频生成成功后只支持保存到用户账号、预览和下载 MP4，不支持分享链接。
 
 ## 时长规则
 
@@ -710,7 +738,7 @@ narrative_purpose
 - `镜头会先看到...`
 - `这里会停一下`
 - `雨声和门铃会在这里出现`
-- `这一段更像私人回忆`
+- `这一段会先安静等待，再用一个小动作完成转折`
 
 用户需要看到的是核心方案和可确认的故事/分镜/片段，不需要知道 Shanyin-style 专业表格、九列字段或内部 shot data。
 
@@ -803,6 +831,7 @@ estimated_clip_duration
 characters[]
 scene
 expanded_storyboard_card_ids[]
+continuity_anchor_note: expanded storyboard images should use this core thumbnail as the spatial reference when available
 clip_status
 clip_result_id
 state
@@ -822,6 +851,7 @@ emotion
 dialogue_or_subtitle
 sound_hint
 duration_hint
+continuity_anchor_note: fixed scene anchors from the core storyboard and scene asset must stay on the same side/location
 state
 version
 ```
@@ -874,7 +904,8 @@ POST /story-world
 
 POST /storyboard
   confirmed script/assets
-  -> one 9-frame storyboard script + one core storyboard group + first-frame image job
+  -> one 9-frame storyboard script + one core storyboard group
+  -> frontend submits first-frame image job after script is visible
 
 POST /storyboard-groups/:id/expand
   selected core group
@@ -913,12 +944,12 @@ Provider 概念：
 
 - `generation_mode`：`mock` 或 `real`
 - `provider_kind`：`text`、`image`、`video` 或 `stitch`
-- `provider_name`：`mock`、`seedance_2_0` 或未来 provider name
+- `provider_name`：`mock`、`seedance_2_0`、`seedance_2_0_fast` 或未来 provider name
 
 产品规则：
 
 - Mock mode 可以完整跑通流程，不调用外部 AI 生成服务。
-- Real video mode 必须先经过一句话 provider-send confirmation。
+- Real video mode 必须先完成故事世界确认和 8 张扩展分镜图检查。
 - MVP 中 Seedance 2.0 调用数等于确认的核心分镜组数量，新建流程固定为 1。
 - 扩展分镜卡不会自动创建额外视频调用。
 - Provider error 展示给用户或写入日志前必须脱敏。
@@ -931,7 +962,7 @@ Always：
 
 - 首次提交前展示默认私密文案。
 - 第一版使用账号登录，首选 Google 登录。
-- 真实视频生成前展示一句话 provider-send confirmation。
+- 真实视频生成前后用普通语言展示视频 provider 边界，不展示完整 packet。
 - 允许用户删除故事/session。
 - 日志、analytics、error payload、debug snapshot、support bundle 中不得出现原始私人输入。
 - Provider API key 只存在服务端。
@@ -941,7 +972,7 @@ Never：
 
 - 把原始私人故事文本写入 server logs。
 - 在客户端错误中展示完整 prompt packet。
-- 未经明确确认就向视频 provider 发送数据。
+- 未完成故事世界确认和扩展分镜要求就向视频 provider 发送数据。
 - 把 mock 生成结果当作用户需求验证。
 
 删除语义：
@@ -1001,41 +1032,45 @@ Never：
 - 数据库：Supabase Postgres。
 - 媒体存储：Supabase Storage，保存上传照片、生成视频片段、最终作品和封面。
 - AI SDK：Vercel AI SDK 作为服务端 AI 编排层。
-- 文生/图生模型：优先使用 OpenRouter 中可用的文本、多模态和图像模型，通过 provider adapter 接入。
+- 文生/图生模型：通过 provider adapter 接入；story-world 文本当前优先 DeepSeek strict tool calling，storyboard/多模态仍可使用 OpenRouter，图像当前优先 Inference.sh `openai/gpt-image-2`。
 - 视频生成：Seedance 2.0 通过独立 `VideoGenerationProvider` 接入。
 - Job：使用数据库 job 状态机 + 可替换 runner，真实 provider path 必须能轮询、取消、超时和丢弃晚到结果。
-- 媒体合成：PLAN 中比较 FFmpeg、Remotion 或云端媒体服务。
+- 媒体合成：通过 final-work provider/composer 边界实现；Phase 1 仍不暴露公开分享。
 
-PLAN 需要明确最终技术栈、目录结构、依赖、API contract、job lifecycle、provider mode、测试命令和部署边界。
+工程实现需要保持技术栈、目录结构、依赖、API contract、job lifecycle、provider mode、测试命令和部署边界与 `docs/ARCHITECTURE.md`、`docs/generated/` 和 `docs/PR_REVIEW.md` 同步。
 
 ## 命令
 
-当前仓库主要是文档和静态设计参考。Web app scaffold 后，实施计划假设支持以下命令：
+当前仓库已经包含 Web app、服务端 route handlers、Supabase repository/service 边界、provider adapters 和浏览器测试。常用命令：
 
 ```bash
 pnpm install
 pnpm dev
 pnpm storycam:seed
-pnpm storycam:reset
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm test:api
 pnpm test:e2e
 pnpm qa:visual
+pnpm storycam:verify:mock
+scripts/check-local.sh
+scripts/check-pr.sh
+scripts/check-dev.sh
+scripts/check-release.sh
 ```
 
-在 app 尚未存在前，文档验证以人工 review 为主；后续可加入 markdown/link checks。
+本地与 CI 使用渐进式 gate：local 轻量、PR fast、dev integration、main release。真实 provider smoke tests 仍然是 secret-gated opt-in。
 
 ## 项目结构
 
 Canonical 文档必须放在 `docs/` 下。
 
-当前和预期文档结构：
+当前文档结构：
 
 ```text
 AGENTS.md                                  智能体入口地图
-ARCHITECTURE.md                            系统架构地图
+docs/ARCHITECTURE.md                       系统架构地图
 docs/
   README.md                                  项目文档索引
   product-specs/
@@ -1048,13 +1083,16 @@ docs/
     storycam-ui-design.md                   实用 UI 设计 brief
     assets/                                 UI 图片和参考素材
   exec-plans/
-    active/
-    storycam-web-mvp-implementation-plan.md 工程实施计划
-    test-plan.md                            测试计划
+    active/                                当前 feature plans，可为空
     completed/
+      phase-1-web-mvp-plan.md              历史 MVP 实施计划
+      phase-1-mvp-tests.md             历史测试计划
     tech-debt-tracker.md                    技术债追踪
   generated/
+    api-contract.md                         API snapshot
     db-schema.md                            数据库 schema 摘要
+    job-lifecycle.md                        job lifecycle snapshot
+    provider-contract.md                    provider boundary snapshot
   references/
     shanyin-director-master-source.md       参考来源和集成说明
     shanyin-director-master/                本地导演脑方法论快照
@@ -1068,21 +1106,22 @@ docs/
   SECURITY.md
 ```
 
-Web app scaffold 后的预期结构：
+当前 app 结构：
 
 ```text
 src/
   app/                                      Next.js App Router pages/routes
-  components/                               用户可见 UI 组件
-  features/storycam/                        StoryCam 领域流程
-  lib/providers/                            Mock 和真实 provider 边界
-  lib/jobs/                                 异步 job 编排
+  components/ui/                            shadcn-style primitives
+  components/storycam/                      StoryCam 用户可见 UI 和 composition wrappers
+  features/storycam/                        StoryCam client API/state/types
+  server/storycam/                          server-only services/repositories
+  server/ai/                                AI SDK/proxy helpers
+  lib/providers/                            provider result/error contracts
   lib/privacy/                              脱敏和删除工具
-  server/                                   服务端 actions/routes
 tests/
-  unit/
   api/
-e2e/
+  e2e/
+  scripts/
 ```
 
 ## 代码风格
@@ -1112,6 +1151,7 @@ function canGenerateClip(group: CoreStoryboardGroup): boolean {
 
 - 产品术语保持一致：`story world`、`core storyboard group`、`expanded storyboard card`、`clip prompt packet`、`generated clip`、`final work`。
 - 避免在 UI 文案中暴露 `prompt packet`、provider payload 或专业分镜表术语。
+- 输出规格可以用产品语言展示，例如 `720p`，但不展示完整 provider payload。
 - Provider-specific 代码必须放在 provider boundary 后面。
 - 当下游生成依赖上游内容时，优先使用 versioned artifacts。
 
@@ -1123,7 +1163,7 @@ function canGenerateClip(group: CoreStoryboardGroup): boolean {
 - 一个核心分镜组同一时间最多对应一个 active video generation job。
 - 扩展卡不会创建视频 job，除非未来显式引入该高级功能。
 - 编辑上游 artifact 会让下游 prompt packet 和 job 变为 stale。
-- 一句话 provider-send confirmation gate 住所有真实视频调用。
+- 故事世界确认和扩展分镜完整性 gate 住所有真实视频调用。
 - 删除/取消后，晚到 provider 结果不会重新出现在用户 session 中。
 - Mock mode 可以在没有外部 provider credentials 的情况下跑完整流程。
 - Real provider smoke tests 必须 opt-in 且 secret-gated。
@@ -1166,7 +1206,7 @@ Never：
 - 把 StoryCam 做成工业化短剧生产后台。
 - 提交 secrets 或真实 provider credentials。
 - 记录原始私人想法、完整剧本、完整 prompts、signed media URLs 或 provider secrets。
-- 未经明确确认启动真实视频生成调用。
+- 未完成故事世界确认和扩展分镜要求就启动真实视频生成调用。
 - 伪造真实视频结果，并称为 MVP 验证。
 - 向用户导出 Shanyin-style shot data 或九列分镜表。
 
@@ -1212,10 +1252,10 @@ Phase 1 具体验收：
 
 轻导演选项：
 
-- `更遗憾一点`
-- `像私人回忆`
-- `少说话，多画面`
-- `停在没说出口`
+- `留白多一点`
+- `像旧照片`
+- `雨夜韩剧感`
+- `靠小动作推进`
 
 剧本：
 

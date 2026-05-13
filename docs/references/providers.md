@@ -13,6 +13,8 @@ StoryCam defaults to mock mode. Mock mode must be deterministic, account-scoped,
 ```text
 STORYCAM_GENERATION_MODE=mock
 STORYCAM_TEXT_PROVIDER=mock
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock
+STORYCAM_STORYBOARD_TEXT_PROVIDER=mock
 STORYCAM_MULTIMODAL_PROVIDER=mock
 STORYCAM_IMAGE_PROVIDER=mock
 STORYCAM_VIDEO_PROVIDER=mock
@@ -27,7 +29,8 @@ Real provider smoke tests are never part of the default local flow. They require
 
 ```text
 STORYCAM_GENERATION_MODE=real
-STORYCAM_TEXT_PROVIDER=deepseek
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek
+STORYCAM_STORYBOARD_TEXT_PROVIDER=openrouter
 STORYCAM_MULTIMODAL_PROVIDER=openrouter
 STORYCAM_IMAGE_PROVIDER=inference_sh
 STORYCAM_VIDEO_PROVIDER=seedance_2_0
@@ -59,10 +62,10 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 | StoryCam stage | Default | Real path | Notes |
 | --- | --- | --- | --- |
 | Story world text | mock | DeepSeek official strict tool calling | Uses `deepseek-v4-pro` through `/beta` Chat Completions, forces `submit_story_world`, parses tool arguments, and validates normalized StoryCam artifacts. StoryCam normalizes the visual route to private comic-film / animated-storyboard style, not photorealistic real-person drama. Raw prompts stay server-side. |
-| Core storyboard text | mock | OpenRouter text | MVP creation uses confirmed script, character assets, and scene asset to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. Image prompts should describe stylized comic animation storyboard frames with fictional illustrated characters. |
+| Core storyboard text | mock | OpenRouter text | MVP creation uses confirmed script, character assets, and scene asset to create one 9-frame storyboard script, one core group, and one main-image prompt from frame 01. The group targets about 15 seconds. User-facing storyboard text must be Simplified Chinese; only internal image prompts should describe stylized comic animation storyboard frames with fictional illustrated characters in English when useful for image generation. Storyboard scripts apply internal Shanyin-style shot connection logic so adjacent frames avoid repeated shot size and neighboring shot-size scale, scene-heavy frames vary establishing/action/reaction/detail/empty beats, and important turns use clear cross-scale shot-size or viewpoint contrast. |
 | Photo understanding | mock | OpenRouter multimodal | Signed URLs and raw private photos must not appear in logs. |
-| Story-world asset image | placeholder/mock | Inference.sh app | Uses the official `@inferencesh/sdk` with `INFERENCE_IMAGE_APP=openai/gpt-image-2`; production routes submit async tasks with `wait:false`, poll `generation_jobs`, then download completed output server-side into private StoryCam storage. The app requires an Inference.sh API key and its required `OPENAI_KEY` secret configured in Inference.sh. Character boards should be comic-animation model sheets, not real-person likeness boards. |
-| Core/expanded storyboard image | placeholder/mock | Inference.sh `openai/gpt-image-2` | Storyboard images use ready character and scene asset images as `images[]` visual references plus the stored frame prompt. Pure-prompt providers return placeholders instead of generating off-text. The default target is stylized comic animation with consistent fictional illustrated characters. |
+| Story-world asset image | placeholder/mock | Inference.sh app | Uses the official `@inferencesh/sdk` with `INFERENCE_IMAGE_APP=openai/gpt-image-2`; production routes submit async tasks with `wait:false`, poll `generation_jobs`, then download completed output server-side into private StoryCam storage. The app requires an Inference.sh API key and its required `OPENAI_KEY` secret configured in Inference.sh. Character boards should be comic-animation model sheets, not real-person likeness boards. In `handdrawn-travel-vlog`, scene boards stay photographic, real-world, and destination-specific because the hand-drawn style applies only to the traveler. |
+| Core/expanded storyboard image | placeholder/mock | Inference.sh `openai/gpt-image-2` | Storyboard images use ready character and scene asset images as `images[]` visual references plus the stored frame prompt. Expanded storyboard images also use the ready core storyboard thumbnail as the spatial continuity anchor when it exists, so fixed landmarks, wall cracks, plants/flowers, doors, windows, and left/right relationships do not drift across the 9-frame group. Pure-prompt providers return placeholders instead of generating off-text. The default target is stylized comic animation with consistent fictional illustrated characters. In `handdrawn-travel-vlog`, the scene reference must stay real travel-location photography while only the traveler is a 2D hand-drawn illustrated character. |
 | Video clip | mock video | Seedance 2.0 | MVP creation generates one clip for the confirmed core storyboard group. The server creates a 9-frame clip prompt packet with native audio direction, submits a Seedance task with comic storyboard image references and `generate_audio: true`, polls by provider task id or receives a webhook update, then downloads `content.video_url` into private storage. Reference media URLs sent to Seedance must be public HTTPS URLs, not local Supabase signed URLs. |
 | Final work | mock/FFmpeg fixture | FFmpeg composer | Account-scoped preview only. |
 
@@ -71,7 +74,7 @@ SEEDANCE_MODEL=doubao-seedance-2-0-260128
 Story-world text generation should use DeepSeek's official beta strict function calling path instead of OpenRouter structured output. Configure:
 
 ```text
-STORYCAM_TEXT_PROVIDER=deepseek
+STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek
 DEEPSEEK_API_KEY=
 DEEPSEEK_TEXT_MODEL=deepseek-v4-pro
 DEEPSEEK_TEXT_BASE_URL=https://api.deepseek.com/beta
@@ -129,7 +132,7 @@ Provider draft schemas should be tolerant at the provider boundary and strict at
 
 When reproducing local API behavior with `curl`, use `--noproxy '*'` for localhost if your shell has proxy env vars. Otherwise the request can be routed through a system proxy and return an empty `502`, which looks like a StoryCam/API failure but never reached the Next.js route.
 
-When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_TEXT_PROVIDER=deepseek`, the dev shell likely exported `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
+When `/api/story-world` appears to return the same mock fixture instantly, check `diagnostics.textProvider` or `x-storycam-text-provider`. If it is `mock` while `.env.local` says `STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek`, the dev shell likely exported `STORYCAM_STORY_WORLD_TEXT_PROVIDER=mock` or the legacy `STORYCAM_TEXT_PROVIDER=mock`; process env wins over `.env.local`.
 
 ## Safety Rules
 
@@ -152,6 +155,10 @@ Seedance video generation is asynchronous. The provider contract is:
 The browser should never poll Seedance directly. StoryCam should create or update a local `generation_jobs` row, store the provider task id when submission succeeds, and let the client poll StoryCam with slow backoff. Production can replace client polling with a webhook-updated job plus SSE or realtime updates, but the provider-facing communication remains server-side.
 
 StoryCam clip generation enables Seedance native audio by default with `generate_audio: true`. The provider prompt packet must include audio direction that follows the confirmed storyboard script and reference frames: rain ambience, store-door chime, footsteps or fabric movement, restrained background music, and sparse dialogue/inner voice only when it supports the visual beat. The generated `content.video_url` is still the single mp4 result and should be downloaded to private storage before expiry.
+
+StoryCam supports two product-facing Seedance variants: `seedance_2_0` (`SEEDANCE_MODEL`, default `doubao-seedance-2-0-260128`) and `seedance_2_0_fast` (`SEEDANCE_FAST_MODEL`, default `doubao-seedance-2-0-fast-260128`). Both variants support the StoryCam-exposed `16:9` and `9:16` output ratios. Store the submitted variant in `generation_jobs.provider_name` and use it to choose the provider while polling. Do not silently downgrade a selected Fast request to regular `seedance_2_0`; if Fast task creation fails, record the failed job against `seedance_2_0_fast` so the UI accurately reports that the selected model was not used.
+
+StoryCam sends `resolution: "720p"` explicitly for the v1 cost profile. The current Volcengine AI experience for `Doubao-Seedance-2.0 260128` shows `1080p` as the selected UI default, but StoryCam keeps the lower-cost 720p setting until the product has an explicit quality/cost control. UI may show this as the product-facing output spec `720p`; do not expose the full provider payload.
 
 Seedance must be able to fetch every referenced image/video/audio URL. StoryCam signs provider reference media with `STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS` (default 3600 seconds) instead of the UI preview TTL. Local Supabase Storage URLs such as `localhost`, `127.0.0.1`, or `::1` are rejected before provider submission and recorded as failed local jobs. For real image-reference testing from local development, run local Next.js against a hosted Supabase dev/staging project so the signed Storage URLs are public HTTPS.
 

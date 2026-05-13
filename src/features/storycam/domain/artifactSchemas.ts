@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { artifactStates, artifactTypes } from "./artifacts";
+import { storyModeIds } from "./storyModes";
 
 const idSchema = z.string().min(1);
 const isoDateSchema = z.string().datetime({ offset: true });
@@ -24,12 +25,27 @@ export const versionedArtifactSchema = artifactIdentitySchema.extend({
   updatedAt: isoDateSchema
 });
 
+export const directorBriefSchema = z.object({
+  dialogueStrategy: z.string().min(1),
+  microRhythm: z.string().min(1),
+  shotDensity: z.string().min(1),
+  shotSizeFocus: z.string().min(1),
+  soundStrategy: z.string().min(1),
+  tone: z.string().min(1),
+  transitionStrategy: z.string().min(1),
+  userFacingSummary: z.string().min(1),
+  visualMotifs: z.array(z.string().min(1)).min(1).max(6)
+});
+
 export const storyScriptSchema = artifactIdentitySchema.extend({
   title: z.string().min(1),
   logline: z.string().min(1),
   summary: z.string().min(1),
+  storyModeId: z.enum(storyModeIds).optional(),
   visualStyle: z.string().min(1).optional(),
-  beats: z.array(z.string().min(1)).min(1).max(8)
+  beats: z.array(z.string().min(1)).min(1).max(8),
+  directorBrief: directorBriefSchema.optional(),
+  qualityChecks: z.array(z.string().min(1)).default([])
 });
 
 export const characterAssetSchema = artifactIdentitySchema.extend({
@@ -94,7 +110,8 @@ export const storyboardFrameSchema = z.object({
   narrativePurpose: z.string().min(1),
   title: z.string().min(1),
   beatType: z.enum(storyboardFrameBeatTypes),
-  imagePrompt: z.string().min(1)
+  imagePrompt: z.string().min(1),
+  visibleCharacterAssetIds: z.array(idSchema).max(3).optional()
 });
 
 export const storyboardScriptSchema = artifactIdentitySchema.extend({
@@ -130,17 +147,20 @@ export const expandedStoryboardCardSchema = artifactIdentitySchema.extend({
   description: z.string().min(1),
   guidance: z.string().min(1),
   imagePrompt: z.string().min(1).optional(),
+  visibleCharacterAssetIds: z.array(idSchema).max(3).optional(),
   mediaAssetId: idSchema.optional()
 });
 
 export const clipPromptPacketSchema = artifactIdentitySchema.extend({
   coreGroupId: idSchema,
+  aspectRatio: z.enum(["16:9", "9:16"]).default("16:9"),
   providerSendConfirmed: z.literal(true),
   confirmationSummary: z.string().min(1),
   inputArtifactVersions: z.record(idSchema, positiveVersionSchema),
   plannedDurationSeconds: z.number().positive().optional(),
   providerPrompt: z.string().min(1).optional(),
   redactedPromptSummary: z.string().min(1),
+  resolution: z.enum(["480p", "720p", "1080p"]).default("720p"),
   storyboardScriptId: idSchema.optional(),
   storyboardFrames: z
     .array(

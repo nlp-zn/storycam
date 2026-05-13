@@ -26,10 +26,20 @@ export function AssetCard({
   const isScene = tone === "scene";
   const previewLines = lines.slice(0, isScene ? 3 : 2);
   const Tag = onOpen ? "button" : "article";
+  const label = statusLabel(status);
+  const cardClassName = [
+    "storycam-glass storycam-asset-card",
+    `storycam-asset-card--${status}`,
+    isScene ? "storycam-asset-card--scene" : "storycam-asset-card--character",
+    layout === "wide" ? "storycam-asset-card--wide" : "",
+    "group overflow-hidden p-2 text-left transition hover:border-[#00f0ff]/50 focus-visible:border-[#00f0ff] focus-visible:outline-none"
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <Tag
-      className={`storycam-glass storycam-asset-card ${isScene ? "storycam-asset-card--scene" : "storycam-asset-card--character"} ${layout === "wide" ? "storycam-asset-card--wide" : ""} group overflow-hidden p-2 text-left transition hover:border-[#00f0ff]/50 focus-visible:border-[#00f0ff] focus-visible:outline-none`}
+      className={cardClassName}
       data-testid={`story-world-${tone}-asset-card`}
       onClick={onOpen}
       type={onOpen ? "button" : undefined}
@@ -48,7 +58,11 @@ export function AssetCard({
             }}
             src={imageUrl}
           />
-        ) : null}
+        ) : (
+          <div className="storycam-asset-frame-empty">
+            <span>{label}</span>
+          </div>
+        )}
         <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
           <span className="rounded-full border border-white/15 bg-black/50 px-3 py-1 text-xs font-black text-[#dbfcff] backdrop-blur">
             {eyebrow}
@@ -59,8 +73,8 @@ export function AssetCard({
             </span>
           ) : null}
         </div>
-        <div className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/55 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#dbfcff] opacity-0 backdrop-blur transition group-hover:opacity-100">
-          {statusLabel(status)}
+        <div className="storycam-asset-status-pill">
+          {label}
         </div>
       </div>
       <div className="px-3 pb-3">

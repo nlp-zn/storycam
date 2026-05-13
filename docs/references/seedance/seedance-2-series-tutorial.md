@@ -1,6 +1,6 @@
 # Doubao Seedance 2.0 Series Tutorial
 
-> Paste the official Doubao Seedance 2.0 series tutorial here.
+> Local provider reference snapshot. Treat official provider docs as the authority when implementing new Seedance behavior.
 
 ## Source
 
@@ -12,7 +12,7 @@
 ## Notes For StoryCam Agents
 
 - Treat this file as a provider reference, not a product spec.
-- When implementing Seedance provider behavior, cross-check `ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/RELIABILITY.md`, and `docs/generated/provider-contract.md`.
+- When implementing Seedance provider behavior, cross-check `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/RELIABILITY.md`, and `docs/generated/provider-contract.md`.
 - Do not copy provider secrets, private prompts, signed URLs, or unredacted provider errors into this file.
 
 ## Official Content
@@ -2261,5 +2261,3 @@ func pollTaskStatus(ctx context.Context, client *arkruntime.Client, taskID strin
 <span id="66cb028f"></span>
 # 使用限制
 参见[使用限制](/docs/82379/1366799#66cb028f)。
-
-

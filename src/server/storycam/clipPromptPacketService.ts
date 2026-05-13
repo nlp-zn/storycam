@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
+import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import { assertClipPromptPacketCanCreateVideoJob, buildClipPromptPacketPayload } from "@/features/storycam/domain/clipPromptPacket";
 import type { ClipPromptPacket, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import { isHanddrawnTravelVlogMode } from "@/features/storycam/domain/storyModes";
+import {
+  defaultStoryCamVideoAspectRatio,
+  parseStoryCamVideoAspectRatio,
+  storyCamSeedanceOutputResolution
+} from "@/features/storycam/domain/videoSettings";
 import { storyCamComicVisualSafetyLine } from "@/lib/storycam/visualStylePolicy";
 import type { Database, Json, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
@@ -55,6 +61,7 @@ export async function createClipPromptPacket(
   }
 
   const rows = (await artifacts.listBySession(userId, { sessionId: session.id })) ?? [];
+  const videoAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
   const coreGroupArtifact = findConfirmedArtifact(rows, input.coreStoryboardGroupId, input.confirmedArtifactVersions, "core_storyboard_group");
 
   if (!coreGroupArtifact) {
@@ -64,6 +71,8 @@ export async function createClipPromptPacket(
   const coreGroup = coreStoryboardGroupSchema.parse(coreGroupArtifact.data_json);
   const storyboardScriptArtifact = findStoryboardScriptArtifact(rows, coreGroupArtifact.id);
   const storyboardScript = storyboardScriptArtifact ? storyboardScriptSchema.parse(storyboardScriptArtifact.data_json) : undefined;
+  const storyScriptArtifact = findLatestStoryScriptArtifact(rows);
+  const storyScript = storyScriptArtifact ? storyScriptSchema.parse(storyScriptArtifact.data_json) : undefined;
   const expandedCardArtifacts = rows.filter(
     (row) =>
       row.type === "expanded_storyboard_card" &&
@@ -81,12 +90,14 @@ export async function createClipPromptPacket(
   const inputArtifactVersions = {
     [coreGroupArtifact.id]: coreGroupArtifact.version,
     ...(storyboardScriptArtifact ? { [storyboardScriptArtifact.id]: storyboardScriptArtifact.version } : {}),
+    ...(storyScriptArtifact ? { [storyScriptArtifact.id]: storyScriptArtifact.version } : {}),
     ...Object.fromEntries(expandedCardArtifacts.map((row) => [row.id, row.version]))
   };
   const packet = buildClipPromptPacketPayload({
     coreGroupId: coreGroupArtifact.id,
     coreGroupTitle: coreGroup.title,
     estimatedClipDurationSeconds: coreGroup.estimatedClipDurationSeconds,
+    aspectRatio: videoAspectRatio,
     expandedCardIds,
     inputArtifactVersions,
     packetId: `${coreGroupArtifact.id}-clip-packet-v1`,
@@ -94,10 +105,12 @@ export async function createClipPromptPacket(
     providerPrompt: buildVideoProviderPrompt({
       coreGroupTitle: coreGroup.title,
       durationSeconds: coreGroup.estimatedClipDurationSeconds,
+      aspectRatio: videoAspectRatio,
       referenceFrames: storyboardMedia.map((item) => ({
         frameNumber: item.frameNumber,
         kind: item.kind
       })),
+      storyModeId: storyScript?.storyModeId,
       storyboardScript
     }),
     referenceImageMedia: storyboardMedia.map((item) => ({
@@ -107,6 +120,7 @@ export async function createClipPromptPacket(
       mediaId: item.media.id
     })),
     sessionId: session.id,
+    resolution: storyCamSeedanceOutputResolution,
     storyboardFrames: storyboardScript?.frames.map((frame) => ({
       frameNumber: frame.frameNumber,
       summary: `${frame.visualContent} ${frame.narrativePurpose}`,
@@ -147,6 +161,33 @@ function findStoryboardScriptArtifact(rows: StoryCamArtifactRow[], coreGroupArti
       row.state === "ready" &&
       storyboardScriptSchema.safeParse(row.data_json).success
   );
+}
+
+function findLatestStoryScriptArtifact(rows: StoryCamArtifactRow[]) {
+  return rows
+    .filter(
+      (row) =>
+        row.type === "script" &&
+        row.state === "ready" &&
+        storyScriptSchema.safeParse(row.data_json).success
+    )
+    .sort(compareArtifactsNewestFirst)[0];
+}
+
+function compareArtifactsNewestFirst(left: StoryCamArtifactRow, right: StoryCamArtifactRow) {
+  const versionDifference = right.version - left.version;
+
+  if (versionDifference !== 0) {
+    return versionDifference;
+  }
+
+  return timestampMs(right.updated_at) - timestampMs(left.updated_at) || timestampMs(right.created_at) - timestampMs(left.created_at);
+}
+
+function timestampMs(value: string) {
+  const parsed = Date.parse(value);
+
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 async function loadStoryboardFrameMedia(
@@ -207,12 +248,14 @@ function hasCompleteNineFrameMedia(storyboardMedia: Array<{ frameNumber: number;
 }
 
 function buildVideoProviderPrompt(input: {
+  aspectRatio: "16:9" | "9:16";
   coreGroupTitle: string;
   durationSeconds: number;
   referenceFrames?: Array<{
     frameNumber: number;
     kind: "core" | "expanded";
   }>;
+  storyModeId?: string;
   storyboardScript?: StoryboardScript;
 }) {
   const referenceImagePlan = input.referenceFrames?.length
@@ -222,20 +265,31 @@ function buildVideoProviderPrompt(input: {
     : undefined;
   const frames = input.storyboardScript?.frames.map((frame) => formatSeedanceFrameBeat(frame, input.referenceFrames ?? [])).join("\n");
   const audioPlan = buildNativeAudioPlan(input.storyboardScript);
+  const rhythmPlan = input.storyboardScript
+    ? `Director rhythm: ${clipText(input.storyboardScript.rhythm, 160)} Tone: ${clipText(input.storyboardScript.tone, 100)}. Keep the clip inside one 15s micro arc: establish state, visible action, reaction or turn, quiet ending.`
+    : "";
 
   return [
-    `Create one continuous ${Math.min(15, Math.round(input.durationSeconds))}s 16:9 cinematic clip for "${input.coreGroupTitle}".`,
+    `Create one continuous ${Math.min(15, Math.round(input.durationSeconds))}s ${formatAspectRatioForPrompt(input.aspectRatio)} cinematic clip for "${input.coreGroupTitle}".`,
     "Visual style: stylized comic animation film, illustrated characters, clean line art, cinematic lighting, private-memory mood.",
     storyCamComicVisualSafetyLine,
     "No subtitles, no readable UI text, no new characters or locations.",
     referenceImagePlan ? `Reference order: ${referenceImagePlan}.` : "",
     "Use each 图片n reference image as a comic storyboard anchor for its matching frame; preserve character design, wardrobe, location, lighting, rain, and screen direction.",
+    isHanddrawnTravelVlogMode(input.storyModeId)
+      ? "Handdrawn travel VLOG mode: keep real travel-location backgrounds from the storyboard references while animating one hand-drawn illustrated traveler character; do not turn the character into a photorealistic person or add visible unlisted people."
+      : "",
+    rhythmPlan,
     frames ? `Director nine-frame plan:\n${frames}` : "",
     audioPlan,
     "Camera: restrained natural movement between frames, visible subject action before each transition, final beat held emotionally."
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function formatAspectRatioForPrompt(aspectRatio: "16:9" | "9:16") {
+  return aspectRatio === "9:16" ? "9:16 vertical portrait" : "16:9 horizontal landscape";
 }
 
 function formatSeedanceFrameBeat(frame: StoryboardScript["frames"][number], referenceFrames: Array<{ frameNumber: number }>) {

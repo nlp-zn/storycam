@@ -9,6 +9,8 @@ test-results/
 playwright-report/
 .vercel/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 .env
 .env*.local
 pnpm-debug.log*

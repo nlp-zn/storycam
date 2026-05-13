@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { characterAssetSchema, sceneAssetSchema, storyScriptSchema } from "@/features/storycam/domain/artifactSchemas";
 import type { CharacterAsset, CoreStoryboardGroup, SceneAsset, StoryboardScript, StoryScript } from "@/features/storycam/domain/artifacts";
 import { createDurationPlan } from "@/features/storycam/domain/durationRules";
+import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import { createMockStoryboardProvider, type MockStoryboardInput, type MockStoryboardOutput } from "@/lib/providers/mock/storyboardProvider";
 import type { ImageGenerationProvider, ProviderFailure, TextGenerationProvider } from "@/lib/providers/types";
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
@@ -21,6 +22,7 @@ import {
 export type StoryboardRequestBody = {
   confirmedArtifactVersions?: unknown;
   coreGroupTargetCount?: unknown;
+  deferRepresentativeImages?: unknown;
   expansionCardTargetCount?: unknown;
   plannedDurationSeconds?: unknown;
   sessionId?: unknown;
@@ -91,7 +93,7 @@ export async function createStoryboard(
   const storyWorld = await loadConfirmedStoryWorld(artifacts, userId, session.id, input.confirmedArtifactVersions);
   const storyWorldArtifactVersions = artifactVersions(storyWorld.artifactRows);
 
-  if (imageProvider?.supportsReferenceImages) {
+  if (imageProvider?.supportsReferenceImages && !input.deferRepresentativeImages) {
     await assertStoryWorldAssetImagesReady(client, userId, session.id, storyWorld.assetRows);
   }
 
@@ -150,17 +152,20 @@ export async function createStoryboard(
   );
   const storyboardScriptRefs = storyboardScriptRows.map((artifact) => toArtifactRef(requireArtifactRow(artifact)));
   const storyboardScriptRef = storyboardScriptRefs[0];
-  const representativeImages = await generateRepresentativeImages({
-    client,
-    coreGroupArtifacts: coreStoryboardGroupRows,
-    coreGroups: providerResult.value.coreStoryboardGroups,
-    imageProvider,
-    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
-    storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
-    scripts: storyboardScripts,
-    sessionId: session.id,
-    userId
-  });
+  const representativeImages = input.deferRepresentativeImages
+    ? providerResult.value.coreStoryboardGroups.map(() => placeholderStoryboardImage())
+    : await generateRepresentativeImages({
+        client,
+        coreGroupArtifacts: coreStoryboardGroupRows,
+        coreGroups: providerResult.value.coreStoryboardGroups,
+        imageProvider,
+        providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds,
+        storyboardScriptArtifacts: storyboardScriptRows.map((artifact) => requireArtifactRow(artifact)),
+        scripts: storyboardScripts,
+        sessionId: session.id,
+        videoAspectRatio: parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio,
+        userId
+      });
   const storyboardCoreGroups = providerResult.value.coreStoryboardGroups.map((group, index) => ({
     ...group,
     expandedStoryboardImages: [],
@@ -199,6 +204,7 @@ export function parseStoryboardRequest(body: StoryboardRequestBody) {
   return {
     confirmedArtifactVersions: parseConfirmedArtifactVersions(body.confirmedArtifactVersions),
     coreGroupTargetCount: parseOptionalCoreGroupTargetCount(body.coreGroupTargetCount),
+    deferRepresentativeImages: body.deferRepresentativeImages === true,
     expansionCardTargetCount: parseOptionalInteger(body.expansionCardTargetCount),
     plannedDurationSeconds: parseOptionalDuration(body.plannedDurationSeconds),
     sessionId
@@ -232,6 +238,7 @@ async function generateRepresentativeImages(input: {
   scripts: StoryboardScript[];
   storyboardScriptArtifacts: StoryCamArtifactRow[];
   sessionId: string;
+  videoAspectRatio: "16:9" | "9:16";
   userId: string;
 }) {
   if (!input.imageProvider) {
@@ -262,7 +269,13 @@ async function generateRepresentativeImages(input: {
       }
 
       const result = await submitImageGenerationJob(input.client, input.userId, {
-        imageInput: toStoryboardRepresentativeProviderInput(coreGroup, input.sessionId, input.scripts[index], visualContext),
+        imageInput: toStoryboardRepresentativeProviderInput(
+          coreGroup,
+          input.sessionId,
+          input.videoAspectRatio,
+          input.scripts[index],
+          visualContext
+        ),
         inputArtifactVersionsJson: {
           ...visualContext.inputArtifactVersionsJson,
           [linkedArtifact.id]: linkedArtifact.version,

@@ -1,6 +1,6 @@
 # Doubao Seedance 2.0 Prompt Guide
 
-> Paste the official Doubao Seedance 2.0 prompt guide here.
+> Local provider reference snapshot. Treat official provider docs as the authority when implementing new Seedance behavior.
 
 ## Source
 
@@ -756,5 +756,4 @@ Seedance 2.0 系列模型支持视频编辑，支持增加、删除或修改元�
 
 </columnsItem>
 </columns>
-
 

@@ -68,6 +68,61 @@ describe("clip-packet service", () => {
     expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("对白");
   });
 
+  it("stores session video aspect ratio in the clip packet and provider prompt", async () => {
+    const client = new FakeSupabaseClient({
+      artifactRows: [coreGroupRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()],
+      sessionRow: storyCamSessionRow({ video_aspect_ratio: "9:16" })
+    });
+
+    const result = await createClipPromptPacket(client.asSupabaseClient(), "user-1", {
+      confirmedArtifactVersions: {
+        "core-artifact-1": 1,
+        ...Object.fromEntries(expandedCardRows().map((row) => [row.id, row.version]))
+      },
+      coreStoryboardGroupId: "core-artifact-1",
+      providerSendConfirmed: true,
+      sessionId: "session-1"
+    });
+
+    expect(result.value.clipPromptPacketPayload).toMatchObject({
+      aspectRatio: "9:16",
+      resolution: "720p"
+    });
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("9:16 vertical portrait");
+  });
+
+  it("keeps handdrawn travel VLOG video prompts on real backgrounds with drawn characters", async () => {
+    const staleScript = scriptRow({}, { id: "script-artifact-1", updated_at: "2026-04-26T00:00:00.000Z", version: 1 });
+    const latestScript = scriptRow(
+      { id: "script-travel-2", storyModeId: "handdrawn-travel-vlog", version: 2 },
+      { id: "script-artifact-2", updated_at: "2026-04-27T00:00:00.000Z", version: 2 }
+    );
+    const client = new FakeSupabaseClient({
+      artifactRows: [staleScript, latestScript, coreGroupRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()],
+      sessionRow: storyCamSessionRow({ video_aspect_ratio: "9:16" })
+    });
+
+    const result = await createClipPromptPacket(client.asSupabaseClient(), "user-1", {
+      confirmedArtifactVersions: {
+        "core-artifact-1": 1,
+        ...Object.fromEntries(expandedCardRows().map((row) => [row.id, row.version]))
+      },
+      coreStoryboardGroupId: "core-artifact-1",
+      providerSendConfirmed: true,
+      sessionId: "session-1"
+    });
+
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("real travel-location backgrounds");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("hand-drawn illustrated traveler character");
+    expect(result.value.clipPromptPacketPayload.providerPrompt).toContain("do not turn the character into a photorealistic person");
+    expect(result.value.clipPromptPacketPayload.inputArtifactVersions).toMatchObject({
+      "script-artifact-2": 2
+    });
+    expect(result.value.clipPromptPacketPayload.inputArtifactVersions["script-artifact-1"]).toBeUndefined();
+  });
+
   it("rejects stale or unconfirmed core groups", async () => {
     const client = new FakeSupabaseClient({ artifactRows: [coreGroupRow({ version: 2 })] });
 
@@ -148,6 +203,28 @@ function expandedMediaRows() {
   return expandedCardRows().map((row, index) => mediaRow(`media-expanded-${index + 1}`, row.id));
 }
 
+function scriptRow(dataOverrides: Record<string, unknown> = {}, rowOverrides: Partial<StoryCamArtifactRow> = {}): StoryCamArtifactRow {
+  return {
+    ...baseArtifactRow(),
+    data_json: {
+      beats: ["角色走进真实旅行地", "在街角停下拍照"],
+      id: "script-travel-1",
+      logline: "一个手绘旅行者在真实目的地里走出轻剧情 VLOG。",
+      qualityChecks: [],
+      sessionId: "session-1",
+      state: "ready",
+      summary: "真实旅行地和手绘角色一起组成一段轻剧情 VLOG。",
+      title: "手绘旅行 VLOG",
+      version: 1,
+      visualStyle: "手绘角色叠加真实旅行地摄影感背景",
+      ...dataOverrides
+    },
+    id: "script-artifact-1",
+    type: "script",
+    ...rowOverrides
+  };
+}
+
 function clipPacketRow(): StoryCamArtifactRow {
   return {
     ...baseArtifactRow(),
@@ -192,6 +269,7 @@ function baseArtifactRow(): StoryCamArtifactRow {
 type FakeSupabaseClientOptions = {
   artifactRows?: unknown[];
   mediaRows?: unknown[];
+  sessionRow?: unknown;
 };
 
 class FakeSupabaseClient {
@@ -270,17 +348,7 @@ class FakeQuery {
     return Promise.resolve({
       data:
         this.table === "storycam_sessions"
-          ? {
-              core_group_target_count: 1,
-              created_at: "2026-04-26T00:00:00.000Z",
-              deleted_at: null,
-              generation_mode: "mock",
-              id: "session-1",
-              planned_duration_seconds: 12,
-              status: "ready",
-              updated_at: "2026-04-26T00:00:00.000Z",
-              user_id: "user-1"
-            }
+          ? this.options.sessionRow ?? storyCamSessionRow()
           : this.table === "media_assets"
             ? this.findMediaRows()[0] ?? null
           : null,
@@ -320,6 +388,22 @@ class FakeQuery {
         (!this.eqFilters.kind || (row as { kind?: unknown }).kind === this.eqFilters.kind)
     );
   }
+}
+
+function storyCamSessionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    core_group_target_count: 1,
+    created_at: "2026-04-26T00:00:00.000Z",
+    deleted_at: null,
+    generation_mode: "mock",
+    id: "session-1",
+    planned_duration_seconds: 12,
+    status: "ready",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    video_aspect_ratio: "16:9",
+    ...overrides
+  };
 }
 
 function mediaRow(id: string, linkedArtifactId: string) {

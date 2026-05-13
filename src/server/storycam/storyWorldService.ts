@@ -6,8 +6,16 @@ import {
   type StoryWorldProviderOutput,
   type UploadedPhotoReference
 } from "@/lib/providers/storyWorld";
+import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio, type StoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
+import {
+  handdrawnTravelVlogPhotoReferenceNote,
+  handdrawnTravelVlogModeId,
+  handdrawnTravelVlogVisualStyle,
+  isHanddrawnTravelVlogMode,
+  parseStoryModeId
+} from "@/features/storycam/domain/storyModes";
 import { createMockStoryWorldProvider } from "@/lib/providers/mock/storyWorldProvider";
-import type { Database, MediaAssetRow, StoryCamArtifactRow } from "@/server/db/types";
+import type { Database, MediaAssetRow, StoryCamArtifactRow, StoryCamSessionRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
@@ -20,7 +28,10 @@ export type StoryWorldRequestBody = {
   lightweightChoices?: unknown;
   plannedDurationSeconds?: unknown;
   sessionId?: unknown;
+  storyModeId?: unknown;
+  travelDestination?: unknown;
   uploadedPhotoIds?: unknown;
+  videoAspectRatio?: unknown;
 };
 
 export type StoryWorldArtifactRef = {
@@ -37,7 +48,12 @@ export type StoryWorldServiceOutput = {
     script: StoryWorldArtifactRef;
   };
   sessionId: string;
-  storyWorld: StoryWorldProviderOutput;
+  storyWorld: PublicStoryWorldProviderOutput;
+  videoAspectRatio: StoryCamVideoAspectRatio;
+};
+
+export type PublicStoryWorldProviderOutput = Omit<StoryWorldProviderOutput, "script"> & {
+  script: Omit<StoryWorldProviderOutput["script"], "directorBrief">;
 };
 
 export class StoryWorldRequestError extends Error {
@@ -57,22 +73,30 @@ export async function createStoryWorld(
   const sessions = new StoryCamSessionRepository(client);
   const artifacts = new StoryCamArtifactRepository(client);
   const mediaAssets = new StoryCamMediaAssetRepository(client);
-  const session = input.sessionId
-    ? await sessions.findById(userId, input.sessionId)
-    : await sessions.create(userId, {
-        generationMode: input.generationMode,
-        plannedDurationSeconds: input.plannedDurationSeconds
-      });
+  const loadedSession = await loadOrCreateStoryWorldSession({
+    input,
+    sessions,
+    userId
+  });
 
-  if (!session) {
+  if (!loadedSession) {
     throw new StoryWorldRequestError("session_not_found");
   }
 
+  const session = await applyInitialVideoAspectRatio({
+    artifacts,
+    requestedAspectRatio: input.requestedVideoAspectRatio,
+    session: loadedSession,
+    sessions,
+    userId
+  });
   const uploadedPhotoRefs = await resolveUploadedPhotoRefs(mediaAssets, userId, session.id, input.uploadedPhotoIds);
   const providerResult = await provider.generate({
     idea: input.input,
     lightweightChoices: input.lightweightChoices,
     sessionId: session.id,
+    storyModeId: input.storyModeId,
+    travelDestination: input.travelDestination,
     uploadedPhotoRefs
   });
 
@@ -80,7 +104,7 @@ export async function createStoryWorld(
     return providerResult;
   }
 
-  const storyWorld = storyWorldProviderOutputSchema.parse(providerResult.value);
+  const storyWorld = storyWorldProviderOutputSchema.parse(applyStoryModePolicy(providerResult.value, input));
   const script = requireArtifactRow(
     await artifacts.createVersion(userId, {
       dataJson: storyWorld.script,
@@ -122,21 +146,108 @@ export async function createStoryWorld(
         script: toArtifactRef(script)
       },
       sessionId: session.id,
-      storyWorld
+      storyWorld: toPublicStoryWorld(storyWorld),
+      videoAspectRatio: parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio
     }
   };
+}
+
+async function applyInitialVideoAspectRatio({
+  artifacts,
+  requestedAspectRatio,
+  session,
+  sessions,
+  userId
+}: {
+  artifacts: StoryCamArtifactRepository;
+  requestedAspectRatio: StoryCamVideoAspectRatio | undefined;
+  session: StoryCamSessionRow;
+  sessions: StoryCamSessionRepository;
+  userId: string;
+}): Promise<StoryCamSessionRow> {
+  if (requestedAspectRatio === undefined) {
+    return session;
+  }
+
+  const currentAspectRatio = parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio;
+
+  if (currentAspectRatio === requestedAspectRatio) {
+    return session;
+  }
+
+  const existingArtifacts = (await artifacts.listBySession(userId, { sessionId: session.id })) ?? [];
+
+  if (existingArtifacts.length > 0) {
+    return session;
+  }
+
+  const updatedSession = await sessions.update(userId, session.id, {
+    videoAspectRatio: requestedAspectRatio
+  });
+
+  if (!updatedSession) {
+    throw new StoryWorldRequestError("session_not_found");
+  }
+
+  return updatedSession;
+}
+
+export function toPublicStoryWorld(storyWorld: StoryWorldProviderOutput): PublicStoryWorldProviderOutput {
+  const { directorBrief: _directorBrief, ...script } = storyWorld.script;
+
+  return {
+    ...storyWorld,
+    script
+  };
+}
+
+async function loadOrCreateStoryWorldSession({
+  input,
+  sessions,
+  userId
+}: {
+  input: ReturnType<typeof parseStoryWorldRequest>;
+  sessions: StoryCamSessionRepository;
+  userId: string;
+}): Promise<StoryCamSessionRow | null> {
+  if (input.sessionId) {
+    return sessions.findById(userId, input.sessionId);
+  }
+
+  return sessions.create(userId, {
+    generationMode: input.generationMode,
+    plannedDurationSeconds: input.plannedDurationSeconds,
+    videoAspectRatio: input.videoAspectRatio
+  });
 }
 
 export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
   const input = typeof body.input === "string" ? body.input.trim() : "";
   const generationMode = body.generationMode ?? "mock";
+  const storyModeId = parseStoryModeId(body.storyModeId);
+  const uploadedPhotoIds = parseStringArray(body.uploadedPhotoIds);
+  const travelDestination = parseTravelDestination(body.travelDestination);
 
   if (generationMode !== "mock" && generationMode !== "real") {
     throw new StoryWorldRequestError("invalid_generation_mode");
   }
 
+  if (body.storyModeId !== undefined && !storyModeId) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
   if (!input || input.length > storyWorldInputMaxLength) {
     throw new StoryWorldRequestError("invalid_input");
+  }
+
+  if (isHanddrawnTravelVlogMode(storyModeId)) {
+    if (uploadedPhotoIds.length !== 1) {
+      throw new StoryWorldRequestError("invalid_photos");
+    }
+
+    if (!travelDestination) {
+      throw new StoryWorldRequestError("invalid_input");
+    }
   }
 
   return {
@@ -144,8 +255,104 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
     input,
     lightweightChoices: parseStringArray(body.lightweightChoices),
     plannedDurationSeconds: parsePlannedDuration(body.plannedDurationSeconds),
+    requestedVideoAspectRatio: parseRequestedVideoAspectRatio(body.videoAspectRatio),
     sessionId: typeof body.sessionId === "string" && body.sessionId ? body.sessionId : undefined,
-    uploadedPhotoIds: parseStringArray(body.uploadedPhotoIds)
+    storyModeId,
+    travelDestination,
+    uploadedPhotoIds,
+    videoAspectRatio: parseVideoAspectRatioWithDefault(body.videoAspectRatio)
+  };
+}
+
+function parseRequestedVideoAspectRatio(value: unknown): StoryCamVideoAspectRatio | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const aspectRatio = parseStoryCamVideoAspectRatio(value);
+
+  if (!aspectRatio) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return aspectRatio;
+}
+
+function parseVideoAspectRatioWithDefault(value: unknown): StoryCamVideoAspectRatio {
+  return parseRequestedVideoAspectRatio(value) ?? defaultStoryCamVideoAspectRatio;
+}
+
+function parseTravelDestination(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length > 120) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return trimmed || undefined;
+}
+
+function applyStoryModePolicy(
+  storyWorld: StoryWorldProviderOutput,
+  input: ReturnType<typeof parseStoryWorldRequest>
+): StoryWorldProviderOutput {
+  const storyWorldWithMode = {
+    ...storyWorld,
+    script: {
+      ...storyWorld.script,
+      ...(input.storyModeId ? { storyModeId: input.storyModeId } : {})
+    }
+  };
+
+  if (!isHanddrawnTravelVlogMode(input.storyModeId)) {
+    return storyWorldWithMode;
+  }
+
+  return applyHanddrawnTravelVlogPolicy(storyWorldWithMode, input);
+}
+
+function applyHanddrawnTravelVlogPolicy(
+  storyWorld: StoryWorldProviderOutput,
+  input: ReturnType<typeof parseStoryWorldRequest>
+): StoryWorldProviderOutput {
+  const referenceMediaIds = input.uploadedPhotoIds.slice(0, 1);
+  const firstCharacter = storyWorld.characterAssets[0];
+  const firstScene = storyWorld.sceneAssets[0];
+
+  return {
+    characterAssets: firstCharacter
+      ? [
+          {
+            ...firstCharacter,
+            consistencyNotes: [...firstCharacter.consistencyNotes, handdrawnTravelVlogPhotoReferenceNote],
+            referenceMediaIds,
+            relationshipToUserStory: firstCharacter.relationshipToUserStory || "由用户照片转译出的手绘旅行主角"
+          }
+        ]
+      : storyWorld.characterAssets,
+    sceneAssets: firstScene
+      ? [
+          {
+            ...firstScene,
+            location: input.travelDestination ?? firstScene.location,
+            name: firstScene.name || `${input.travelDestination ?? "旅行地"}路线资产板`,
+            referenceMediaIds: []
+          }
+        ]
+      : storyWorld.sceneAssets,
+    script: {
+      ...storyWorld.script,
+      storyModeId: handdrawnTravelVlogModeId,
+      visualStyle: handdrawnTravelVlogVisualStyle
+    }
   };
 }
 

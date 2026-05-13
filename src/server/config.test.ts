@@ -18,6 +18,8 @@ describe("loadStoryCamConfig", () => {
     expect(config.generation).toEqual({
       mode: "mock",
       textProvider: "mock",
+      storyWorldTextProvider: "mock",
+      storyboardTextProvider: "mock",
       multimodalProvider: "mock",
       imageProvider: "mock",
       videoProvider: "mock",
@@ -152,15 +154,17 @@ describe("loadStoryCamConfig", () => {
       loadStoryCamConfig({
         ...validMockEnv,
         STORYCAM_GENERATION_MODE: "real",
-        STORYCAM_TEXT_PROVIDER: "openrouter",
+        STORYCAM_STORY_WORLD_TEXT_PROVIDER: "openrouter",
+        STORYCAM_STORYBOARD_TEXT_PROVIDER: "openrouter",
         STORYCAM_MULTIMODAL_PROVIDER: "openrouter",
-        STORYCAM_IMAGE_PROVIDER: "openrouter",
+        STORYCAM_IMAGE_PROVIDER: "inference_sh",
         STORYCAM_VIDEO_PROVIDER: "seedance_2_0",
         STORYCAM_FINAL_WORK_PROVIDER: "ffmpeg",
         OPENROUTER_API_KEY: "openrouter-key",
         OPENROUTER_TEXT_MODEL: "text-model",
         OPENROUTER_MULTIMODAL_MODEL: "multimodal-model",
-        OPENROUTER_IMAGE_MODEL: "image-model",
+        INFERENCE_API_KEY: "inference-key",
+        INFERENCE_IMAGE_APP: "openai/gpt-image-2",
         SEEDANCE_MODEL: "doubao-seedance-2-0-260128"
       })
     ).toThrow(/MISSING_ENV:SEEDANCE_API_KEY/);
@@ -170,22 +174,28 @@ describe("loadStoryCamConfig", () => {
     const config = loadStoryCamConfig({
       ...validMockEnv,
       STORYCAM_GENERATION_MODE: "real",
-      STORYCAM_TEXT_PROVIDER: "openrouter",
+      STORYCAM_STORY_WORLD_TEXT_PROVIDER: "deepseek",
+      STORYCAM_STORYBOARD_TEXT_PROVIDER: "openrouter",
       STORYCAM_MULTIMODAL_PROVIDER: "openrouter",
-      STORYCAM_IMAGE_PROVIDER: "openrouter",
+      STORYCAM_IMAGE_PROVIDER: "inference_sh",
       STORYCAM_VIDEO_PROVIDER: "seedance_2_0",
       STORYCAM_FINAL_WORK_PROVIDER: "ffmpeg",
+      DEEPSEEK_API_KEY: "deepseek-key",
       OPENROUTER_API_KEY: "openrouter-key",
       OPENROUTER_TEXT_MODEL: "text-model",
       OPENROUTER_MULTIMODAL_MODEL: "multimodal-model",
-      OPENROUTER_IMAGE_MODEL: "image-model",
+      INFERENCE_API_KEY: "inference-key",
+      INFERENCE_IMAGE_APP: "openai/gpt-image-2",
       SEEDANCE_API_KEY: "seedance-key",
       SEEDANCE_MODEL: "doubao-seedance-2-0-260128"
     });
 
     expect(config.seedance).toEqual({
       apiKey: "seedance-key",
-      model: "doubao-seedance-2-0-260128"
+      models: {
+        seedance_2_0: "doubao-seedance-2-0-260128",
+        seedance_2_0_fast: "doubao-seedance-2-0-fast-260128"
+      }
     });
   });
 

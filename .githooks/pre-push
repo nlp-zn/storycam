@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scripts/check-local.sh
+
+cat <<'MSG'
+
+Local pre-push checks passed.
+
+PR CI will run build; dev/main CI will run the heavier browser and release gates.
+Ask Codex for the StoryCam PR Gate only when you want the three-reviewer AI review.
+MSG

@@ -1,6 +1,8 @@
 # Privacy Logging Contract
 
-Status: implemented baseline, sourced from `src/lib/privacy/redact.ts` and `src/server/logging/storycamLogger.ts`.
+Status: implemented snapshot, sourced from `src/lib/privacy/redact.ts`, `src/server/logging/storycamLogger.ts`, and provider request repositories.
+Sentry uses the same redaction boundary through `src/server/monitoring/sentryRedaction.ts`
+and worker-safe capture helpers.
 
 ## Allowed Log Fields
 
@@ -21,6 +23,7 @@ Logs may include:
 - `errorCode`
 - `retryable`
 - `redactionApplied`
+- `lockedBy`, only for worker ids
 
 ## Forbidden Log Fields
 
@@ -37,6 +40,7 @@ Logs must not include:
 - Seedance API key,
 - provider raw request body,
 - provider raw response body,
+- storage paths,
 - unredacted provider errors.
 
 ## Error Redaction
@@ -76,3 +80,4 @@ It must not include:
 - Generate short-lived signed URLs only when needed.
 - Do not log signed URLs.
 - Do not store long-lived public URLs in metadata.
+- Provider reference URLs have a separate TTL and must not be returned to the client as UI preview URLs.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coreStoryboardGroups, directorChoices, storyAssets, storyModeEntries } from "./shellContent";
+import { coreStoryboardGroups, directorChoices, discoveryEntries, storyAssets, storyModeEntries } from "./shellContent";
 
 describe("StoryCam shell content", () => {
   it("keeps the phase 1 core storyboard group limit", () => {
@@ -12,12 +12,56 @@ describe("StoryCam shell content", () => {
   });
 
   it("offers lightweight director choices instead of professional controls", () => {
-    expect(directorChoices).toContain("像私人回忆");
-    expect(directorChoices.join(" ")).not.toMatch(/prompt|packet|model|shot/i);
+    expect(directorChoices).toEqual(["留白多一点", "像旧照片", "雨夜韩剧感", "靠小动作推进"]);
+    expect(storyModeEntries[0].directorChoices).toEqual(directorChoices);
+    expect(
+      storyModeEntries.every((entry) => {
+        const choiceSet = new Set<string>(entry.directorChoices);
+
+        return entry.defaultChoices.every((choice) => choiceSet.has(choice));
+      })
+    ).toBe(true);
+    expect(
+      storyModeEntries
+        .flatMap((entry) => [...entry.directorChoices, ...entry.defaultChoices])
+        .join(" ")
+    ).not.toMatch(/prompt|packet|model|shot|少说话|加旁白/i);
+    expect(new Set(storyModeEntries.flatMap((entry) => entry.directorChoices)).size).toBe(
+      storyModeEntries.reduce((count, entry) => count + entry.directorChoices.length, 0)
+    );
   });
 
-  it("keeps adjacent story modes visible but marked incomplete", () => {
-    expect(storyModeEntries.map((entry) => entry.label)).toEqual(["私人记忆", "宠物小剧场", "小说角色", "情绪短片"]);
-    expect(storyModeEntries.slice(1).every((entry) => entry.status === "暂不完整支持")).toBe(true);
+  it("keeps playable story mode templates visible in a stable order", () => {
+    expect(storyModeEntries.map((entry) => entry.label)).toEqual(["私人记忆", "宠物小剧场", "小说角色", "情绪短片", "手绘旅行 VLOG"]);
+    expect(storyModeEntries.map((entry) => entry.id)).toEqual([
+      "personal-memory",
+      "pet-theater",
+      "novel-character",
+      "emotion-short",
+      "handdrawn-travel-vlog"
+    ]);
+    expect(storyModeEntries.every((entry) => entry.sampleIdea.length > 0)).toBe(true);
+    expect(storyModeEntries.every((entry) => entry.directorChoices.length === 4)).toBe(true);
+    expect(storyModeEntries.map((entry) => `${entry.label} ${entry.text} ${entry.sampleIdea}`).join(" ")).not.toMatch(
+      /prompt|packet|model|shot/i
+    );
+  });
+
+  it("marks handdrawn travel VLOG as a photo and destination driven portrait mode", () => {
+    const travelMode = storyModeEntries.find((entry) => entry.id === "handdrawn-travel-vlog");
+
+    expect(travelMode).toMatchObject({
+      defaultChoices: ["手绘角色感"],
+      preferredAspectRatio: "9:16",
+      requiresPhoto: true,
+      requiresTravelDestination: true
+    });
+    expect(travelMode?.directorChoices).toEqual(["手绘角色感", "真实旅行地", "轻剧情 VLOG", "自然走拍"]);
+  });
+
+  it("prepares discovery presets for horizontal and vertical video slots", () => {
+    expect(discoveryEntries.some((entry) => entry.format === "landscape")).toBe(true);
+    expect(discoveryEntries.some((entry) => entry.format === "portrait")).toBe(true);
+    expect(discoveryEntries.every((entry) => entry.videoSrc === null || entry.videoSrc.startsWith("/storycam/"))).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createExpandedStoryboardCards, ExpansionRequestError } from "@/server/storycam/expansionService";
+import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
 
 type ExpansionRouteContext = {
@@ -15,8 +16,10 @@ export async function POST(request: Request, context: ExpansionRouteContext) {
     const params = await context.params;
     const config = loadStoryCamConfig();
     const imageProvider = createConfiguredStoryboardImageProvider(config);
+    const client = createSupabaseAdminClient();
+    await assertStoryCamDailyJobQuota(client, user.id, config, "image");
     const result = await createExpandedStoryboardCards(
-      createSupabaseAdminClient(),
+      client,
       user.id,
       params.id,
       await request.json(),
@@ -65,6 +68,10 @@ export async function POST(request: Request, context: ExpansionRouteContext) {
         },
         { status: 500 }
       );
+    }
+
+    if (error instanceof StoryCamQuotaError) {
+      return quotaErrorResponse(error);
     }
 
     return NextResponse.json(

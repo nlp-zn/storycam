@@ -14,6 +14,7 @@ export type StoryCamSessionRow = {
   user_id: string;
   status: "draft" | "generating" | "ready" | "deleted";
   generation_mode: "mock" | "real";
+  video_aspect_ratio: "16:9" | "9:16";
   planned_duration_seconds: number;
   core_group_target_count: number;
   created_at: string;
@@ -26,6 +27,7 @@ export type StoryCamSessionInsert = {
   user_id: string;
   status?: StoryCamSessionRow["status"];
   generation_mode?: StoryCamSessionRow["generation_mode"];
+  video_aspect_ratio?: StoryCamSessionRow["video_aspect_ratio"];
   planned_duration_seconds?: number;
   core_group_target_count?: number;
   created_at?: string;
@@ -97,6 +99,9 @@ export type GenerationJobRow = {
   redacted_error: string | null;
   started_at: string | null;
   ended_at: string | null;
+  locked_by: string | null;
+  locked_at: string | null;
+  run_after: string;
   created_at: string;
   updated_at: string;
   tombstoned_at: string | null;
@@ -123,6 +128,9 @@ export type GenerationJobInsert = {
   redacted_error?: string | null;
   started_at?: string | null;
   ended_at?: string | null;
+  locked_by?: string | null;
+  locked_at?: string | null;
+  run_after?: string;
   created_at?: string;
   updated_at?: string;
   tombstoned_at?: string | null;
@@ -210,6 +218,15 @@ export type Database = {
           target_user_id: string;
         };
         Returns: undefined;
+      };
+      claim_storycam_generation_jobs: {
+        Args: {
+          job_types: string[];
+          limit_count?: number;
+          lock_ttl_seconds?: number;
+          worker_id: string;
+        };
+        Returns: GenerationJobRow[];
       };
     };
     Enums: Record<string, never>;

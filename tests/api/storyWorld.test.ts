@@ -58,11 +58,68 @@ describe("POST /api/story-world", () => {
     });
   });
 
-  it("returns artifact versions from mock mode", async () => {
+  it("returns a redacted validation error for an invalid video aspect ratio", async () => {
     const { POST } = await import("@/app/api/story-world/route");
 
     requireUserMock.mockResolvedValue({ id: "user-1" });
     createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        input: "我想把暗恋拍成韩剧雨夜",
+        videoAspectRatio: "1:1"
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "invalid_input",
+      redactedError: "Invalid story world request.",
+      redactionApplied: true
+    });
+  });
+
+  it("returns redacted validation errors when handdrawn travel VLOG is missing its required photo or destination", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(new FakeSupabaseClient().asSupabaseClient());
+
+    const missingPhoto = await POST(
+      jsonRequest({
+        input: "我想做一个手绘旅行 VLOG",
+        storyModeId: "handdrawn-travel-vlog",
+        travelDestination: "里斯本"
+      })
+    );
+    const missingDestination = await POST(
+      jsonRequest({
+        input: "我想做一个手绘旅行 VLOG",
+        storyModeId: "handdrawn-travel-vlog",
+        uploadedPhotoIds: ["photo-1"]
+      })
+    );
+
+    expect(missingPhoto.status).toBe(400);
+    expect(missingDestination.status).toBe(400);
+    await expect(missingPhoto.json()).resolves.toMatchObject({
+      error: "invalid_photos",
+      redactedError: "Invalid story world request.",
+      redactionApplied: true
+    });
+    await expect(missingDestination.json()).resolves.toMatchObject({
+      error: "invalid_input",
+      redactedError: "Invalid story world request.",
+      redactionApplied: true
+    });
+  });
+
+  it("returns artifact versions from mock mode", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const client = new FakeSupabaseClient();
+
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
 
     const response = await POST(
       jsonRequest({
@@ -74,9 +131,14 @@ describe("POST /api/story-world", () => {
 
     expect(response.status).toBe(201);
     expect(response.headers.get("x-storycam-text-provider")).toBe("mock");
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+
+    expect(body).toMatchObject({
       artifacts: {
-        characterAssets: [{ type: "character_asset", version: 1 }],
+        characterAssets: expect.arrayContaining([
+          expect.objectContaining({ id: "character-rainy-crush-lead-artifact", type: "character_asset", version: 1 }),
+          expect.objectContaining({ id: "character-rainy-crush-counterpart-artifact", type: "character_asset", version: 1 })
+        ]),
         sceneAssets: [{ type: "scene_asset", version: 1 }],
         script: { type: "script", version: 1 }
       },
@@ -86,7 +148,10 @@ describe("POST /api/story-world", () => {
       ok: true,
       sessionId: "session-1",
       storyWorld: {
-        characterAssets: [expect.objectContaining({ name: "她" })],
+        characterAssets: expect.arrayContaining([
+          expect.objectContaining({ name: "她" }),
+          expect.objectContaining({ name: "他" })
+        ]),
         sceneAssets: [
           expect.objectContaining({
             name: "便利店外的玻璃反光",
@@ -96,6 +161,9 @@ describe("POST /api/story-world", () => {
         script: expect.objectContaining({ title: "雨夜未发送" })
       }
     });
+    expect(body.storyWorld.script.qualityChecks).toEqual(expect.arrayContaining([expect.stringContaining("可见")]));
+    expect(body.storyWorld.script).not.toHaveProperty("directorBrief");
+    expect(JSON.stringify(body)).not.toContain("shotDensity");
   });
 
   it("uses the OpenRouter story-world provider when text provider is configured for mixed mode", async () => {
@@ -127,7 +195,7 @@ describe("POST /api/story-world", () => {
     const response = await POST(
       jsonRequest({
         input: "我想把毕业告别拍成一个旧照片短片",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
 
@@ -160,7 +228,7 @@ describe("POST /api/story-world", () => {
     expect(provider.generate).toHaveBeenCalledWith(
       expect.objectContaining({
         idea: "我想把毕业告别拍成一个旧照片短片",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
   });
@@ -196,7 +264,7 @@ describe("POST /api/story-world", () => {
     const response = await POST(
       jsonRequest({
         input: "我想把暗恋拍成韩剧雨夜",
-        lightweightChoices: ["像私人回忆"]
+        lightweightChoices: ["留白多一点"]
       })
     );
 
@@ -264,7 +332,7 @@ describe("POST /api/story-world", () => {
     const response = await POST(
       jsonRequest({
         input: "这是非常私密的一句话，不应该出现在错误响应里",
-        lightweightChoices: ["少说话"]
+        lightweightChoices: ["像旧照片"]
       })
     );
     const body = await response.json();
@@ -446,7 +514,7 @@ class FakeQuery {
       return {
         created_at: "2026-04-26T00:00:00.000Z",
         deleted_at: null,
-        id: `${this.inserted?.type}-artifact-1`,
+        id: artifactRowId(this.inserted),
         stale_at: null,
         updated_at: "2026-04-26T00:00:00.000Z",
         ...this.inserted
@@ -455,4 +523,14 @@ class FakeQuery {
 
     return this.inserted;
   }
+}
+
+function artifactRowId(inserted: Record<string, unknown> | null) {
+  const dataJson = inserted?.data_json;
+
+  if (dataJson && typeof dataJson === "object" && "id" in dataJson) {
+    return `${String(dataJson.id)}-artifact`;
+  }
+
+  return `${String(inserted?.type)}-artifact`;
 }

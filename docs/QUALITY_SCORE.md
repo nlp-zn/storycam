@@ -23,3 +23,13 @@ A change is not ready if it:
 - stores raw private input in logs,
 - creates public sharing in Phase 1,
 - lacks tests or a documented verification path.
+
+## PR Gate
+
+Before opening or merging a meaningful PR, follow `docs/PR_REVIEW.md`:
+
+- run the appropriate progressive deterministic gate,
+- produce three independent reviewer reports from `code-reviewer`, `security-auditor`, and `test-engineer`,
+- merge the three reports into a final `GO` or `NO-GO`,
+- resolve Critical and High findings unless the project owner explicitly accepts the risk,
+- include deterministic evidence, reviewer summaries, accepted risks, and rollback notes in the PR.

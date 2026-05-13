@@ -1,0 +1,133 @@
+services:
+  - type: web
+    name: storycam-web
+    runtime: node
+    region: singapore
+    plan: standard
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STORYCAM_GENERATION_MODE
+        value: real
+      - key: STORYCAM_STORY_WORLD_TEXT_PROVIDER
+        value: deepseek
+      - key: STORYCAM_STORYBOARD_TEXT_PROVIDER
+        value: openrouter
+      - key: STORYCAM_MULTIMODAL_PROVIDER
+        value: openrouter
+      - key: STORYCAM_IMAGE_PROVIDER
+        value: inference_sh
+      - key: STORYCAM_VIDEO_PROVIDER
+        value: seedance_2_0
+      - key: STORYCAM_FINAL_WORK_PROVIDER
+        value: ffmpeg
+      - key: STORYCAM_ALLOWED_ORIGINS
+        sync: false
+      - key: STORYCAM_DEEP_HEALTH_TOKEN
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_TEXT_MODEL
+        value: deepseek-v4-pro
+      - key: DEEPSEEK_TEXT_BASE_URL
+        value: https://api.deepseek.com/beta
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_TEXT_MODEL
+        value: deepseek/deepseek-v4-flash
+      - key: OPENROUTER_MULTIMODAL_MODEL
+        value: deepseek/deepseek-v4-pro
+      - key: INFERENCE_API_KEY
+        sync: false
+      - key: INFERENCE_IMAGE_APP
+        value: openai/gpt-image-2
+      - key: SEEDANCE_API_KEY
+        sync: false
+      - key: SEEDANCE_MODEL
+        value: doubao-seedance-2-0-260128
+      - key: SEEDANCE_FAST_MODEL
+        value: doubao-seedance-2-0-fast-260128
+      - key: STORYCAM_DAILY_IMAGE_JOB_LIMIT
+        value: "30"
+      - key: STORYCAM_DAILY_VIDEO_JOB_LIMIT
+        value: "5"
+      - key: STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT
+        value: "5"
+      - key: SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+
+  - type: worker
+    name: storycam-worker
+    runtime: node
+    region: singapore
+    plan: standard
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm worker:storycam
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STORYCAM_GENERATION_MODE
+        value: real
+      - key: STORYCAM_STORY_WORLD_TEXT_PROVIDER
+        value: deepseek
+      - key: STORYCAM_STORYBOARD_TEXT_PROVIDER
+        value: openrouter
+      - key: STORYCAM_MULTIMODAL_PROVIDER
+        value: openrouter
+      - key: STORYCAM_IMAGE_PROVIDER
+        value: inference_sh
+      - key: STORYCAM_VIDEO_PROVIDER
+        value: seedance_2_0
+      - key: STORYCAM_FINAL_WORK_PROVIDER
+        value: ffmpeg
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_TEXT_MODEL
+        value: deepseek-v4-pro
+      - key: DEEPSEEK_TEXT_BASE_URL
+        value: https://api.deepseek.com/beta
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_TEXT_MODEL
+        value: deepseek/deepseek-v4-flash
+      - key: OPENROUTER_MULTIMODAL_MODEL
+        value: deepseek/deepseek-v4-pro
+      - key: INFERENCE_API_KEY
+        sync: false
+      - key: INFERENCE_IMAGE_APP
+        value: openai/gpt-image-2
+      - key: SEEDANCE_API_KEY
+        sync: false
+      - key: SEEDANCE_MODEL
+        value: doubao-seedance-2-0-260128
+      - key: SEEDANCE_FAST_MODEL
+        value: doubao-seedance-2-0-fast-260128
+      - key: STORYCAM_DAILY_IMAGE_JOB_LIMIT
+        value: "30"
+      - key: STORYCAM_DAILY_VIDEO_JOB_LIMIT
+        value: "5"
+      - key: STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT
+        value: "5"
+      - key: SENTRY_DSN
+        sync: false

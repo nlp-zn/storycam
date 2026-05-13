@@ -24,6 +24,9 @@ const job = {
   redacted_error: null,
   started_at: null,
   ended_at: null,
+  locked_at: null,
+  locked_by: null,
+  run_after: "2026-04-26T00:00:00.000Z",
   created_at: "2026-04-26T00:00:00.000Z",
   updated_at: "2026-04-26T00:00:00.000Z",
   tombstoned_at: null
@@ -93,17 +96,17 @@ describe("generation-job repository", () => {
     expect(client.queries[0]?.calls).toContainEqual(["update", { status: "cancel_requested" }]);
     expect(client.queries[1]?.calls).toContainEqual([
       "update",
-      {
+      expect.objectContaining({
         ended_at: "2026-04-26T01:02:03.000Z",
         status: "canceled"
-      }
+      })
     ]);
     expect(client.queries[2]?.calls).toContainEqual([
       "update",
-      {
+      expect.objectContaining({
         status: "canceled",
         tombstoned_at: "2026-04-26T01:03:04.000Z"
-      }
+      })
     ]);
   });
 
@@ -119,11 +122,53 @@ describe("generation-job repository", () => {
     expect(client.queries[0]?.calls).toContainEqual(["is", "tombstoned_at", null]);
     expect(client.queries[0]?.calls).toContainEqual([
       "update",
-      {
+      expect.objectContaining({
         ended_at: "2026-04-26T01:02:03.000Z",
         output_artifact_id: "clip-artifact-1",
         status: "succeeded"
+      })
+    ]);
+  });
+
+  it("claims runnable jobs through the worker RPC", async () => {
+    const client = new FakeSupabaseClient([{ data: [{ ...job, locked_by: "worker-1", status: "running" }], error: null }]);
+    const repository = new StoryCamGenerationJobRepository(client.asStoryCamDbClient());
+
+    const result = await repository.claimRunnable({
+      jobTypes: ["video_clip", "final_work"],
+      limit: 2,
+      lockTtlSeconds: 120,
+      workerId: "worker-1"
+    });
+
+    expect(result).toHaveLength(1);
+    expect(client.rpcs).toEqual([
+      {
+        args: {
+          job_types: ["video_clip", "final_work"],
+          limit_count: 2,
+          lock_ttl_seconds: 120,
+          worker_id: "worker-1"
+        },
+        fn: "claim_storycam_generation_jobs"
       }
+    ]);
+  });
+
+  it("releases active jobs for a later worker poll", async () => {
+    const runAfter = new Date("2026-04-26T01:02:03.000Z");
+    const client = new FakeSupabaseClient([{ data: { ...job, run_after: runAfter.toISOString() }, error: null }]);
+    const repository = new StoryCamGenerationJobRepository(client.asStoryCamDbClient());
+
+    await repository.releaseForRetry("user-1", "job-1", { runAfter });
+
+    expect(client.queries[0]?.calls).toContainEqual([
+      "update",
+      expect.objectContaining({
+        locked_at: null,
+        locked_by: null,
+        run_after: "2026-04-26T01:02:03.000Z"
+      })
     ]);
   });
 });
@@ -135,6 +180,7 @@ type FakeResponse = {
 
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  readonly rpcs: Array<{ args: unknown; fn: string }> = [];
   private responseIndex = 0;
 
   constructor(private readonly responses: FakeResponse[]) {}
@@ -153,6 +199,11 @@ class FakeSupabaseClient {
     const query = new FakeQuery(table, this);
     this.queries.push(query);
     return query;
+  }
+
+  rpc(fn: string, args: unknown) {
+    this.rpcs.push({ args, fn });
+    return Promise.resolve(this.nextResponse());
   }
 }
 

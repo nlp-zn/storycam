@@ -4,6 +4,7 @@ import type {
   characterAssetSchema,
   clipPromptPacketSchema,
   coreStoryboardGroupSchema,
+  directorBriefSchema,
   directorPacketSchema,
   expandedStoryboardCardSchema,
   finalWorkSchema,
@@ -40,6 +41,7 @@ export type StoryScript = z.infer<typeof storyScriptSchema>;
 export type CharacterAsset = z.infer<typeof characterAssetSchema>;
 export type ScenePanel = z.infer<typeof scenePanelSchema>;
 export type SceneAsset = z.infer<typeof sceneAssetSchema>;
+export type DirectorBrief = z.infer<typeof directorBriefSchema>;
 export type StoryboardFrame = z.infer<typeof storyboardFrameSchema>;
 export type StoryboardScript = z.infer<typeof storyboardScriptSchema>;
 export type CoreStoryboardGroup = z.infer<typeof coreStoryboardGroupSchema>;

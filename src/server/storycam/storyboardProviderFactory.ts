@@ -6,7 +6,9 @@ import type { StoryCamConfig } from "@/server/config";
 export function createConfiguredStoryboardProvider(
   config: StoryCamConfig
 ): TextGenerationProvider<MockStoryboardInput, MockStoryboardOutput> | undefined {
-  if (config.generation.textProvider !== "openrouter") {
+  const provider = config.generation.storyboardTextProvider ?? (config.generation.textProvider === "openrouter" ? "openrouter" : "mock");
+
+  if (provider !== "openrouter") {
     return undefined;
   }
 

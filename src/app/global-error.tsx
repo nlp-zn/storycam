@@ -1,20 +1,16 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import NextError from "next/error";
-import { AppConfig } from "@/utils/AppConfig";
+import { useEffect } from "react";
 
-export default function GlobalError({
-  error
-}: {
-  error: Error & { digest?: string };
-}) {
-  console.error("StoryCam global error", {
-    digest: error.digest,
-    name: error.name
-  });
+export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
 
   return (
-    <html lang={AppConfig.locale}>
+    <html lang="en">
       <body>
         <NextError statusCode={0} />
       </body>
