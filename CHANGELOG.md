@@ -2,6 +2,12 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.1.1] - 2026-05-14
+
+### Changed
+
+- Simplified final work composition internals, provider config parsing, worker typing, and deep health status reporting without changing user-facing behavior.
+
 ## [0.1.1.0] - 2026-05-14
 
 ### Added
