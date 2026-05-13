@@ -8,8 +8,9 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 2. `ARCHITECTURE.md` for system boundaries and current implementation shape.
 3. `product-specs/index.md` before changing product behavior.
 4. `SECURITY.md`, `RELIABILITY.md`, `FRONTEND.md`, and `DESIGN.md` for domain rules.
-5. `PR_REVIEW.md` before reviewing, shipping, or changing gates.
-6. `exec-plans/active/` only when there is an active feature plan.
+5. `DEPLOYMENT.md` before deployment, infrastructure, monitoring, or launch-readiness work.
+6. `PR_REVIEW.md` before reviewing, shipping, or changing gates.
+7. `exec-plans/active/` only when there is an active feature plan.
 
 ## Canonical Docs
 
@@ -18,11 +19,13 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 - `ARCHITECTURE.md` — current system and code boundary map.
 - `SECURITY.md` — auth, RLS, storage, provider keys, logs, privacy.
 - `RELIABILITY.md` — async jobs, retries, cancellation, late results, provider failures.
+- `DEPLOYMENT.md` — production deployment topology, environment plan, monitoring, rollout, and launch gaps.
 - `FRONTEND.md` — frontend implementation rules and current user-facing surfaces.
 - `DESIGN.md` — visual principles and current design references.
 - `PR_REVIEW.md` — progressive deterministic gates, Codex PR Gate, Ship Gate.
 - `QUALITY_SCORE.md` — review rubric for major changes.
 - `PLANS.md` — execution plan lifecycle.
+- `../CHANGELOG.md` — release history.
 
 ## Directories
 

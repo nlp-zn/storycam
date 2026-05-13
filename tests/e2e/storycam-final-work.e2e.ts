@@ -28,6 +28,41 @@ test.describe("StoryCam final work", () => {
     expect(routes.finalWorkCalls()).toBe(2);
   });
 
+  test("exports the final MP4 directly without opening the browser video page", async ({ page }) => {
+    await installWorkflowRoutes(page);
+
+    await driveToClipGeneration(page);
+
+    await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+
+    const pageUrl = page.url();
+    const download = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "导出 MP4" }).click()
+    ]).then(([downloadEvent]) => downloadEvent);
+
+    expect(download.suggestedFilename()).toBe("storycam-final-work.mp4");
+    await expect(page).toHaveURL(pageUrl);
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
+  });
+
+  test("keeps the final work preview visible when MP4 export fails", async ({ page }) => {
+    await installWorkflowRoutes(page, { failExportDownload: true });
+
+    await driveToClipGeneration(page);
+
+    await expect(page.getByRole("heading", { name: "账号内预览已保存" })).toBeVisible();
+    const pageUrl = page.url();
+
+    await page.getByRole("button", { name: "导出 MP4" }).click();
+
+    await expect(page.getByText("导出失败，请稍后再试。")).toBeVisible();
+    await expect(page).toHaveURL(pageUrl);
+    await expect(page.locator("video.storycam-clip-video")).toBeVisible();
+  });
+
   test("restoring an unfinished clip clears stale auto-save guards", async ({ page }) => {
     const routes = await installWorkflowRoutes(page, { failFirstFinalWork: true });
 
@@ -146,7 +181,12 @@ async function driveToClipGeneration(page: Page) {
 
 async function installWorkflowRoutes(
   page: Page,
-  options: { delayFirstFinalWork?: boolean; failDelayedFirstFinalWork?: boolean; failFirstFinalWork?: boolean } = {}
+  options: {
+    delayFirstFinalWork?: boolean;
+    failDelayedFirstFinalWork?: boolean;
+    failExportDownload?: boolean;
+    failFirstFinalWork?: boolean;
+  } = {}
 ): Promise<FinalWorkRoutes> {
   let generateCalls = 0;
   let finalWorkCalls = 0;
@@ -370,6 +410,30 @@ async function installWorkflowRoutes(
           signedUrlExpiresIn: 300
         }
       })
+    });
+  });
+
+  await page.route("**/api/storycam-media/*/download", async (route) => {
+    if (options.failExportDownload) {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 500,
+        body: JSON.stringify({
+          error: "download_failed",
+          redactedError: "StoryCam media download failed.",
+          redactionApplied: true
+        })
+      });
+      return;
+    }
+
+    await route.fulfill({
+      body: Buffer.from("final-work-bytes"),
+      headers: {
+        "Content-Disposition": 'attachment; filename="storycam-final-work.mp4"',
+        "Content-Type": "video/mp4"
+      },
+      status: 200
     });
   });
 

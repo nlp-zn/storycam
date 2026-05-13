@@ -60,7 +60,7 @@ export type StoryboardImageFrameInput = {
 
 export type StoryWorldReferenceImage = {
   assetArtifactId: string;
-  kind: "character" | "scene";
+  kind: "character" | "core_storyboard" | "scene";
   mediaId: string;
   mimeType: string;
   signedUrl: string;
@@ -409,6 +409,76 @@ export async function loadStoryWorldVisualContext(
   };
 }
 
+export async function withCoreStoryboardReferenceImage(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    coreStoryboardGroupArtifactId: string;
+    providerReferenceSignedUrlTtlSeconds?: number;
+    sessionId: string;
+    visualContext: StoryWorldVisualContext;
+  }
+): Promise<StoryWorldVisualContext> {
+  if (!input.visualContext.ok) {
+    return input.visualContext;
+  }
+
+  try {
+    const coreReferenceImage = await loadCoreStoryboardReferenceImage(client, userId, {
+      coreStoryboardGroupArtifactId: input.coreStoryboardGroupArtifactId,
+      providerReferenceSignedUrlTtlSeconds: input.providerReferenceSignedUrlTtlSeconds,
+      sessionId: input.sessionId
+    });
+
+    if (!coreReferenceImage || input.visualContext.referenceImages.some((image) => image.mediaId === coreReferenceImage.mediaId)) {
+      return input.visualContext;
+    }
+
+    return {
+      ...input.visualContext,
+      inputArtifactVersionsJson: {
+        ...input.visualContext.inputArtifactVersionsJson,
+        [`media:${coreReferenceImage.mediaId}`]: coreReferenceImage.mediaId
+      },
+      referenceImages: [...input.visualContext.referenceImages, coreReferenceImage]
+    };
+  } catch (error) {
+    if (error instanceof StoryCamMediaStoreError && error.code === "provider_reference_url_not_public") {
+      return { ok: false, reason: "reference_images_unsupported" };
+    }
+
+    throw error;
+  }
+}
+
+export async function loadCoreStoryboardReferenceImage(
+  client: SupabaseClient<Database>,
+  userId: string,
+  input: {
+    coreStoryboardGroupArtifactId: string;
+    providerReferenceSignedUrlTtlSeconds?: number;
+    sessionId: string;
+  }
+): Promise<StoryWorldReferenceImage | null> {
+  const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const media = await mediaAssets.findLatestThumbnailByLinkedArtifact(userId, {
+    linkedArtifactId: input.coreStoryboardGroupArtifactId,
+    sessionId: input.sessionId
+  });
+
+  if (!media) {
+    return null;
+  }
+
+  return toReferenceImageFromMedia(client, {
+    assetArtifactId: input.coreStoryboardGroupArtifactId,
+    kind: "core_storyboard",
+    media,
+    providerReferenceSignedUrlTtlSeconds:
+      input.providerReferenceSignedUrlTtlSeconds ?? storyCamProviderReferenceSignedUrlTtlSeconds
+  });
+}
+
 function findCharacterArtifactRows(rows: StoryCamArtifactRow[], requiredIds: string[]) {
   return requiredIds
     .map((id) =>
@@ -431,18 +501,35 @@ async function toReferenceImage(
     providerReferenceSignedUrlTtlSeconds: number;
   }
 ): Promise<StoryWorldReferenceImage> {
-  return {
+  return toReferenceImageFromMedia(client, {
     assetArtifactId: artifact.id,
     kind: artifact.type === "character_asset" ? "character" : "scene",
-    mediaId: media.id,
-    mimeType: media.mime_type,
+    media,
+    providerReferenceSignedUrlTtlSeconds: options.providerReferenceSignedUrlTtlSeconds
+  });
+}
+
+async function toReferenceImageFromMedia(
+  client: SupabaseClient<Database>,
+  input: {
+    assetArtifactId: string;
+    kind: StoryWorldReferenceImage["kind"];
+    media: MediaAssetRow;
+    providerReferenceSignedUrlTtlSeconds: number;
+  }
+): Promise<StoryWorldReferenceImage> {
+  return {
+    assetArtifactId: input.assetArtifactId,
+    kind: input.kind,
+    mediaId: input.media.id,
+    mimeType: input.media.mime_type,
     signedUrl: await createStoryCamProviderReferenceSignedUrl(
       client,
       storyCamGeneratedBucket,
-      media.storage_path,
-      options.providerReferenceSignedUrlTtlSeconds
+      input.media.storage_path,
+      input.providerReferenceSignedUrlTtlSeconds
     ),
-    signedUrlExpiresIn: options.providerReferenceSignedUrlTtlSeconds
+    signedUrlExpiresIn: input.providerReferenceSignedUrlTtlSeconds
   };
 }
 

@@ -43,6 +43,8 @@ Progressive gates:
 - `scripts/check-release.sh`: dev gate plus mock verification and dependency audit. GitHub runs this after promotion to `main`.
 - `scripts/pr-ready.sh`: compatibility alias for `check-pr.sh`; set `PR_READY_E2E=1` to run the dev gate.
 
+For day-to-day work, use the test selection strategy in `../PR_REVIEW.md`: run the nearest deterministic test first, widen to related API or integration coverage for behavior-boundary changes, and reserve full gates for review, ship, PR, or merge.
+
 ## Required Environment Variables
 
 Create `.env.local` from `.env.example` and keep the mock defaults unless you are intentionally running a real provider smoke test.

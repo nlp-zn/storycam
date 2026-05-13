@@ -58,16 +58,17 @@ export function ClipGenerationWorkspace({
   videoModel
 }: ClipGenerationWorkspaceProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const clipPreview = clipJob?.outputPreview;
   const finalPreview = finalWork?.preview;
   const activePreview = finalPreview ?? clipPreview;
-  const finalWorkSignedUrl = finalWork?.preview?.signedUrl;
+  const finalWorkMediaId = finalWork?.media.id;
   const isCreatingClip = clipGenerationState.kind === "pending";
   const isClipCreationError = clipGenerationState.kind === "error";
   const canCancel = clipJob?.status === "queued" || clipJob?.status === "running";
   const canRetry = clipJob?.status === "failed" || clipJob?.status === "canceled" || clipJob?.status === "expired";
   const isClipReady = clipJob?.status === "succeeded";
-  const canExport = !isCreatingClip && !isClipCreationError && Boolean(finalWorkSignedUrl);
+  const canExport = !isCreatingClip && !isClipCreationError && Boolean(finalWorkMediaId);
   const saveStatusLabel = clipSaveStatusLabel({ hasFinalWork: Boolean(finalWork), hasSaveError: Boolean(finalWorkError), isClipReady });
   const durationLabel = formatDuration(durationSeconds);
   const progress = progressNumberForStatus(clipJob?.status);
@@ -81,14 +82,27 @@ export function ClipGenerationWorkspace({
   });
 
   async function exportMp4(): Promise<void> {
-    if (isExporting || isFinalWorkSubmitting || !finalWorkSignedUrl) {
+    if (isExporting || isFinalWorkSubmitting || !finalWorkMediaId) {
       return;
     }
 
     setIsExporting(true);
+    setExportError(null);
 
     try {
-      triggerDownload(finalWorkSignedUrl, "storycam-final-work.mp4");
+      const response = await fetch(`/api/storycam-media/${encodeURIComponent(finalWorkMediaId)}/download`, {
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        throw new Error("storycam_media_download_failed");
+      }
+
+      const blob = await response.blob();
+
+      triggerBlobDownload(blob, "storycam-final-work.mp4");
+    } catch {
+      setExportError("导出失败，请稍后再试。");
     } finally {
       setIsExporting(false);
     }
@@ -169,6 +183,7 @@ export function ClipGenerationWorkspace({
       {clipJob ? <p className="sr-only">任务 {clipJob.id}</p> : null}
       {clipJob?.redactedError ? <p className="storycam-clip-error">{clipJob.redactedError}</p> : null}
       {finalWorkError ? <p className="storycam-clip-error">{finalWorkError}</p> : null}
+      {exportError ? <p className="storycam-clip-error">{exportError}</p> : null}
       {clipJob?.providerErrorCategory ? <p className="storycam-clip-error">失败类型：{clipJob.providerErrorCategory}</p> : null}
 
       <div className="storycam-clip-footer-actions" aria-label="片段工具">
@@ -224,7 +239,7 @@ export function ClipGenerationWorkspace({
         ) : finalWork ? (
           <Button disabled={!canExport || isExporting || isFinalWorkSubmitting} onClick={exportMp4} type="button" variant="primaryNeon">
             <Download aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
-            导出 MP4
+            {isExporting ? "准备下载" : "导出 MP4"}
           </Button>
         ) : finalWorkError ? (
           <Button disabled={isFinalWorkSubmitting} onClick={onRetryFinalWork} type="button" variant="primaryNeon">
@@ -369,12 +384,14 @@ function formatDuration(seconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-function triggerDownload(signedUrl: string, filename: string): void {
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  anchor.href = signedUrl;
+  anchor.href = objectUrl;
   anchor.download = filename;
   anchor.rel = "noreferrer";
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }

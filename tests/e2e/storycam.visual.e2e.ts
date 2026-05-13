@@ -47,10 +47,10 @@ test.describe("StoryCam visual smoke", () => {
     await expect(page).toHaveURL(/\/storycam\/clip-generation$/);
     await expect(page.getByText("任务 job-1")).toBeVisible();
     await page.getByRole("button", { name: "取消生成" }).click();
-    await expect(page.getByText("已取消", { exact: true })).toBeVisible();
+    await expect(page.getByText("生成已取消", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "重试" }).click();
-    await expect(page.getByText("生成失败", { exact: true })).toBeVisible();
+    await expect(page.getByText("生成需要重试", { exact: true })).toBeVisible();
     await expect(page.getByText("状态更新失败。")).toBeVisible();
 
     await page.getByRole("button", { name: "重试" }).click();

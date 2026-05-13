@@ -36,6 +36,43 @@ Use Ship Gate when the user asks for:
 
 Ship Gate runs the same deterministic checks and three reviewer perspectives. Only a final `GO` authorizes commit, push, and PR creation. Any blocker stops the workflow before publish actions.
 
+## Test Selection Strategy
+
+Do not treat full gates as the default feedback loop. Choose the smallest deterministic check that can prove the change, then widen only when the behavioral surface widens.
+
+Small fast check:
+
+```bash
+pnpm vitest run path/to/file.test.ts
+pnpm vitest run path/to/file.test.ts -t "case name"
+```
+
+Use this for pure functions, provider prompts, normalization logic, CSS-adjacent behavior, and small component logic where one test file or case directly covers the change.
+
+Local regression:
+
+```bash
+pnpm vitest run tests/api/generationJobs.test.ts
+pnpm typecheck
+pnpm lint
+```
+
+Use this for routes, server services, data contracts, provider boundaries, or user-visible behavior changes. Add `typecheck`, `lint`, or both when the change crosses TypeScript or style boundaries.
+
+Delivery gate:
+
+```bash
+pnpm test
+pnpm test:api
+pnpm test:e2e
+pnpm typecheck
+pnpm lint
+```
+
+Use this before review, ship, PR, or merge, or when the diff spans enough surfaces that targeted tests no longer give good confidence.
+
+Core rule: small changes run the nearest deterministic test first; behavior-boundary changes run the related API or integration tests; delivery runs the full gate. Do not make full checks part of every inner-loop step. During development, prefer serial targeted commands for clearer failures; reserve parallel `vitest`, `typecheck`, and `lint` runs for final gate waiting.
+
 ## Progressive Deterministic Gates
 
 StoryCam uses four deterministic gate levels. Run the lowest gate that matches the moment:

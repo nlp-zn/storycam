@@ -84,10 +84,16 @@ describe("story-world asset image service", () => {
     );
 
     expect(input.referenceImages?.[0]).toMatchObject({
+      kind: "style_reference",
+      mediaId: "storycam-handdrawn-travel-character-style"
+    });
+    expect(input.referenceImages?.[0]?.signedUrl).toMatch(/^data:image\/jpeg;base64,/);
+    expect(input.referenceImages?.[1]).toMatchObject({
       kind: "uploaded_photo",
       mediaId: "photo-1",
       signedUrl: "https://storycam.example.supabase.co/storage/v1/object/sign/users/user-1/sessions/session-1/uploads/photo-1.png"
     });
+    expect(input.referenceImages).toHaveLength(2);
     expect(client.signedUrlCalls).toEqual([
       {
         bucket: "storycam-uploads",
@@ -95,6 +101,30 @@ describe("story-world asset image service", () => {
         path: "users/user-1/sessions/session-1/uploads/photo-1.png"
       }
     ]);
+  });
+
+  it("carries the selected session aspect ratio into story-world asset image inputs", async () => {
+    const artifactRows = storyWorldArtifactRows();
+    const client = new FakeSupabaseClient(artifactRows);
+
+    const input = await buildStoryWorldAssetImageProviderInput(
+      client.asStoryCamDbClient(),
+      "user-1",
+      {
+        assetArtifactId: "scene-artifact-1",
+        assetKind: "scene",
+        sessionId: "session-1"
+      },
+      artifactRows[2],
+      artifactRows,
+      "9:16"
+    );
+
+    expect(input).toMatchObject({
+      assetArtifactId: "scene-artifact-1",
+      assetKind: "scene",
+      aspectRatio: "9:16"
+    });
   });
 });
 

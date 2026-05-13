@@ -93,6 +93,41 @@ test.describe("StoryCam session restore", () => {
     expect(restoreCalls).toBe(1);
   });
 
+  test("always opens continued recent projects at story world even when the project is further along", async ({ page }) => {
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, restored: false })
+      });
+    });
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          ok: true,
+          projects: [recentProject({ currentStep: "export", title: "已完成项目" })]
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-1/restore", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify(restoredCompletedProject({ currentStep: "export", sessionId: "session-restored-1" }))
+      });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "继续创作 已完成项目" }).click();
+
+    await expect(page.getByRole("heading", { name: "确认故事世界" })).toBeVisible();
+    await expect(page).toHaveURL(/\/storycam\/story-world$/);
+    await expect(page.getByRole("heading", { name: "生成片段" })).toHaveCount(0);
+  });
+
   test("recent project prefetch does not replace the verified current restore target", async ({ page }) => {
     let currentRestoreCalls = 0;
     let prefetchRestoreCalls = 0;
@@ -202,6 +237,80 @@ test.describe("StoryCam session restore", () => {
 
     const recentProjectsDialog = page.getByRole("dialog", { name: "最近项目" });
     await expect(recentProjectsDialog.getByRole("heading", { name: "雨夜未发送" })).toBeVisible();
+  });
+
+  test("recent projects drawer scrolls and supports deleting a project", async ({ page }) => {
+    let deleteCalls = 0;
+    const projects = Array.from({ length: 12 }, (_, index) =>
+      recentProject({
+        sessionId: `session-restored-${index + 1}`,
+        title: `最近项目 ${index + 1}`,
+        updatedAt: `2026-04-28T10:${String(59 - index).padStart(2, "0")}:00.000Z`
+      })
+    );
+
+    await mockAuthenticated(page);
+    await page.route("**/api/storycam-sessions/current", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, restored: false })
+      });
+    });
+    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ ok: true, projects })
+      });
+    });
+    await page.route("**/api/storycam-sessions/*/restore", async (route) => {
+      const sessionId = route.request().url().split("/api/storycam-sessions/")[1]?.split("/")[0] ?? "session-restored-1";
+
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({
+          coreGroupTargetCount: 1,
+          currentStep: "story-world",
+          ok: true,
+          restored: true,
+          sessionId,
+          storyboard: null,
+          storyWorld: restoredStoryWorld(sessionId),
+          storyWorldConfirmed: false
+        })
+      });
+    });
+    await page.route("**/api/storycam-sessions/session-restored-3", async (route) => {
+      deleteCalls += 1;
+      expect(route.request().method()).toBe("DELETE");
+      await route.fulfill({
+        contentType: "application/json",
+        status: 200,
+        body: JSON.stringify({ deletedArtifacts: 3, deletedMedia: 2, ok: true, sessionId: "session-restored-3", tombstonedJobs: 0 })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "打开" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "最近项目" });
+    await expect(dialog.getByRole("heading", { name: "最近项目 12" })).toHaveCount(1);
+    const scrollMetrics = await dialog.locator(".overflow-y-auto").evaluate((node) => ({
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight
+    }));
+    expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+
+    const row = dialog.locator("article").filter({ hasText: "最近项目 3" });
+    await row.getByRole("button", { name: "删除" }).click();
+    await expect(row.getByRole("button", { name: "确认删除" })).toBeVisible();
+    await row.getByRole("button", { name: "确认删除" }).click();
+
+    await expect(dialog.getByText("已删除「最近项目 3」。")).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "最近项目 3" })).toHaveCount(0);
+    expect(deleteCalls).toBe(1);
   });
 
   test("does not duplicate recent project refreshes while one request is in flight", async ({ page }) => {

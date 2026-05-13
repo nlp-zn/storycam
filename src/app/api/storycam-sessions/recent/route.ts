@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   try {
     const user = await requireUser();
     const url = new URL(request.url);
-    const limit = Number(url.searchParams.get("limit") ?? 5);
+    const limit = Number(url.searchParams.get("limit") ?? 20);
     const result = await listRecentStoryCamProjects(createSupabaseAdminClient(), user.id, limit);
 
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" }, status: 200 });

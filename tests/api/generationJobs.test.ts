@@ -308,6 +308,89 @@ describe("generation job API routes", () => {
     });
   });
 
+  it("keeps Seedance Fast failures on the selected provider instead of silently falling back", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
+    const client = new FakeSupabaseClient({
+      artifactRows: [coreGroupRow(), storyboardScriptRow(), ...expandedCardRows()],
+      mediaRows: [mediaRow("media-core-1", "core-artifact-1"), ...expandedMediaRows()]
+    });
+    process.env.STORYCAM_GENERATION_MODE = "real";
+    process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
+    process.env.SEEDANCE_API_KEY = "seedance-secret";
+    process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
+    const fastProvider = {
+      generateClip: vi.fn(),
+      providerKind: "video" as const,
+      providerName: "seedance_2_0_fast",
+      resolveClipTask: vi.fn(),
+      submitClipTask: vi.fn().mockResolvedValue({
+        errorCode: "SEEDANCE_PROVIDER_ERROR",
+        ok: false,
+        providerErrorCategory: "request_rejected",
+        providerHttpStatus: 404,
+        providerKind: "video",
+        providerName: "seedance_2_0_fast",
+        redactedError: "Provider request failed.",
+        redactionApplied: true,
+        retryable: true
+      })
+    };
+    const regularProvider = {
+      generateClip: vi.fn(),
+      providerKind: "video" as const,
+      providerName: "seedance_2_0",
+      resolveClipTask: vi.fn(),
+      submitClipTask: vi.fn().mockResolvedValue({
+        ok: true,
+        providerKind: "video",
+        providerName: "seedance_2_0",
+        value: { providerRequestId: "seedance-standard-task-1" }
+      })
+    };
+
+    createConfiguredVideoProvidersMock.mockReturnValue({
+      seedance_2_0: regularProvider,
+      seedance_2_0_fast: fastProvider
+    });
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(generateClipRequest({ videoModel: "seedance_2_0_fast" }), {
+      params: { id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      providerErrorCategory: "request_rejected",
+      providerHttpStatus: 404,
+      providerName: "seedance_2_0_fast",
+      redactedError: "Provider request failed.",
+      status: "failed"
+    });
+    expect(fastProvider.submitClipTask).toHaveBeenCalledTimes(1);
+    expect(regularProvider.submitClipTask).not.toHaveBeenCalled();
+    expect(
+      client.queries
+        .filter((query) => query.table === "generation_jobs")
+        .flatMap((query) => query.calls)
+        .find((call) => call[0] === "insert")?.[1]
+    ).toMatchObject({
+      provider_name: "seedance_2_0_fast",
+      provider_request_id: null,
+      status: "running"
+    });
+    expect(
+      client.queries
+        .filter((query) => query.table === "generation_jobs")
+        .flatMap((query) => query.calls)
+        .find((call) => call[0] === "update")?.[1]
+    ).toMatchObject({
+      provider_error_category: "request_rejected",
+      provider_http_status: 404,
+      status: "failed"
+    });
+  });
+
   it("rejects an unknown video model with a redacted validation error", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
 

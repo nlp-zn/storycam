@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ZodError } from "zod";
 import {
   defaultStoryCamVideoAspectRatio,
   parseStoryCamVideoAspectRatio,
@@ -163,6 +164,8 @@ type StoryWorldBundle = {
   scriptRow: StoryCamArtifactRow;
 };
 
+const recentProjectSummaryBatchSize = 5;
+
 export async function restoreCurrentStoryCamSession(
   client: SupabaseClient<Database>,
   userId: string
@@ -206,29 +209,66 @@ export async function restoreStoryCamSessionById(
 export async function listRecentStoryCamProjects(
   client: SupabaseClient<Database>,
   userId: string,
-  limit = 5
+  limit = 20
 ): Promise<ListRecentStoryCamProjectsOutput> {
-  const projectLimit = Math.min(5, Math.max(1, Math.floor(limit)));
+  const projectLimit = recentProjectLimit(limit);
   const candidateLimit = Math.max(projectLimit * 10, 50);
   const sessions = (await new StoryCamSessionRepository(client).listRecentRestorableCandidates(userId, candidateLimit)) ?? [];
-  const projects: RecentStoryCamProject[] = [];
-
-  for (const session of sessions) {
-    if (projects.length >= projectLimit) {
-      break;
-    }
-
-    const summary = await summarizeSession(client, userId, session);
-
-    if (summary) {
-      projects.push(summary);
-    }
-  }
 
   return {
     ok: true,
-    projects
+    projects: await summarizeRecentProjectCandidates(client, userId, sessions, projectLimit)
   };
+}
+
+async function summarizeRecentProjectCandidates(
+  client: SupabaseClient<Database>,
+  userId: string,
+  sessions: StoryCamSessionRow[],
+  projectLimit: number
+): Promise<RecentStoryCamProject[]> {
+  const projects: RecentStoryCamProject[] = [];
+
+  for (let index = 0; index < sessions.length && projects.length < projectLimit; index += recentProjectSummaryBatchSize) {
+    const batch = sessions.slice(index, index + recentProjectSummaryBatchSize);
+    const summaries = await Promise.all(batch.map((session) => safeSummarizeSession(client, userId, session)));
+
+    for (const summary of summaries) {
+      if (summary) {
+        projects.push(summary);
+      }
+
+      if (projects.length >= projectLimit) {
+        break;
+      }
+    }
+  }
+
+  return projects;
+}
+
+async function safeSummarizeSession(
+  client: SupabaseClient<Database>,
+  userId: string,
+  session: StoryCamSessionRow
+): Promise<RecentStoryCamProject | null> {
+  try {
+    return await summarizeSession(client, userId, session);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function recentProjectLimit(limit: number) {
+  if (!Number.isFinite(limit)) {
+    return 20;
+  }
+
+  return Math.min(20, Math.max(1, Math.floor(limit)));
 }
 
 async function restoreSession(

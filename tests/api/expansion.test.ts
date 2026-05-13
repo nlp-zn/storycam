@@ -201,7 +201,7 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image/route");
     const client = new FakeSupabaseClient({
       artifactRows: [scriptArtifactRow(), characterAssetRow(), sceneAssetRow(), coreGroupRow(), storyboardScriptRow()],
-      mediaRows: assetImageRows()
+      mediaRows: assetAndCoreStoryboardImageRows()
     });
 
     createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
@@ -221,6 +221,9 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     });
     expect(generationJobInserts(client)).toContainEqual(
       expect.objectContaining({
+        input_artifact_versions_json: expect.objectContaining({
+          "media:media-core-1": "media-core-1"
+        }),
         type: "expanded_storyboard_image"
       })
     );
@@ -228,10 +231,49 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
       expect.objectContaining({
         imagePrompt: expect.stringContaining("frame 5"),
         referenceImages: [
-          expect.objectContaining({ mediaId: "media-character-1" }),
-          expect.objectContaining({ mediaId: "media-scene-1" })
+          expect.objectContaining({ kind: "character", mediaId: "media-character-1" }),
+          expect.objectContaining({ kind: "scene", mediaId: "media-scene-1" }),
+          expect.objectContaining({ assetArtifactId: "core-artifact-1", kind: "core_storyboard", mediaId: "media-core-1" })
         ],
         sortOrder: 3
+      })
+    );
+  });
+
+  it("uses the center storyboard image as a continuity reference when creating expanded frame images", async () => {
+    const { POST } = await import("@/app/api/storyboard-groups/[id]/expand/route");
+    const client = new FakeSupabaseClient({
+      artifactRows: [scriptArtifactRow(), characterAssetRow(), sceneAssetRow(), coreGroupRow(), storyboardScriptRow()],
+      mediaRows: assetAndCoreStoryboardImageRows()
+    });
+
+    createConfiguredStoryboardImageProviderMock.mockReturnValue(fakeAsyncImageProvider());
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(jsonRequest({ sessionId: "session-1" }), {
+      params: { id: "core-artifact-1" }
+    });
+
+    expect(response.status).toBe(201);
+    expect(generationJobInserts(client)).toHaveLength(8);
+    expect(generationJobInserts(client)[0]).toEqual(
+      expect.objectContaining({
+        input_artifact_versions_json: expect.objectContaining({
+          "media:media-character-1": "media-character-1",
+          "media:media-core-1": "media-core-1",
+          "media:media-scene-1": "media-scene-1"
+        }),
+        type: "expanded_storyboard_image"
+      })
+    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        referenceImages: [
+          expect.objectContaining({ kind: "character", mediaId: "media-character-1" }),
+          expect.objectContaining({ kind: "scene", mediaId: "media-scene-1" }),
+          expect.objectContaining({ assetArtifactId: "core-artifact-1", kind: "core_storyboard", mediaId: "media-core-1" })
+        ]
       })
     );
   });
@@ -766,6 +808,10 @@ function assetImageRows() {
     mediaRow("media-character-1", "character-artifact-1"),
     mediaRow("media-scene-1", "scene-artifact-1")
   ];
+}
+
+function assetAndCoreStoryboardImageRows() {
+  return [...assetImageRows(), mediaRow("media-core-1", "core-artifact-1")];
 }
 
 function mediaRow(id: string, linkedArtifactId: string) {
