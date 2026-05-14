@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mockAuthenticated } from "./helpers/auth";
 
 test.describe("StoryCam expansion", () => {
@@ -19,6 +19,7 @@ test.describe("StoryCam expansion", () => {
           },
           ok: true,
           sessionId: "session-1",
+          videoAspectRatio: "9:16",
           storyWorld: storyWorldFixture()
         })
       });
@@ -137,9 +138,14 @@ test.describe("StoryCam expansion", () => {
     await expect(page.getByTestId("storyboard-frame-04").locator(".storycam-frame-spinner")).toHaveText("生成中");
     await expect(page.getByTestId("storyboard-frame-04").getByText("生成中")).toHaveCount(1);
     await expect(page.getByText(/音频：雨声 \/ 伞面水声 \/ 手机震动 \/ 门铃/)).toBeVisible();
+    await expect(page.locator(".storycam-core-workbench")).toHaveAttribute("data-aspect-ratio", "9:16");
+    await expect.poll(() => scriptToAudioGap(page)).toBeLessThanOrEqual(32);
     await expect(page.getByText("低声对白")).toHaveCount(0);
     await expect(page.getByTestId("storyboard-frame-01").getByText("01")).toBeVisible();
     await expect(page.getByTestId("storyboard-frame-09").getByText("09")).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").locator(".storycam-frame-label")).toHaveText("01");
+    await expect(page.getByTestId("storyboard-frame-02").locator(".storycam-frame-label")).toHaveText("02");
+    await expect(page.getByTestId("storyboard-frame-09").locator(".storycam-frame-label")).toHaveText("09");
     await page.getByRole("button", { name: "查看第 02 帧大图" }).click();
     const preview = page.getByRole("dialog", { name: /第 02 帧大图/ });
     await expect(preview).toBeVisible();
@@ -193,6 +199,19 @@ function storyWorldFixture() {
       version: 1
     }
   };
+}
+
+async function scriptToAudioGap(page: Page) {
+  return page.evaluate(() => {
+    const scriptMore = document.querySelector(".storycam-core-script-more");
+    const audioNote = document.querySelector(".storycam-core-audio-note");
+
+    if (!scriptMore || !audioNote) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return audioNote.getBoundingClientRect().top - scriptMore.getBoundingClientRect().bottom;
+  });
 }
 
 function storyboardFixture() {

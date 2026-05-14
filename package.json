@@ -12,6 +12,7 @@
     "storycam:smoke:deepseek": "tsx scripts/storycam-smoke-deepseek.ts",
     "storycam:smoke:openrouter": "tsx scripts/storycam-smoke-openrouter.ts",
     "storycam:smoke:seedance": "tsx scripts/storycam-smoke-seedance.ts",
+    "storycam:upload:discovery-samples": "tsx scripts/storycam-upload-discovery-samples.ts",
     "storycam:verify:live": "node scripts/storycam-verify-live.mjs",
     "storycam:verify:mock": "tsx scripts/storycam-verify-mock.ts",
     "storycam:verify:supabase": "tsx scripts/storycam-verify-supabase.ts",

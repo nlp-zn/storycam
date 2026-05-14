@@ -1,6 +1,20 @@
 # StoryCam Observability Runbook
 
-Status: beta launch runbook for Sentry, Cloudflare, Render, and uptime checks.
+Status: production beta runbook for Sentry, Cloudflare, Render, and uptime checks.
+
+Current production state:
+
+- Sentry is enabled for StoryCam web, browser, and worker paths with the redaction boundary
+  described below.
+- Cloudflare fronts `storycam.znbuild.com` with DNS/TLS, cache rules, and a 10-second burst
+  rate-limit guard.
+- GitHub Actions runs scheduled production uptime checks.
+- Render dashboard notification policies still need final human confirmation for native
+  deploy-failure and unhealthy-service events. Memory, disk, worker crash-loop, and 5xx
+  visibility must be covered by Render metrics/logs plus Sentry and uptime checks until a
+  dedicated metrics alerting integration is added.
+- The 2026-05-14 real production smoke passed with DeepSeek/OpenRouter text,
+  Inference.sh images, Seedance video, and ffmpeg final MP4 on Render Native Runtime.
 
 ## Stack
 
@@ -76,8 +90,9 @@ Rate-limit starting points:
 | `/api/story-world/assets/*` and storyboard image regeneration | Moderate burst limit by IP to protect image-provider cost. |
 | `/api/storyboard-groups/*/generate-clip` and `/api/final-work` | Strict hourly limit by IP because video/final MP4 are expensive. |
 
-Cloudflare rate limits are defense-in-depth. StoryCam's server-side per-user quotas remain
-the cost-control source of truth.
+Current production rate limiting is a short 10-second burst guard by IP. It is useful for
+abusive traffic spikes, but it is not a complete provider-cost control layer. StoryCam's
+server-side per-user quotas remain the cost-control source of truth.
 
 Operational note: Wrangler is useful for Cloudflare auth and worker-oriented resources.
 Zone cache/WAF/rate-limit rules should be applied through the Cloudflare dashboard,
@@ -114,8 +129,17 @@ STORYCAM_REQUIRE_CLOUDFLARE_STATIC_CACHE=1 pnpm storycam:verify:live
 ## Alert Routing
 
 - GitHub scheduled workflow failures should notify repository watchers.
-- Render alerts should cover web health check failure, worker restarts, deploy failure,
-  memory pressure, disk pressure, and sustained 5xx.
+- Render notifications should cover deploy/build failures and unhealthy running services
+  for `storycam-web` and `storycam-worker` where the service type supports native
+  notifications.
+- Render health checks apply to the web service. Background workers do not receive HTTP
+  health checks; Render relies on process uptime and exit codes for worker deploy/runtime
+  health.
+- Render CLI does not currently expose alert-policy configuration for this project. Use the
+  Render Dashboard to confirm notification level and destination for both services.
+- Track memory pressure, disk pressure, worker crash loops, and sustained 5xx through
+  Render metrics/logs, Sentry, and the GitHub uptime workflow until a dedicated metrics
+  alerting integration is added.
 - Sentry alerts should page on new high-severity server/worker issues and provider or
   ffmpeg failure spikes.
 - Provider dashboards should be checked during real smoke tests and incidents because

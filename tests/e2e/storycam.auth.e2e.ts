@@ -127,6 +127,13 @@ async function mockAuthenticated(page: Page) {
       status: 200
     });
   });
+  await page.route("**/api/storycam-discovery-samples", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({ assets: [], ok: true, signedUrlExpiresIn: 300, unavailableIds: [] }),
+      contentType: "application/json",
+      status: 200
+    });
+  });
 }
 
 async function mockAuthState(page: Page, isAuthenticated: () => boolean) {

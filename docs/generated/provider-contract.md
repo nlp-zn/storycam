@@ -151,6 +151,7 @@ Requirements:
 - cancellation/tombstone,
 - late-result discard,
 - model name from `SEEDANCE_MODEL` or `SEEDANCE_FAST_MODEL`, selected by `generation_jobs.provider_name`; selected Fast requests must not be silently downgraded to regular `seedance_2_0`, and Fast submission failures stay recorded against `seedance_2_0_fast`,
+- task payload duration normalized to Volcengine's current 4 to 15 second Seedance 2.0 range, with Fast resolution kept within `480p` or `720p`,
 - create tasks with `POST /contents/generations/tasks`,
 - poll or normalize webhook payloads from `GET /contents/generations/tasks/{id}`,
 - terminal success returns `content.video_url`, which must be downloaded before the provider URL expires,

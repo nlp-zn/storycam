@@ -378,6 +378,28 @@ export type RecentStoryCamProject = {
   videoAspectRatio: "16:9" | "9:16";
 };
 
+export type DiscoverySampleSignedAsset = {
+  id: string;
+  posterUrl: string;
+  signedUrlExpiresIn: number;
+  videoUrl: string;
+};
+
+export type DiscoverySampleAssetsResponse =
+  | {
+      assets: DiscoverySampleSignedAsset[];
+      ok: true;
+      signedUrlExpiresIn: number;
+      unavailableIds: string[];
+    }
+  | {
+      assets: [];
+      error: string;
+      ok: false;
+      redactedError: string;
+      redactionApplied: true;
+    };
+
 export type RecentStoryCamProjectsResponse = {
   ok: true;
   projects: RecentStoryCamProject[];
@@ -565,6 +587,25 @@ export async function listRecentStoryCamProjects(limit = 20, options: { signal?:
   writeRecentStoryCamProjectsCache(result.projects);
 
   return result;
+}
+
+export async function getDiscoverySampleAssets(options: { signal?: AbortSignal } = {}) {
+  const response = await fetch("/api/storycam-discovery-samples", {
+    cache: "no-store",
+    signal: options.signal
+  });
+
+  if (!response.ok) {
+    return {
+      assets: [],
+      error: "discovery_samples_unavailable",
+      ok: false,
+      redactedError: "StoryCam discovery samples are temporarily unavailable.",
+      redactionApplied: true
+    } satisfies DiscoverySampleAssetsResponse;
+  }
+
+  return (await response.json()) as DiscoverySampleAssetsResponse;
 }
 
 export function readCachedRecentStoryCamProjects(nowMs = Date.now()): CachedRecentStoryCamProjects | null {

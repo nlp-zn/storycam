@@ -879,6 +879,13 @@ async function mockAuthenticated(page: Page) {
       })
     });
   });
+  await page.route("**/api/storycam-discovery-samples", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 200,
+      body: JSON.stringify({ assets: [], ok: true, signedUrlExpiresIn: 300, unavailableIds: [] })
+    });
+  });
 }
 
 async function mockRestore(page: Page, body: unknown) {
