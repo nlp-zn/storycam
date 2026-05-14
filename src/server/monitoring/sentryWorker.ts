@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { getSentryEnvironment, getSentryRelease } from "@/lib/monitoring/sentryEnvironment";
 import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { GenerationJobRow } from "@/server/db/types";
 import { scrubSentryEvent } from "./sentryRedaction";
@@ -13,6 +14,8 @@ export function initStoryCamWorkerSentry() {
   Sentry.init({
     beforeSend: scrubSentryEvent,
     dsn,
+    environment: getSentryEnvironment(),
+    release: getSentryRelease(),
     sendDefaultPii: false,
     tracesSampleRate: 0.05
   });

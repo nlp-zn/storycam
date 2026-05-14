@@ -220,6 +220,10 @@ Exact values belong in Render and Supabase dashboards, not in this repository.
 - `NEXT_PUBLIC_SUPABASE_URL`: public Supabase project URL.
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon key.
 - `NEXT_PUBLIC_SENTRY_DSN`: browser-safe Sentry DSN, if browser capture is enabled.
+- `NEXT_PUBLIC_SENTRY_ENVIRONMENT`: browser-safe Sentry environment tag, normally
+  `production` on Render production.
+- `NEXT_PUBLIC_SENTRY_RELEASE`: optional browser-safe release id if it is not inferred
+  from the build platform.
 - `NEXT_PUBLIC_POSTHOG_KEY`: only if PostHog is enabled.
 - `NEXT_PUBLIC_POSTHOG_HOST`: PostHog cloud or self-hosted ingest host.
 
@@ -249,6 +253,10 @@ Exact values belong in Render and Supabase dashboards, not in this repository.
   `STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT`: per-user daily server-side quota defaults.
 - `ADMIN_EMAILS`: comma-separated Google account allowlist for the initial admin view.
 - `SENTRY_DSN`: server/worker Sentry DSN.
+- `SENTRY_ENVIRONMENT`: Sentry environment tag, normally `production` on Render
+  production.
+- `SENTRY_RELEASE`: optional explicit release id; otherwise StoryCam falls back to hosted
+  git commit env values where available.
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`: only if source maps are uploaded in
   CI or build steps.
 
@@ -302,6 +310,9 @@ P1 soon after launch:
 
 ## Monitoring and Analytics
 
+Use `docs/OBSERVABILITY.md` as the operational runbook for concrete Sentry, Cloudflare,
+Render alerting, and uptime-check configuration.
+
 ### Sentry
 
 Use Sentry first for exceptions and performance traces across:
@@ -335,6 +346,16 @@ Use an external uptime check for:
 - Health endpoint.
 - Auth callback sanity.
 - A staging-only real generation canary when provider cost is acceptable.
+
+The repository also includes a dependency-free live check:
+
+```bash
+pnpm storycam:verify:live
+```
+
+GitHub Actions runs the same public checks every 15 minutes through
+`.github/workflows/uptime.yml`. Add repository secret
+`STORYCAM_PRODUCTION_DEEP_HEALTH_TOKEN` to include `/api/health/deep`.
 
 ### Product Analytics
 
