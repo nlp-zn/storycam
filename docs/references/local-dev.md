@@ -377,6 +377,8 @@ OPENROUTER_SMOKE_IMAGE_SIZE=
 OPENROUTER_SMOKE_SKIP_IMAGE=1
 
 SEEDANCE_SMOKE_PROMPT=
+SEEDANCE_SMOKE_PROVIDER=seedance_2_0_fast
+SEEDANCE_SMOKE_FAST=1
 SEEDANCE_SMOKE_DURATION_SECONDS=5
 SEEDANCE_SMOKE_RATIO=16:9
 SEEDANCE_SMOKE_POLL_INTERVAL_MS=10000
@@ -384,6 +386,18 @@ SEEDANCE_SMOKE_MAX_ATTEMPTS=60
 ```
 
 Successful smoke output is written to `.temp/storycam-smoke/`. The commands do not print provider media URLs.
+
+## Discovery Samples
+
+The homepage `发现更多` gallery signs fixed sample media from the private `storycam-generated` bucket. Put canonical sample videos in Supabase Storage under `samples/discovery/`; do not rely on `public/storycam/discovery/` for production sample playback.
+
+Upload or replace the eight current samples with:
+
+```bash
+DISCOVERY_SAMPLE_SOURCE_DIR=/path/to/sample-mp4s pnpm storycam:upload:discovery-samples
+```
+
+The source directory must contain `storycam-样片-1.mp4` through `storycam-样片-8.mp4`. The script extracts poster JPGs locally, uploads both posters and MP4s, and prints only sample ids plus the bucket prefix.
 
 ## Safety Defaults
 

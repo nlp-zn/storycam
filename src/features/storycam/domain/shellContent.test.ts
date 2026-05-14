@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { coreStoryboardGroups, directorChoices, discoveryEntries, storyAssets, storyModeEntries } from "./shellContent";
+import { coreStoryboardGroups, directorChoices, discoveryEntries, discoveryLayoutPresets, storyAssets, storyModeEntries } from "./shellContent";
 
 describe("StoryCam shell content", () => {
   it("keeps the phase 1 core storyboard group limit", () => {
@@ -60,8 +60,29 @@ describe("StoryCam shell content", () => {
   });
 
   it("prepares discovery presets for horizontal and vertical video slots", () => {
+    const samples = discoveryEntries.filter((entry) => entry.kind === "sample");
+    const placeholders = discoveryEntries.filter((entry) => entry.kind === "placeholder");
+
+    expect(samples).toHaveLength(8);
+    expect(placeholders.length).toBeGreaterThanOrEqual(1);
     expect(discoveryEntries.some((entry) => entry.format === "landscape")).toBe(true);
     expect(discoveryEntries.some((entry) => entry.format === "portrait")).toBe(true);
-    expect(discoveryEntries.every((entry) => entry.videoSrc === null || entry.videoSrc.startsWith("/storycam/"))).toBe(true);
+    expect(samples.every((entry) => entry.duration === "00:15")).toBe(true);
+    expect(samples.map((entry) => entry.id)).toEqual([
+      "sample-03",
+      "sample-02",
+      "sample-08",
+      "sample-05",
+      "sample-01",
+      "sample-07",
+      "sample-04",
+      "sample-06"
+    ]);
+    expect(discoveryLayoutPresets).toHaveLength(2);
+    expect(discoveryLayoutPresets.every((preset) => preset.length === discoveryEntries.length)).toBe(true);
+    expect(
+      discoveryLayoutPresets.every((preset) => preset.every((entryId) => discoveryEntries.some((entry) => entry.id === entryId)))
+    ).toBe(true);
+    expect(JSON.stringify(discoveryEntries)).not.toContain("storycam-generated");
   });
 });

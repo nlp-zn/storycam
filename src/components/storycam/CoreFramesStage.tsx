@@ -206,7 +206,7 @@ export function CoreFramesStage({
         <p>点击中心主帧后，系统自动延展周围 8 张分镜图，确认后生成 Seedance 片段。</p>
       </header>
 
-      <div className="storycam-core-workbench">
+      <div className="storycam-core-workbench" data-aspect-ratio={videoAspectRatio}>
         <div className="storycam-core-board-panel">
           <div className="storycam-core-board-header">
             <h2>01 · 自动延展画布</h2>
@@ -415,7 +415,7 @@ function CoreSlot({
         />
       </button>
       <div className="storycam-expansion-slot-overlay" />
-      <FrameLabel frameNumber={1} label="中心主图" />
+      <FrameLabel frameNumber={1} />
       <div className="storycam-expansion-slot-copy">
         <h3>{frame?.title ?? selectedGroupTitle}</h3>
         <p>
@@ -490,7 +490,7 @@ function ExpansionSlot({
         />
       </button>
       <div className="storycam-expansion-slot-overlay" />
-      <FrameLabel frameNumber={frameNumber} label={frame?.label ?? "扩展帧"} />
+      <FrameLabel frameNumber={frameNumber} />
       <div className="storycam-expansion-slot-copy">
         <h3>{frame?.title ?? "等待生成"}</h3>
         <p>{frame?.description ?? "点击中心主图后，这一帧会承接对应的动作或反应。"}</p>
@@ -605,11 +605,10 @@ function StoryboardImage({
   );
 }
 
-function FrameLabel({ frameNumber, label }: { frameNumber: number; label: string }) {
+function FrameLabel({ frameNumber }: { frameNumber: number }) {
   return (
-    <div className="storycam-frame-label">
+    <div aria-label={`第 ${String(frameNumber).padStart(2, "0")} 帧`} className="storycam-frame-label">
       <span>{String(frameNumber).padStart(2, "0")}</span>
-      <strong>{label}</strong>
     </div>
   );
 }

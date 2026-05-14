@@ -160,6 +160,10 @@ StoryCam supports two product-facing Seedance variants: `seedance_2_0` (`SEEDANC
 
 StoryCam sends `resolution: "720p"` explicitly for the v1 cost profile. The current Volcengine AI experience for `Doubao-Seedance-2.0 260128` shows `1080p` as the selected UI default, but StoryCam keeps the lower-cost 720p setting until the product has an explicit quality/cost control. UI may show this as the product-facing output spec `720p`; do not expose the full provider payload.
 
+Provider submission must stay inside Volcengine's current Seedance 2.0 output limits: 4 to 15 seconds for both variants, and `480p` or `720p` for Fast. StoryCam normalizes the provider payload to that range before task creation; direct Fast calls that ask for `1080p` are sent as `720p`.
+
+If real Fast smoke returns `SEEDANCE_MODEL_NOT_OPEN`, the Ark response maps to Volcengine `ModelNotOpen`: the current account has not activated the configured Fast model, or `SEEDANCE_FAST_MODEL` points at a model/endpoint the account cannot access. Treat this as a setup failure, not a retryable provider outage; enable the model in the Ark console or configure an accessible Fast model before rerunning smoke.
+
 Seedance must be able to fetch every referenced image/video/audio URL. StoryCam signs provider reference media with `STORYCAM_PROVIDER_REFERENCE_URL_TTL_SECONDS` (default 3600 seconds) instead of the UI preview TTL. Local Supabase Storage URLs such as `localhost`, `127.0.0.1`, or `::1` are rejected before provider submission and recorded as failed local jobs. For real image-reference testing from local development, run local Next.js against a hosted Supabase dev/staging project so the signed Storage URLs are public HTTPS.
 
 The v1 Seedance route should avoid sending photorealistic real-person or real-person-like face references from external Storage URLs. Default StoryCam assets and storyboard frames should be comic-film / animated-storyboard references. Real-person, virtual-human, or authorized likeness routes require an explicit Ark/ByteDance asset workflow such as `asset://...` and should be treated as a later provider capability.
@@ -191,7 +195,7 @@ The DeepSeek smoke command requires `DEEPSEEK_API_KEY` and defaults to `DEEPSEEK
 
 The OpenRouter smoke command requires `OPENROUTER_API_KEY` and `OPENROUTER_TEXT_MODEL`. Its legacy image path also requires `OPENROUTER_IMAGE_MODEL`; set `OPENROUTER_SMOKE_SKIP_IMAGE=1` when only validating the text path. Inference.sh image smoke is currently manual through the story-world asset image endpoint with `STORYCAM_IMAGE_PROVIDER=inference_sh`, `INFERENCE_API_KEY`, and `INFERENCE_IMAGE_APP`.
 
-The Seedance smoke command requires `SEEDANCE_API_KEY` and `SEEDANCE_MODEL`. It polls the provider until a terminal task status, downloads the returned video into `.temp/storycam-smoke/`, and does not print the provider video URL.
+The Seedance smoke command requires `SEEDANCE_API_KEY`; standard smoke also requires `SEEDANCE_MODEL`. Set `SEEDANCE_SMOKE_PROVIDER=seedance_2_0_fast` or `SEEDANCE_SMOKE_FAST=1` to smoke the Fast model; it uses `SEEDANCE_FAST_MODEL` when set, otherwise the documented Fast model id. It polls the provider until a terminal task status, downloads the returned video into `.temp/storycam-smoke/`, and does not print the provider video URL.
 
 Other real smoke checks still need dedicated scripts or manual harnesses:
 

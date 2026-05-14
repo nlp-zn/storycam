@@ -57,6 +57,8 @@ type SeedanceTaskResponse = {
 };
 
 const defaultBaseUrl = "https://ark.cn-beijing.volces.com/api/v3";
+const seedanceMinDurationSeconds = 4;
+const seedanceMaxDurationSeconds = 15;
 
 export function createSeedanceVideoProvider(
   options: SeedanceVideoProviderOptions
@@ -214,7 +216,7 @@ async function submitSeedanceTask(input: {
   request: typeof fetch;
 }): Promise<ProviderResult<SeedanceVideoTaskSubmission>> {
   const createResponse = await input.request(`${input.baseUrl}/contents/generations/tasks`, {
-    body: JSON.stringify(toCreateTaskBody(input.input, input.model)),
+    body: JSON.stringify(toCreateTaskBody(input.input, input.model, input.identity.providerName)),
     headers: {
       Authorization: `Bearer ${input.apiKey}`,
       "Content-Type": "application/json"
@@ -278,7 +280,7 @@ async function resolveSeedanceTask(input: {
   });
 }
 
-function toCreateTaskBody(input: SeedanceVideoGenerationInput, model: string) {
+function toCreateTaskBody(input: SeedanceVideoGenerationInput, model: string, providerName: string) {
   return {
     ...(input.callbackUrl ? { callback_url: input.callbackUrl } : {}),
     content: [
@@ -292,14 +294,32 @@ function toCreateTaskBody(input: SeedanceVideoGenerationInput, model: string) {
         type: "image_url"
       }))
     ],
-    duration: Math.max(1, Math.round(input.durationSeconds)),
+    duration: normalizeSeedanceDuration(input.durationSeconds),
     generate_audio: input.generateAudio ?? false,
     model,
     ratio: input.ratio ?? "16:9",
-    resolution: input.resolution ?? "720p",
+    resolution: normalizeSeedanceResolution(input.resolution ?? "720p", providerName),
     ...(input.seed !== undefined ? { seed: input.seed } : {}),
     watermark: input.watermark ?? false
   };
+}
+
+function normalizeSeedanceDuration(durationSeconds: number) {
+  const rounded = Math.round(durationSeconds);
+
+  if (!Number.isFinite(rounded)) {
+    return seedanceMinDurationSeconds;
+  }
+
+  return Math.min(seedanceMaxDurationSeconds, Math.max(seedanceMinDurationSeconds, rounded));
+}
+
+function normalizeSeedanceResolution(resolution: StoryCamVideoOutputResolution, providerName: string): StoryCamVideoOutputResolution {
+  if (providerName === "seedance_2_0_fast" && resolution === "1080p") {
+    return "720p";
+  }
+
+  return resolution;
 }
 
 function parseCreateTaskResponse(value: unknown) {
@@ -328,7 +348,7 @@ function seedanceFailure(identity: ProviderIdentity, error: unknown, httpStatus:
       errorCode,
       providerErrorCategory,
       providerHttpStatus: httpStatus,
-      retryable: errorCode !== "SEEDANCE_POLICY_REFUSAL"
+      retryable: isRetryableSeedanceError(errorCode)
     }
   );
 }
@@ -344,6 +364,10 @@ function seedanceErrorCode(error: unknown, httpStatus: number, taskStatus?: Seed
 
   if (httpStatus === 402 || httpStatus === 429) {
     return "SEEDANCE_QUOTA_OR_RATE_LIMIT";
+  }
+
+  if (isSeedanceModelAccessError(error)) {
+    return "SEEDANCE_MODEL_NOT_OPEN";
   }
 
   const serialized = JSON.stringify(error).toLowerCase();
@@ -362,6 +386,10 @@ function seedanceErrorCategory(error: unknown, httpStatus: number, taskStatus?: 
 
   if (httpStatus === 402 || httpStatus === 429) {
     return "quota_or_rate_limit";
+  }
+
+  if (isSeedanceModelAccessError(error)) {
+    return "configuration";
   }
 
   const serialized = JSON.stringify(error).toLowerCase();
@@ -383,6 +411,21 @@ function seedanceErrorCategory(error: unknown, httpStatus: number, taskStatus?: 
   }
 
   return "provider_error";
+}
+
+function isRetryableSeedanceError(errorCode: string) {
+  return errorCode !== "SEEDANCE_POLICY_REFUSAL" && errorCode !== "SEEDANCE_MODEL_NOT_OPEN";
+}
+
+function isSeedanceModelAccessError(error: unknown) {
+  const serialized = JSON.stringify(error).toLowerCase();
+
+  return (
+    serialized.includes("modelnotopen") ||
+    serialized.includes("servicenotopen") ||
+    serialized.includes("invalidendpointormodel") ||
+    serialized.includes("modelidaccessdisabled")
+  );
 }
 
 function normalizeSeedanceStatus(status: unknown): SeedanceTaskStatus | null {
