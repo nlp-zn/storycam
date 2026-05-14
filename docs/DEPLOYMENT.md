@@ -1,9 +1,9 @@
 # StoryCam Deployment Plan
 
-Status: implemented deployment baseline. The repository now contains a Render Blueprint,
-production start/worker scripts, health endpoints, worker claiming primitives, and the
-P0 async final-work job path. Values still belong in Render, Supabase, Cloudflare, and
-provider dashboards rather than in git.
+Status: production beta deployed. The repository contains a Render Blueprint, production
+start/worker scripts, health endpoints, worker claiming primitives, and the P0 async
+final-work job path. Values still belong in Render, Supabase, Cloudflare, and provider
+dashboards rather than in git.
 
 ## Goals
 
@@ -52,10 +52,11 @@ service to another region, so create the first staging and production services i
 Singapore. Supabase also supports Singapore (`ap-southeast-1`), which keeps database and
 storage round trips close to the app runtime.
 
-Render's native runtime docs list Node.js, pnpm, and ffmpeg in the deploy environment.
-That is enough for the first deployment if the service can run ffmpeg successfully at
-runtime. If runtime ffmpeg behavior differs from the docs or the app needs stricter media
-tooling, move the services to Docker and install/pin ffmpeg explicitly.
+Render's native runtime docs list Node.js, pnpm, and ffmpeg in the deploy environment. As
+of the 2026-05-14 production beta smoke, Render Native Runtime successfully composed a
+real final MP4 with ffmpeg after DeepSeek/OpenRouter text, Inference.sh image generation,
+and Seedance video generation. Docker remains the fallback only if a later runtime change
+breaks ffmpeg or the app needs stricter media tooling.
 
 ## Why Not Vercel Frontend Plus Render Backend
 
@@ -178,6 +179,10 @@ Cloudflare improves global edge reachability and static asset delivery. It does 
 dynamic authenticated flows local to every user; those requests still travel to the Render
 Singapore service and Supabase Singapore.
 
+Current production note: Cloudflare rate limiting is configured as a short 10-second
+burst guard for abuse protection. It is not the complete provider-cost control layer.
+StoryCam's server-side per-user quotas remain the cost-control source of truth.
+
 ## Environments
 
 Maintain separate Supabase projects and Render services for staging and production.
@@ -202,6 +207,11 @@ production
 
 Do not point staging at production Supabase. Do not run real provider smoke tests against
 production except for a controlled post-deploy canary.
+
+Current beta exception: the 2026-05-14 beta launch shipped through `dev -> main` directly
+to production after CI, Render deploy, live health, uptime, and one controlled real
+production smoke. Add a separate staging Render/Supabase/Cloudflare environment before
+broadening traffic or running riskier provider/runtime changes.
 
 ## Runtime Requirements
 
@@ -291,19 +301,30 @@ Before production:
 - Confirm signed URL TTLs are short enough for user access and long enough for provider
   reference workflows.
 
-## Production Readiness Gaps
+## Production Readiness Status
 
-P0 before launch:
+Completed for the 2026-05-14 production beta:
 
-- Review and apply the worker-claim migration in staging and production.
-- Verify the Render Blueprint creates both `storycam-web` and `storycam-worker` in
-  Singapore with the expected secret groups/env values.
-- Verify Render Native Runtime has runtime ffmpeg available; switch to Docker if it does
-  not.
-- Add Cloudflare cache-bypass and rate-limit rules.
-- Configure staging and production Supabase projects, Auth redirect URLs, Storage buckets,
-  and provider secrets.
-- Run real staging smoke tests for text, image, video, and final MP4.
+- Render `storycam-web` and `storycam-worker` run in Singapore from the `main` branch.
+- Cloudflare production hostname `storycam.znbuild.com` fronts the Render web service.
+- Production Supabase Auth, Postgres, and private Storage are configured for the beta
+  environment.
+- Worker-owned durable generation handles long text, image, video, and final-work jobs
+  without relying on browser polling.
+- Real production smoke passed for DeepSeek/OpenRouter text, Inference.sh images,
+  Seedance video, and ffmpeg final MP4, including closing the page and restoring the saved
+  downloadable MP4.
+- GitHub Release `v0.1.2.0` records the deployed beta artifact.
+
+Remaining launch hardening:
+
+- Confirm Render dashboard notifications for deploy/build failures and unhealthy running
+  services. Render health checks apply to the web service; background worker health relies
+  on process uptime and exit codes. Memory pressure, disk pressure, worker crash loops, and
+  sustained 5xx need Render metrics/logs, Sentry, and uptime coverage until a dedicated
+  metrics alerting integration is added.
+- Add staging Render/Supabase/Cloudflare services before broader beta traffic or risky
+  provider/runtime changes.
 
 P1 soon after launch:
 
@@ -335,13 +356,16 @@ bodies to Sentry.
 ### Render Observability
 
 Use Render logs, metrics, health checks, deploy history, and rollback controls for platform
-operations. Add alerts for:
+operations. Render native notifications should cover deploy/build failures and unhealthy
+running services where the service type supports them. Render health checks apply to web
+services; background workers rely on process uptime and exit codes.
 
-- Web service unavailable.
-- Worker process down or crash-looping.
-- High memory/disk use during MP4 composition.
-- Sustained 5xx rate.
-- Deploy failures.
+Render CLI currently covers services, deploys, logs, instances, restarts, jobs, projects,
+and blueprints, but not alert configuration. Configure the alert policies in the Render
+Dashboard and record any StoryCam-specific thresholds in `docs/OBSERVABILITY.md`.
+
+Use Sentry, GitHub uptime, and Render metrics/logs for memory pressure, disk pressure,
+worker crash-loop investigation, and sustained 5xx until dedicated metrics alerting exists.
 
 ### Uptime Checks
 
@@ -439,8 +463,6 @@ replace it later.
 
 ## Open Decisions
 
-- Whether the first production launch keeps Render Native Runtime or switches to Docker
-  after ffmpeg runtime validation.
 - Provider completion strategy: polling-only initially, or webhooks where providers support
   them.
 - Render instance sizes for beta traffic and MP4 composition.
@@ -452,6 +474,8 @@ replace it later.
 - [Render Regions](https://render.com/docs/regions)
 - [Render Native Runtimes](https://render.com/docs/native-runtimes)
 - [Render Custom Domains](https://render.com/docs/custom-domains)
+- [Render Health Checks](https://render.com/docs/health-checks)
+- [Render Notifications](https://render.com/docs/notifications)
 - [Supabase Regions](https://supabase.com/docs/guides/platform/regions)
 - [Supabase Deployment and Branching](https://supabase.com/docs/guides/deployment)
 - [Cloudflare Cache Rules](https://developers.cloudflare.com/cache/how-to/cache-rules/settings/)
