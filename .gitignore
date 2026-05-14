@@ -4,6 +4,7 @@
 node_modules/
 .next/
 out/
+outputs/
 coverage/
 test-results/
 playwright-report/
