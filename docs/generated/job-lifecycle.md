@@ -8,14 +8,18 @@ Sources: `src/server/storycam/generationJobService.ts`, `generationJobRepository
 
 ```ts
 type GenerationJobType =
+  | "story_world"
   | "story_world_asset_image"
+  | "storyboard"
   | "storyboard_image"
   | "expanded_storyboard_image"
   | "video_clip"
   | "final_work";
 ```
 
-Text story-world/storyboard requests may return immediately or create artifacts through service logic; image, video, and final-work generation are the main job-backed workflows.
+In production real mode, story-world and core-storyboard text generation are job-backed.
+Mock/local mode may still create text artifacts synchronously for fast deterministic tests.
+Image, video, and final-work generation are also job-backed.
 
 ## Job Statuses
 
@@ -74,11 +78,31 @@ Job creation routes require an idempotency key.
 - Scope includes current user, session, route/workflow, and relevant parent artifact or group.
 - Idempotency must not cross users or deleted sessions.
 
+## Text Jobs
+
+Story-world text jobs:
+
+- store the private input as an account-scoped `input` artifact,
+- let the worker call the configured DeepSeek/OpenRouter story-world provider,
+- write script, character asset, and scene asset artifacts,
+- mark the job succeeded with the script artifact id,
+- return no raw private input, prompt, or provider payload through job polling.
+
+Core storyboard text jobs:
+
+- store only confirmed artifact versions and storyboard request settings in the job input,
+- let the worker call the configured OpenRouter storyboard provider,
+- write storyboard script and core group artifacts,
+- mark the job succeeded with the storyboard script artifact id,
+- rely on session restore for the browser to read the saved storyboard.
+
 ## Image Jobs
 
 Story-world asset, core storyboard, and expanded storyboard image jobs:
 
 - may start as placeholders while upstream reference media is missing or still generating,
+- are created before provider task submission in production real mode,
+- let the worker submit the Inference.sh task and store the provider task id,
 - poll async provider state when using Inference.sh,
 - download completed provider output server-side,
 - store generated image media in private Storage,
@@ -91,7 +115,8 @@ Seedance video clip jobs:
 
 - require a confirmed core storyboard group,
 - assemble an internal clip prompt packet from stored artifacts,
-- submit a provider task server-side,
+- are created before provider task submission in production real mode,
+- let the worker submit a provider task server-side and store the provider task id,
 - poll by provider task id or normalize webhook-shaped payloads,
 - download `content.video_url` before provider URL expiry,
 - store generated clip media in private Storage,

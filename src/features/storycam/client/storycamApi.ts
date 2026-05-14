@@ -126,6 +126,19 @@ export type CreateStoryWorldResponse = {
   };
 };
 
+type CreateStoryWorldJobResponse = {
+  job: {
+    jobId: string;
+    providerName: string;
+    sessionId: string;
+    status: GenerationJobStatus;
+  };
+  ok: true;
+  providerName: string;
+  sessionId: string;
+  status: GenerationJobStatus;
+};
+
 export type CreateStoryboardResponse = {
   ok: true;
   artifacts: {
@@ -169,6 +182,17 @@ export type CreateStoryboardResponse = {
       version: number;
     }>;
   };
+};
+
+type CreateStoryboardJobResponse = {
+  job: {
+    jobId: string;
+    providerName: string;
+    status: GenerationJobStatus;
+  };
+  ok: true;
+  providerName: string;
+  status: GenerationJobStatus;
 };
 
 export type StoryboardFrame = {
@@ -1214,6 +1238,7 @@ export async function uploadStoryCamPhoto(input: { file: File; sessionId?: strin
 }
 
 export async function createStoryWorld(input: {
+  idempotencyKey?: string;
   input: string;
   lightweightChoices: string[];
   plannedDurationSeconds?: number;
@@ -1225,6 +1250,7 @@ export async function createStoryWorld(input: {
 }) {
   const response = await fetch("/api/story-world", {
     body: JSON.stringify({
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       input: input.input,
       lightweightChoices: input.lightweightChoices,
       plannedDurationSeconds: input.plannedDurationSeconds ?? 12,
@@ -1242,6 +1268,12 @@ export async function createStoryWorld(input: {
 
   if (!response.ok) {
     throw new Error(errorCode(await response.json(), "story_world_failed"));
+  }
+
+  if (response.status === 202) {
+    const job = (await response.json()) as CreateStoryWorldJobResponse;
+
+    return waitForStoryWorldJob(job.job.jobId, job.sessionId);
   }
 
   const result = (await response.json()) as CreateStoryWorldResponse;
@@ -1271,6 +1303,12 @@ export async function createStoryboard(input: {
 
   if (!response.ok) {
     throw new Error(errorCode(await response.json(), "storyboard_failed"));
+  }
+
+  if (response.status === 202) {
+    const job = (await response.json()) as CreateStoryboardJobResponse;
+
+    return waitForStoryboardJob(job.job.jobId, input.sessionId);
   }
 
   return (await response.json()) as CreateStoryboardResponse;
@@ -1484,6 +1522,55 @@ async function waitForFinalWorkJob(jobId: string): Promise<FinalWorkResponse> {
   }
 
   throw new Error("final_work_timeout");
+}
+
+async function waitForStoryWorldJob(jobId: string, sessionId: string): Promise<CreateStoryWorldResponse> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await getGenerationJob(jobId);
+
+    if (response.job.status === "succeeded") {
+      const restored = await refreshStoryCamSessionRestore(sessionId);
+
+      if (restored.restored) {
+        clearRecentStoryCamProjectsCache();
+        return restored.storyWorld;
+      }
+
+      throw new Error("story_world_restore_failed");
+    }
+
+    if (response.job.status === "failed" || response.job.status === "canceled" || response.job.status === "expired") {
+      throw new Error(response.job.redactedError ?? "story_world_failed");
+    }
+
+    await delay(nextVideoGenerationPollDelayMs(attempt));
+  }
+
+  throw new Error("story_world_timeout");
+}
+
+async function waitForStoryboardJob(jobId: string, sessionId: string): Promise<CreateStoryboardResponse> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await getGenerationJob(jobId);
+
+    if (response.job.status === "succeeded") {
+      const restored = await refreshStoryCamSessionRestore(sessionId);
+
+      if (restored.restored && restored.storyboard) {
+        return restored.storyboard;
+      }
+
+      throw new Error("storyboard_restore_failed");
+    }
+
+    if (response.job.status === "failed" || response.job.status === "canceled" || response.job.status === "expired") {
+      throw new Error(response.job.redactedError ?? "storyboard_failed");
+    }
+
+    await delay(nextVideoGenerationPollDelayMs(attempt));
+  }
+
+  throw new Error("storyboard_timeout");
 }
 
 function delay(ms: number) {

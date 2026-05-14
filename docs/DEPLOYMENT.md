@@ -120,6 +120,11 @@ Region: Singapore.
 Responsibilities:
 
 - Advance generation jobs independently from browser polling.
+- Run production real story-world and storyboard text generation as durable jobs so
+  Cloudflare/browser request timeouts cannot fail long provider calls.
+- Submit production real image and video provider tasks from the worker after the API
+  has created a durable job, so slow provider task creation also cannot trigger a
+  browser-facing timeout.
 - Claim queued/running jobs with a durable lock so multiple workers do not process the same
   job.
 - Poll or resume async provider tasks for image and video generation.

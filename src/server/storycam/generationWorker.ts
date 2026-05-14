@@ -16,12 +16,18 @@ import {
 import { resolveImageGenerationJob } from "./imageGenerationJobService";
 import { completeFinalWorkJob } from "./finalWorkService";
 import { createConfiguredStoryboardImageProvider } from "./storyboardImageProviderFactory";
+import { createConfiguredStoryboardProvider } from "./storyboardProviderFactory";
+import { completeStoryboardJob } from "./storyboardService";
 import { createConfiguredStoryWorldAssetImageProvider } from "./storyWorldAssetImageProviderFactory";
+import { createConfiguredStoryWorldProvider } from "./storyWorldProviderFactory";
+import { completeStoryWorldJob } from "./storyWorldService";
 import { createConfiguredVideoProviders } from "./videoProviderFactory";
 import type { StoryCamVideoModel } from "@/features/storycam/domain/videoSettings";
 
 export const storyCamWorkerJobTypes: GenerationJobRow["type"][] = [
+  "story_world",
   "story_world_asset_image",
+  "storyboard",
   "storyboard_image",
   "expanded_storyboard_image",
   "video_clip",
@@ -51,6 +57,8 @@ type StoryCamWorkerRuntime = {
   };
   logger: Pick<typeof console, "error" | "info" | "warn">;
   runAfterDelayMs: number;
+  storyboardProvider?: ReturnType<typeof createConfiguredStoryboardProvider>;
+  storyWorldProvider?: ReturnType<typeof createConfiguredStoryWorldProvider>;
   videoProviders: Partial<Record<StoryCamVideoModel, GenerationJobServiceVideoProvider>>;
   workerId: string;
 };
@@ -116,6 +124,18 @@ export async function processStoryCamWorkerJob(runtime: StoryCamWorkerRuntime, j
       return;
     }
 
+    if (job.type === "story_world") {
+      await completeStoryWorldJob(runtime.client, job, runtime.storyWorldProvider);
+      return;
+    }
+
+    if (job.type === "storyboard") {
+      await completeStoryboardJob(runtime.client, job, runtime.storyboardProvider, runtime.imageProviders.storyboard, {
+        providerReferenceSignedUrlTtlSeconds: runtime.config.media.providerReferenceSignedUrlTtlSeconds
+      });
+      return;
+    }
+
     if (isImageJobType(job.type)) {
       const imageProvider = job.type === "story_world_asset_image" ? runtime.imageProviders.storyWorld : runtime.imageProviders.storyboard;
 
@@ -130,7 +150,11 @@ export async function processStoryCamWorkerJob(runtime: StoryCamWorkerRuntime, j
     if (job.type === "video_clip") {
       const provider = runtime.videoProviders[job.provider_name as StoryCamVideoModel];
 
-      await resolveVideoGenerationJob(runtime.client, job.user_id, { job, provider });
+      await resolveVideoGenerationJob(runtime.client, job.user_id, {
+        job,
+        provider,
+        providerReferenceSignedUrlTtlSeconds: runtime.config.media.providerReferenceSignedUrlTtlSeconds
+      });
       await releaseIfStillActive(runtime, job);
       return;
     }
@@ -163,6 +187,8 @@ function createStoryCamWorkerRuntime(options: StoryCamWorkerOptions): StoryCamWo
     },
     logger: options.logger ?? console,
     runAfterDelayMs: options.runAfterDelayMs ?? numberEnv("STORYCAM_WORKER_RUN_AFTER_DELAY_MS", 10_000),
+    storyboardProvider: createConfiguredStoryboardProvider(config),
+    storyWorldProvider: createConfiguredStoryWorldProvider(config),
     videoProviders: createConfiguredVideoProviders(config),
     workerId: options.workerId ?? process.env.RENDER_INSTANCE_ID ?? `storycam-worker-${process.pid}`
   };

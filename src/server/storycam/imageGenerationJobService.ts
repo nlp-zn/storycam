@@ -8,6 +8,8 @@ import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamGeneratedBucket, storyCamSignedUrlTtlSeconds } from "./mediaStore";
 import { StoryCamRepositoryError } from "./repositoryErrors";
 
+const queuedImageProviderInputKey = "__storycam_image_provider_input";
+
 export type ImageJobType = Extract<
   GenerationJobRow["type"],
   "expanded_storyboard_image" | "story_world_asset_image" | "storyboard_image"
@@ -188,32 +190,21 @@ async function submitImageGenerationJobWithRepositories<Input>(
     }
   }
 
-  const submitted = await input.provider.submitImageTask(input.imageInput);
-
-  if (!submitted.ok) {
-    return {
-      image: placeholderImage(submitted.redactedError, "provider_failed"),
-      job: null,
-      status: "placeholder"
-    };
-  }
-
   const job = await jobs.create(userId, {
     generationMode: "real",
     idempotencyKeyHash,
-    inputArtifactVersionsJson: input.inputArtifactVersionsJson ?? {},
+    inputArtifactVersionsJson: withQueuedImageProviderInput(input.inputArtifactVersionsJson, input.imageInput),
     outputArtifactId: input.linkedArtifactId,
     providerKind: input.provider.providerKind,
     providerName: input.provider.providerName,
-    providerRequestId: submitted.value.providerRequestId,
     sessionId: input.sessionId,
-    status: "running",
+    status: "queued",
     type: input.type
   });
 
   if (!job) {
     return {
-        image: placeholderImage("Image job creation failed.", "storage_failed"),
+      image: placeholderImage("Image job creation failed.", "storage_failed"),
       job: null,
       status: "placeholder"
     };
@@ -245,16 +236,57 @@ export async function resolveImageGenerationJob<Input>(
     return existingMedia;
   }
 
+  const jobs = new StoryCamGenerationJobRepository(client);
+
+  if (input.job.status === "cancel_requested" || input.job.tombstoned_at) {
+    await jobs.markCanceled(userId, input.job.id);
+
+    return placeholderImage(input.job.redacted_error ?? undefined, "provider_failed");
+  }
+
   if (input.job.status === "failed" || input.job.status === "canceled" || input.job.status === "expired") {
     return placeholderImage(input.job.redacted_error ?? undefined, "provider_failed");
   }
 
-  if (!input.job.provider_request_id || !input.job.output_artifact_id || !isAsyncImageProvider(input.provider)) {
+  if (!input.job.output_artifact_id || !isAsyncImageProvider(input.provider)) {
     return placeholderImage("Image provider is not available.", "reference_images_unsupported");
   }
 
-  const providerResult = await input.provider.resolveImageTask(input.job.provider_request_id);
-  const jobs = new StoryCamGenerationJobRepository(client);
+  const providerRequestId = input.job.provider_request_id;
+
+  if (!providerRequestId) {
+    const queuedInput = queuedImageProviderInput<Input>(input.job.input_artifact_versions_json);
+
+    if (!queuedInput) {
+      await jobs.markFailed(userId, input.job.id, {
+        errorCode: "IMAGE_PROVIDER_INPUT_UNAVAILABLE",
+        redactedError: "Image provider input is unavailable."
+      });
+
+      return placeholderImage("Image provider input is unavailable.", "provider_failed");
+    }
+
+    const submitted = await input.provider.submitImageTask(queuedInput);
+
+    if (!submitted.ok) {
+      await jobs.markFailed(userId, input.job.id, {
+        errorCode: submitted.errorCode,
+        providerErrorCategory: submitted.providerErrorCategory,
+        providerHttpStatus: submitted.providerHttpStatus,
+        redactedError: submitted.redactedError
+      });
+
+      return placeholderImage(submitted.redactedError, "provider_failed");
+    }
+
+    await jobs.markProviderRequestSubmitted(userId, input.job.id, {
+      providerRequestId: submitted.value.providerRequestId
+    });
+
+    return generatingImage(input.job.id);
+  }
+
+  const providerResult = await input.provider.resolveImageTask(providerRequestId);
 
   if (!providerResult.ok) {
     await jobs.markFailed(userId, input.job.id, {
@@ -350,4 +382,27 @@ async function toReadyImage(
 
 function stableJson(value: Json) {
   return JSON.stringify(value, Object.keys(value && typeof value === "object" && !Array.isArray(value) ? value : {}).sort());
+}
+
+function withQueuedImageProviderInput(inputArtifactVersionsJson: Json | undefined, imageInput: unknown): Json {
+  return {
+    ...(isRecord(inputArtifactVersionsJson) ? inputArtifactVersionsJson : {}),
+    [queuedImageProviderInputKey]: toJson(imageInput)
+  };
+}
+
+function queuedImageProviderInput<Input>(value: Json): Input | null {
+  if (!isRecord(value) || !(queuedImageProviderInputKey in value)) {
+    return null;
+  }
+
+  return value[queuedImageProviderInputKey] as Input;
+}
+
+function toJson(value: unknown): Json {
+  return JSON.parse(JSON.stringify(value)) as Json;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
