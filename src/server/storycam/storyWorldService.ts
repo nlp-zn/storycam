@@ -27,6 +27,7 @@ export const storyWorldInputMaxLength = 2_000;
 
 export type StoryWorldRequestBody = {
   generationMode?: "mock" | "real";
+  idempotencyKey?: unknown;
   input?: unknown;
   lightweightChoices?: unknown;
   plannedDurationSeconds?: unknown;
@@ -175,6 +176,19 @@ export async function createStoryWorldJob(
   const sessions = new StoryCamSessionRepository(client);
   const artifacts = new StoryCamArtifactRepository(client);
   const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const jobs = new StoryCamGenerationJobRepository(client);
+  const idempotencyKeyHash = hashLogIdentifier(
+    stableStoryWorldJobHashInput({
+      input,
+      providerName: options.providerName
+    })
+  );
+  const existingJob = await jobs.findActiveByIdempotencyKey(userId, idempotencyKeyHash);
+
+  if (existingJob && !isFailedOrExpiredStoryWorldJob(existingJob)) {
+    return toStoryWorldJobOutput(existingJob);
+  }
+
   const loadedSession = await loadOrCreateStoryWorldSession({ input, sessions, userId });
 
   if (!loadedSession) {
@@ -190,20 +204,6 @@ export async function createStoryWorldJob(
   });
 
   await resolveUploadedPhotoRefs(mediaAssets, userId, session.id, input.uploadedPhotoIds);
-
-  const idempotencyKeyHash = hashLogIdentifier(
-    stableStoryWorldJobHashInput({
-      input,
-      providerName: options.providerName,
-      sessionId: session.id
-    })
-  );
-  const jobs = new StoryCamGenerationJobRepository(client);
-  const existingJob = await jobs.findActiveByIdempotencyKey(userId, idempotencyKeyHash);
-
-  if (existingJob && !isFailedOrExpiredStoryWorldJob(existingJob)) {
-    return toStoryWorldJobOutput(existingJob);
-  }
 
   const inputArtifact = requireArtifactRow(
     await artifacts.createVersion(userId, {
@@ -388,6 +388,7 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
 
   return {
     generationMode,
+    idempotencyKey: parseStoryWorldIdempotencyKey(body.idempotencyKey),
     input,
     lightweightChoices: parseStringArray(body.lightweightChoices),
     plannedDurationSeconds: parsePlannedDuration(body.plannedDurationSeconds),
@@ -403,6 +404,7 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
 function toStoryWorldInputArtifactJson(input: ReturnType<typeof parseStoryWorldRequest>, sessionId: string): Json {
   return {
     generationMode: input.generationMode,
+    idempotencyKey: input.idempotencyKey ?? null,
     input: input.input,
     lightweightChoices: input.lightweightChoices,
     plannedDurationSeconds: input.plannedDurationSeconds,
@@ -434,6 +436,7 @@ async function loadStoryWorldJobRequestBody(client: SupabaseClient<Database>, jo
 
   return {
     generationMode: inputArtifact.data_json.generationMode === "real" ? "real" : "mock",
+    idempotencyKey: nullToUndefined(inputArtifact.data_json.idempotencyKey),
     input: inputArtifact.data_json.input,
     lightweightChoices: inputArtifact.data_json.lightweightChoices,
     plannedDurationSeconds: inputArtifact.data_json.plannedDurationSeconds,
@@ -457,17 +460,35 @@ function nullToUndefined(value: unknown) {
   return value === null ? undefined : value;
 }
 
+function parseStoryWorldIdempotencyKey(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length > 200) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return trimmed;
+}
+
 function stableStoryWorldJobHashInput(input: {
   input: ReturnType<typeof parseStoryWorldRequest>;
   providerName: string;
-  sessionId: string;
 }) {
   return JSON.stringify({
+    idempotencyKey: input.input.idempotencyKey ?? null,
     input: input.input.input,
     lightweightChoices: input.input.lightweightChoices,
     plannedDurationSeconds: input.input.plannedDurationSeconds,
     providerName: input.providerName,
-    sessionId: input.sessionId,
+    sessionId: input.input.sessionId ?? null,
     storyModeId: input.input.storyModeId ?? null,
     travelDestination: input.input.travelDestination ?? null,
     uploadedPhotoIds: input.input.uploadedPhotoIds,

@@ -68,9 +68,14 @@ const stepPaths = [
   "/storycam/clip-generation"
 ] as const;
 
+function createStoryCamRequestId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 type StoryWorldAssetImage = NonNullable<GenerateStoryWorldAssetImageResponse["media"]>;
 type TopBarAuthStatus = "checking" | "authenticated" | "anonymous" | "error";
 type StoryWorldGenerationRequest = StoryWorldDraft & {
+  idempotencyKey: string;
   requestId: number;
   sessionId?: string;
   uploadedPhotoIds?: string[];
@@ -800,6 +805,7 @@ export function StoryCamWorkspace() {
   function submitStoryWorldDraft(draft: StoryWorldDraft) {
     const request = {
       ...draft,
+      idempotencyKey: createStoryCamRequestId(),
       requestId: storyWorldRequestIdRef.current + 1
     };
     storyWorldRequestIdRef.current = request.requestId;
@@ -849,6 +855,7 @@ export function StoryCamWorkspace() {
       }
 
       const nextStoryWorld = await createStoryWorld({
+        idempotencyKey: requestWithUploads.idempotencyKey,
         input: requestWithUploads.idea,
         lightweightChoices: requestWithUploads.selectedChoices,
         sessionId: requestWithUploads.sessionId,

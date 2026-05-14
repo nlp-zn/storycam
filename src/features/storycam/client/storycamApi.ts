@@ -1238,6 +1238,7 @@ export async function uploadStoryCamPhoto(input: { file: File; sessionId?: strin
 }
 
 export async function createStoryWorld(input: {
+  idempotencyKey?: string;
   input: string;
   lightweightChoices: string[];
   plannedDurationSeconds?: number;
@@ -1249,6 +1250,7 @@ export async function createStoryWorld(input: {
 }) {
   const response = await fetch("/api/story-world", {
     body: JSON.stringify({
+      ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       input: input.input,
       lightweightChoices: input.lightweightChoices,
       plannedDurationSeconds: input.plannedDurationSeconds ?? 12,

@@ -68,6 +68,11 @@ job succeeds, but browser polling is not the production progress engine.
 
 `POST /api/story-world` accepts optional `storyModeId` and `travelDestination`. For `storyModeId: "handdrawn-travel-vlog"`, the request must include exactly one `uploadedPhotoIds[]` entry and a non-empty `travelDestination`; validation failures return redacted `400` errors. The response script may include `storyModeId` so downstream server code can keep image and video prompts in the correct visual route.
 
+In real mode, `POST /api/story-world` also accepts a client-generated
+`idempotencyKey`. First-run requests without a `sessionId` must be able to reuse the
+same durable job before creating another session, so the key is hashed with the
+story-world request payload and provider name.
+
 ## Clip And Final Work Routes
 
 | Route | Purpose |

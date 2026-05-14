@@ -192,6 +192,7 @@ describe("POST /api/story-world", () => {
 
     const response = await POST(
       jsonRequest({
+        idempotencyKey: "story-world-request-1",
         input: "这是非常私密的一句话，不应该出现在响应里",
         lightweightChoices: ["留白多一点"],
         videoAspectRatio: "9:16"
@@ -238,6 +239,64 @@ describe("POST /api/story-world", () => {
         type: "story_world"
       })
     );
+  });
+
+  it("reuses an active first-run real story-world job before creating a new session", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const provider = {
+      generate: vi.fn(),
+      providerKind: "text" as const,
+      providerName: "deepseek"
+    };
+    const client = new FakeSupabaseClient({
+      existingGenerationJob: storyWorldGenerationJobRow({
+        id: "existing-story-world-job",
+        provider_name: "deepseek",
+        session_id: "existing-session"
+      })
+    });
+
+    loadStoryCamConfigMock.mockReturnValue(
+      mockTextConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textModel: "deepseek-v4-pro"
+        },
+        mode: "real",
+        textProvider: "deepseek"
+      })
+    );
+    createConfiguredStoryWorldProviderMock.mockReturnValue(provider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        idempotencyKey: "story-world-request-1",
+        input: "这是非常私密的一句话，不应该出现在响应里",
+        lightweightChoices: ["留白多一点"],
+        videoAspectRatio: "9:16"
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(body).toMatchObject({
+      job: {
+        jobId: "existing-story-world-job",
+        providerName: "deepseek",
+        sessionId: "existing-session",
+        status: "queued"
+      },
+      ok: true,
+      sessionId: "existing-session"
+    });
+    expect(provider.generate).not.toHaveBeenCalled();
+    expect(client.queries[0]?.table).toBe("generation_jobs");
+    expect(client.insertedRows("storycam_sessions")).toEqual([]);
+    expect(client.insertedRows("storycam_artifacts")).toEqual([]);
+    expect(client.insertedRows("generation_jobs")).toEqual([]);
   });
 
   it("uses the OpenRouter story-world provider when text provider is configured for mixed mode", async () => {
@@ -535,12 +594,54 @@ function dynamicStoryWorld() {
   };
 }
 
+function storyWorldGenerationJobRow(overrides: Record<string, unknown> = {}) {
+  return {
+    attempts: 0,
+    created_at: "2026-04-26T00:00:00.000Z",
+    ended_at: null,
+    error_code: null,
+    generation_mode: "real",
+    id: "job-1",
+    idempotency_key_hash: "hash-1",
+    input_artifact_versions_json: {},
+    locked_at: null,
+    locked_by: null,
+    max_attempts: 1,
+    output_artifact_id: null,
+    provider_error_category: null,
+    provider_http_status: null,
+    provider_kind: "text",
+    provider_name: "deepseek",
+    provider_request_id: null,
+    redacted_error: null,
+    run_after: "2026-04-26T00:00:00.000Z",
+    session_id: "session-1",
+    started_at: null,
+    status: "queued",
+    tombstoned_at: null,
+    type: "story_world",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    ...overrides
+  };
+}
+
+type FakeSupabaseClientOptions = {
+  existingGenerationJob?: Record<string, unknown>;
+};
+
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
   private generationJobInsertCount = 0;
 
+  constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
+
   asSupabaseClient() {
     return this;
+  }
+
+  existingGenerationJob() {
+    return this.options.existingGenerationJob ?? null;
   }
 
   insertedRows(table: string) {
@@ -621,7 +722,7 @@ class FakeQuery {
 
   maybeSingle() {
     return Promise.resolve({
-      data: this.table === "generation_jobs" ? null : this.table === "storycam_sessions" ? this.sessionRow() : null,
+      data: this.table === "generation_jobs" ? this.client.existingGenerationJob() : this.table === "storycam_sessions" ? this.sessionRow() : null,
       error: null
     });
   }
