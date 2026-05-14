@@ -390,6 +390,11 @@ class FakeQuery {
     return this;
   }
 
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
   maybeSingle() {
     return Promise.resolve({
       data: this.row(),

@@ -5,7 +5,7 @@ import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
 import { createConfiguredStoryboardProvider } from "@/server/storycam/storyboardProviderFactory";
-import { createStoryboard, StoryboardRequestError } from "@/server/storycam/storyboardService";
+import { createStoryboard, createStoryboardJob, StoryboardRequestError } from "@/server/storycam/storyboardService";
 import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 
 export async function POST(request: Request) {
@@ -17,13 +17,31 @@ export async function POST(request: Request) {
     const requestBody = await parseStoryboardJson(request);
     const client = createSupabaseAdminClient();
     await assertStoryCamDailyJobQuota(client, user.id, config, "image");
-    const result = await createStoryboard(client, user.id, requestBody, provider, imageProvider, {
-      providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
-    });
     const responseHeaders = {
       "x-storycam-text-provider": provider?.providerName ?? "mock",
       "x-storycam-image-provider": imageProvider?.providerName ?? "mock"
     };
+
+    if (config.generation.mode === "real" && provider?.providerName === "openrouter") {
+      const job = await createStoryboardJob(client, user.id, requestBody, {
+        generationMode: config.generation.mode,
+        providerName: provider.providerName
+      });
+
+      return NextResponse.json(
+        {
+          job,
+          ok: true,
+          providerName: job.providerName,
+          status: job.status
+        },
+        { headers: responseHeaders, status: 202 }
+      );
+    }
+
+    const result = await createStoryboard(client, user.id, requestBody, provider, imageProvider, {
+      providerReferenceSignedUrlTtlSeconds: config.media.providerReferenceSignedUrlTtlSeconds
+    });
 
     if (!result.ok) {
       return NextResponse.json(

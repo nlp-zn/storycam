@@ -4,9 +4,11 @@ import type { CharacterAsset, CoreStoryboardGroup, SceneAsset, StoryboardScript,
 import { createDurationPlan } from "@/features/storycam/domain/durationRules";
 import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import { createMockStoryboardProvider, type MockStoryboardInput, type MockStoryboardOutput } from "@/lib/providers/mock/storyboardProvider";
+import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { ImageGenerationProvider, ProviderFailure, TextGenerationProvider } from "@/lib/providers/types";
-import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";
+import type { Database, GenerationJobRow, Json, StoryCamArtifactRow } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
+import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { submitImageGenerationJob } from "./imageGenerationJobService";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
@@ -24,6 +26,7 @@ export type StoryboardRequestBody = {
   coreGroupTargetCount?: unknown;
   deferRepresentativeImages?: unknown;
   expansionCardTargetCount?: unknown;
+  idempotencyKey?: unknown;
   plannedDurationSeconds?: unknown;
   sessionId?: unknown;
 };
@@ -58,6 +61,12 @@ export type StoryboardCoreGroupView = CoreStoryboardGroup & {
   expandedStoryboardImages: GeneratedStoryboardImageState[];
   representativeImage: GeneratedStoryboardImageState;
   scriptArtifact: StoryboardArtifactRef;
+};
+
+export type StoryboardJobOutput = {
+  jobId: string;
+  providerName: string;
+  status: GenerationJobRow["status"];
 };
 
 export class StoryboardRequestError extends Error {
@@ -194,6 +203,124 @@ export async function createStoryboard(
   };
 }
 
+export async function createStoryboardJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  body: StoryboardRequestBody,
+  options: {
+    generationMode: GenerationJobRow["generation_mode"];
+    providerName: string;
+  }
+): Promise<StoryboardJobOutput> {
+  const input = parseStoryboardRequest(body);
+  const sessions = new StoryCamSessionRepository(client);
+  const artifacts = new StoryCamArtifactRepository(client);
+  const session = await sessions.findById(userId, input.sessionId);
+
+  if (!session) {
+    throw new StoryboardRequestError("session_not_found");
+  }
+
+  await loadConfirmedStoryWorld(artifacts, userId, session.id, input.confirmedArtifactVersions);
+
+  const idempotencyKey = parseStoryboardIdempotencyKey(body.idempotencyKey);
+  const jobInput = toStoryboardJobInputJson(input);
+  const idempotencyKeyHash = hashLogIdentifier(
+    stableStoryboardJobHashInput({
+      idempotencyKey,
+      jobInput,
+      providerName: options.providerName,
+      sessionId: session.id
+    })
+  );
+  const jobs = new StoryCamGenerationJobRepository(client);
+  const existingJob = await jobs.findActiveByIdempotencyKey(userId, idempotencyKeyHash);
+
+  if (existingJob && !isFailedOrExpiredStoryboardJob(existingJob)) {
+    return toStoryboardJobOutput(existingJob);
+  }
+
+  const job = await jobs.create(userId, {
+    generationMode: options.generationMode,
+    idempotencyKeyHash,
+    inputArtifactVersionsJson: jobInput,
+    maxAttempts: 1,
+    providerKind: "text",
+    providerName: options.providerName,
+    sessionId: session.id,
+    status: "queued",
+    type: "storyboard"
+  });
+
+  if (!job) {
+    throw new Error("StoryCam storyboard job creation failed.");
+  }
+
+  return toStoryboardJobOutput(job);
+}
+
+export async function completeStoryboardJob(
+  client: SupabaseClient<Database>,
+  job: GenerationJobRow,
+  provider?: TextGenerationProvider<MockStoryboardInput, MockStoryboardOutput>,
+  imageProvider?: ImageGenerationProvider<StoryboardRepresentativeImageInput, StoryboardRepresentativeImageOutput>,
+  options: {
+    providerReferenceSignedUrlTtlSeconds?: number;
+  } = {}
+) {
+  const jobs = new StoryCamGenerationJobRepository(client);
+
+  if (job.status === "succeeded" || job.status === "failed" || job.status === "canceled" || job.status === "expired") {
+    return job;
+  }
+
+  if (job.status === "cancel_requested" || job.tombstoned_at) {
+    return (await jobs.markCanceled(job.user_id, job.id)) ?? job;
+  }
+
+  if (job.provider_name !== "mock" && !provider) {
+    return (
+      (await jobs.markFailed(job.user_id, job.id, {
+        errorCode: "STORYBOARD_PROVIDER_UNAVAILABLE",
+        redactedError: "Storyboard generation failed."
+      })) ?? job
+    );
+  }
+
+  try {
+    const result = await createStoryboard(
+      client,
+      job.user_id,
+      fromStoryboardJobInputJson(job.input_artifact_versions_json),
+      provider,
+      imageProvider,
+      options
+    );
+
+    if (!result.ok) {
+      return (
+        (await jobs.markFailed(job.user_id, job.id, {
+          errorCode: result.errorCode,
+          providerErrorCategory: result.providerErrorCategory,
+          providerHttpStatus: result.providerHttpStatus,
+          redactedError: result.redactedError
+        })) ?? job
+      );
+    }
+
+    return (await jobs.markSucceeded(job.user_id, job.id, { outputArtifactId: result.value.storyboardScript.id })) ?? job;
+  } catch (error) {
+    const errorCode = error instanceof StoryboardRequestError ? error.code : "STORYBOARD_JOB_FAILED";
+
+    return (
+      (await jobs.markFailed(job.user_id, job.id, {
+        errorCode,
+        redactedError: "Storyboard generation failed."
+      })) ?? job
+    );
+  }
+}
+
 export function parseStoryboardRequest(body: StoryboardRequestBody) {
   const sessionId = typeof body.sessionId === "string" && body.sessionId ? body.sessionId : "";
 
@@ -208,6 +335,67 @@ export function parseStoryboardRequest(body: StoryboardRequestBody) {
     expansionCardTargetCount: parseOptionalInteger(body.expansionCardTargetCount),
     plannedDurationSeconds: parseOptionalDuration(body.plannedDurationSeconds),
     sessionId
+  };
+}
+
+function parseStoryboardIdempotencyKey(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "default";
+}
+
+function toStoryboardJobInputJson(input: ReturnType<typeof parseStoryboardRequest>): Json {
+  return {
+    confirmedArtifactVersions: input.confirmedArtifactVersions,
+    coreGroupTargetCount: input.coreGroupTargetCount ?? null,
+    deferRepresentativeImages: input.deferRepresentativeImages,
+    expansionCardTargetCount: input.expansionCardTargetCount ?? null,
+    plannedDurationSeconds: input.plannedDurationSeconds ?? null,
+    sessionId: input.sessionId
+  };
+}
+
+function fromStoryboardJobInputJson(value: Json): StoryboardRequestBody {
+  if (!isRecord(value)) {
+    throw new StoryboardRequestError("invalid_input");
+  }
+
+  return {
+    confirmedArtifactVersions: value.confirmedArtifactVersions,
+    coreGroupTargetCount: nullToUndefined(value.coreGroupTargetCount),
+    deferRepresentativeImages: value.deferRepresentativeImages === true,
+    expansionCardTargetCount: nullToUndefined(value.expansionCardTargetCount),
+    plannedDurationSeconds: nullToUndefined(value.plannedDurationSeconds),
+    sessionId: value.sessionId
+  };
+}
+
+function nullToUndefined(value: unknown) {
+  return value === null ? undefined : value;
+}
+
+function stableStoryboardJobHashInput(input: {
+  idempotencyKey: string;
+  jobInput: Json;
+  providerName: string;
+  sessionId: string;
+}) {
+  return JSON.stringify({
+    idempotencyKey: input.idempotencyKey,
+    jobInput: input.jobInput,
+    providerName: input.providerName,
+    sessionId: input.sessionId,
+    type: "storyboard"
+  });
+}
+
+function isFailedOrExpiredStoryboardJob(job: GenerationJobRow) {
+  return job.status === "failed" || job.status === "expired";
+}
+
+function toStoryboardJobOutput(job: GenerationJobRow): StoryboardJobOutput {
+  return {
+    jobId: job.id,
+    providerName: job.provider_name,
+    status: job.status
   };
 }
 

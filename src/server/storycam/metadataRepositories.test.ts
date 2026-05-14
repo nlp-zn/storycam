@@ -270,6 +270,11 @@ class FakeQuery {
     return this;
   }
 
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
   order(column: string, options: Record<string, unknown>) {
     this.calls.push(["order", column, options]);
     return this;

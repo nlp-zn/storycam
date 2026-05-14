@@ -207,11 +207,20 @@ class FakeQuery {
     return this;
   }
 
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
   single() {
     return Promise.resolve({
       data: this.row(),
       error: null
     });
+  }
+
+  maybeSingle() {
+    return this.single();
   }
 
   private row() {

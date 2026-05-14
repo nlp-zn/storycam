@@ -33,6 +33,11 @@ export type CancelGenerationJobInput = {
   endedAt?: Date;
 };
 
+export type SubmitGenerationJobProviderRequestInput = {
+  providerRequestId: string;
+  startedAt?: Date;
+};
+
 export type TombstoneGenerationJobInput = {
   tombstonedAt?: Date;
 };
@@ -82,6 +87,7 @@ export class StoryCamGenerationJobRepository {
       .select(jobColumns)
       .eq("user_id", userId)
       .eq("idempotency_key_hash", idempotencyKeyHash)
+      .in("status", ["queued", "running", "succeeded"])
       .is("tombstoned_at", null)
       .maybeSingle();
 
@@ -123,9 +129,10 @@ export class StoryCamGenerationJobRepository {
       })
       .eq("id", jobId)
       .eq("user_id", userId)
+      .in("status", ["queued", "running"])
       .is("tombstoned_at", null)
       .select(jobColumns)
-      .single();
+      .maybeSingle();
 
     return unwrapRepositoryResult("mark_generation_job_succeeded", data, error);
   }
@@ -139,11 +146,30 @@ export class StoryCamGenerationJobRepository {
       })
       .eq("id", jobId)
       .eq("user_id", userId)
+      .in("status", ["queued", "running"])
       .is("tombstoned_at", null)
       .select(jobColumns)
-      .single();
+      .maybeSingle();
 
     return unwrapRepositoryResult("mark_generation_job_running", data, error);
+  }
+
+  async markProviderRequestSubmitted(userId: string, jobId: string, input: SubmitGenerationJobProviderRequestInput) {
+    const { data, error } = await this.client
+      .from("generation_jobs")
+      .update({
+        provider_request_id: input.providerRequestId,
+        started_at: (input.startedAt ?? new Date()).toISOString(),
+        status: "running"
+      })
+      .eq("id", jobId)
+      .eq("user_id", userId)
+      .in("status", ["queued", "running"])
+      .is("tombstoned_at", null)
+      .select(jobColumns)
+      .maybeSingle();
+
+    return unwrapRepositoryResult("mark_generation_job_provider_request_submitted", data, error);
   }
 
   async markFailed(userId: string, jobId: string, input: FailGenerationJobInput) {
@@ -161,9 +187,10 @@ export class StoryCamGenerationJobRepository {
       })
       .eq("id", jobId)
       .eq("user_id", userId)
+      .in("status", ["queued", "running"])
       .is("tombstoned_at", null)
       .select(jobColumns)
-      .single();
+      .maybeSingle();
 
     return unwrapRepositoryResult("mark_generation_job_failed", data, error);
   }
