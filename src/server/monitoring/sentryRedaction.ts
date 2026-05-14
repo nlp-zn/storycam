@@ -17,24 +17,27 @@ const sensitiveKeys = new Set([
 ]);
 
 export function scrubSentryEvent<T>(event: T): T {
-  const scrubbed = deepScrub(event) as {
-    request?: {
-      method?: string;
-      url?: string;
-    };
-    user?: unknown;
-  };
+  const original = event as SentryEventShape;
+  const scrubbed = deepScrub(event) as SentryEventShape;
 
   delete scrubbed.user;
-  scrubbed.request = scrubbed.request
+  scrubbed.request = original.request
     ? {
-        method: scrubbed.request.method,
-        url: scrubbed.request.url ? redactUrl(scrubbed.request.url) : undefined
+        method: typeof original.request.method === "string" ? original.request.method : undefined,
+        url: typeof original.request.url === "string" ? redactUrl(original.request.url) : undefined
       }
     : undefined;
 
   return scrubbed as T;
 }
+
+type SentryEventShape = {
+  request?: {
+    method?: unknown;
+    url?: unknown;
+  };
+  user?: unknown;
+};
 
 function deepScrub(value: unknown, key?: string): unknown {
   if (key && shouldRedactKey(key)) {
@@ -69,6 +72,10 @@ function redactMaybeSensitiveString(value: string) {
 function redactUrl(value: string) {
   try {
     const parsed = new URL(value);
+
+    if (/storage/i.test(`${parsed.hostname}${parsed.pathname}`)) {
+      return "[redacted]";
+    }
 
     return `${parsed.origin}${parsed.pathname}`;
   } catch {
