@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin));
+  return NextResponse.redirect(new URL(next, getRedirectOrigin(requestUrl)));
 }
 
 function sanitizeRedirectPath(value: string | null) {
@@ -20,4 +20,18 @@ function sanitizeRedirectPath(value: string | null) {
   }
 
   return value;
+}
+
+function getRedirectOrigin(requestUrl: URL) {
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+
+  if (!configuredAppUrl) {
+    return requestUrl.origin;
+  }
+
+  try {
+    return new URL(configuredAppUrl).origin;
+  } catch {
+    return requestUrl.origin;
+  }
 }
