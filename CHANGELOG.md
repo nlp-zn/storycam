@@ -2,6 +2,20 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.2.0] - 2026-05-14
+
+### Changed
+
+- Story-world and core storyboard generation can now continue through durable worker jobs in real mode, so long-running provider calls no longer depend on the browser tab or a Cloudflare request window staying open.
+- Real image and video provider task submission now starts from the worker path, keeping browser requests focused on queuing work and reading saved job state.
+- The StoryCam client now waits for durable story-world and storyboard jobs through the existing generation-job restore flow.
+
+### Fixed
+
+- Real storyboard requests keep the server-side image quota check before queuing worker-owned work.
+- Generation job updates now avoid reusing canceled/failed idempotency records and avoid writing provider task ids or terminal status onto jobs that are no longer active.
+- Restore E2E coverage now scopes the storyboard title assertion to the restored frame card instead of the matching script summary panel.
+
 ## [0.1.1.2] - 2026-05-14
 
 ### Fixed
