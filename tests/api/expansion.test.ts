@@ -178,6 +178,13 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
       expect.objectContaining({
         input_artifact_versions_json: expect.objectContaining({
           "character-artifact-1": 1,
+          __storycam_image_provider_input: expect.objectContaining({
+            frame: expect.objectContaining({ frameNumber: 1, imagePrompt: expect.stringContaining("frame 1") }),
+            referenceImages: [
+              expect.objectContaining({ assetArtifactId: "character-artifact-1", kind: "character", mediaId: "media-character-1" }),
+              expect.objectContaining({ assetArtifactId: "scene-artifact-1", kind: "scene", mediaId: "media-scene-1" })
+            ]
+          }),
           "media:media-character-1": "media-character-1",
           "media:media-scene-1": "media-scene-1",
           "scene-artifact-1": 1
@@ -186,15 +193,7 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
         type: "storyboard_image"
       })
     );
-    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        frame: expect.objectContaining({ frameNumber: 1, imagePrompt: expect.stringContaining("frame 1") }),
-        referenceImages: [
-          expect.objectContaining({ assetArtifactId: "character-artifact-1", kind: "character", mediaId: "media-character-1" }),
-          expect.objectContaining({ assetArtifactId: "scene-artifact-1", kind: "scene", mediaId: "media-scene-1" })
-        ]
-      })
-    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
   });
 
   it("regenerates an expanded frame image from its stored frame prompt", async () => {
@@ -222,22 +221,21 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     expect(generationJobInserts(client)).toContainEqual(
       expect.objectContaining({
         input_artifact_versions_json: expect.objectContaining({
+          __storycam_image_provider_input: expect.objectContaining({
+            imagePrompt: expect.stringContaining("frame 5"),
+            referenceImages: [
+              expect.objectContaining({ kind: "character", mediaId: "media-character-1" }),
+              expect.objectContaining({ kind: "scene", mediaId: "media-scene-1" }),
+              expect.objectContaining({ assetArtifactId: "core-artifact-1", kind: "core_storyboard", mediaId: "media-core-1" })
+            ],
+            sortOrder: 3
+          }),
           "media:media-core-1": "media-core-1"
         }),
         type: "expanded_storyboard_image"
       })
     );
-    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        imagePrompt: expect.stringContaining("frame 5"),
-        referenceImages: [
-          expect.objectContaining({ kind: "character", mediaId: "media-character-1" }),
-          expect.objectContaining({ kind: "scene", mediaId: "media-scene-1" }),
-          expect.objectContaining({ assetArtifactId: "core-artifact-1", kind: "core_storyboard", mediaId: "media-core-1" })
-        ],
-        sortOrder: 3
-      })
-    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
   });
 
   it("uses the center storyboard image as a continuity reference when creating expanded frame images", async () => {
@@ -260,6 +258,13 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     expect(generationJobInserts(client)[0]).toEqual(
       expect.objectContaining({
         input_artifact_versions_json: expect.objectContaining({
+          __storycam_image_provider_input: expect.objectContaining({
+            referenceImages: [
+              expect.objectContaining({ kind: "character", mediaId: "media-character-1" }),
+              expect.objectContaining({ kind: "scene", mediaId: "media-scene-1" }),
+              expect.objectContaining({ assetArtifactId: "core-artifact-1", kind: "core_storyboard", mediaId: "media-core-1" })
+            ]
+          }),
           "media:media-character-1": "media-character-1",
           "media:media-core-1": "media-core-1",
           "media:media-scene-1": "media-scene-1"
@@ -267,15 +272,7 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
         type: "expanded_storyboard_image"
       })
     );
-    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        referenceImages: [
-          expect.objectContaining({ kind: "character", mediaId: "media-character-1" }),
-          expect.objectContaining({ kind: "scene", mediaId: "media-scene-1" }),
-          expect.objectContaining({ assetArtifactId: "core-artifact-1", kind: "core_storyboard", mediaId: "media-core-1" })
-        ]
-      })
-    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
   });
 
   it("skips regeneration image jobs until required story-world asset images are ready", async () => {
@@ -320,9 +317,10 @@ describe("POST /api/storyboard-groups/:id/expand", () => {
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toMatchObject({
       frameNumber: 1,
-      image: { placeholder: true, reason: "storage_failed", status: "placeholder" },
+      image: { placeholder: true, status: "generating" },
       ok: true
     });
+    expect(provider.submitImageTask).not.toHaveBeenCalled();
   });
 
   it("rejects invalid JSON for storyboard frame image regeneration", async () => {
@@ -689,6 +687,16 @@ class FakeQuery {
 
   is(column: string, value: unknown) {
     this.calls.push(["is", column, value]);
+    return this;
+  }
+
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
+  gte(column: string, value: unknown) {
+    this.calls.push(["gte", column, value]);
     return this;
   }
 

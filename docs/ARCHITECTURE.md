@@ -87,10 +87,10 @@ Provider concepts are separate:
 
 Provider selection is server configuration, not a client parameter.
 
-- Story-world text uses DeepSeek official beta strict function calling. It forces the `submit_story_world` tool, parses only tool-call arguments, and validates the final StoryCam artifacts before returning data to the client.
-- Core storyboard text and fallback structured text use OpenRouter-backed Vercel AI SDK adapters.
-- Story-world, core storyboard, and expanded storyboard images prefer Inference.sh `openai/gpt-image-2`; OpenRouter image remains a legacy adapter behind the same boundary.
-- Video generation uses Seedance 2.0 / Seedance 2.0 Fast behind `VideoGenerationProvider`.
+- Story-world text uses DeepSeek official beta strict function calling. It forces the `submit_story_world` tool, parses only tool-call arguments, and validates the final StoryCam artifacts before saving them.
+- Core storyboard text and fallback structured text use OpenRouter-backed Vercel AI SDK adapters. In production real mode, story-world and core-storyboard text run as durable `generation_jobs` so Cloudflare/browser HTTP timeouts do not own progress.
+- Story-world, core storyboard, and expanded storyboard images prefer Inference.sh `openai/gpt-image-2`; OpenRouter image remains a legacy adapter behind the same boundary. Real image task submission and polling are worker-owned.
+- Video generation uses Seedance 2.0 / Seedance 2.0 Fast behind `VideoGenerationProvider`. Real video task submission and polling are worker-owned.
 - Final work uses the final-work provider/composer boundary and remains account-scoped.
 
 Local mixed mode can run `STORYCAM_GENERATION_MODE=mock` with `STORYCAM_STORY_WORLD_TEXT_PROVIDER=deepseek`; other providers may remain mock. `STORYCAM_TEXT_PROVIDER` remains a compatibility fallback. Runtime process env takes precedence over `.env.local`.
@@ -103,6 +103,8 @@ Async work uses `generation_jobs` plus service-owned polling, cancellation, time
 
 Job-backed surfaces include:
 
+- real story-world text generation,
+- real core storyboard text generation,
 - story-world asset image generation,
 - storyboard image generation,
 - expanded storyboard image generation,

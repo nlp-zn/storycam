@@ -834,7 +834,7 @@ test.describe("StoryCam session restore", () => {
     await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
     await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
     await expect(page.getByText("1 组 · 约 15 秒内")).toBeVisible();
-    await expect(page.getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
+    await expect(page.getByTestId("storyboard-frame-01").getByRole("heading", { exact: true, name: "未发送短信" })).toBeVisible();
     await expect(page.getByRole("heading", { exact: true, name: "玻璃反光" })).toHaveCount(0);
     await expect(page.getByAltText("未发送短信 主分镜图")).toBeVisible();
     await expect(page.getByAltText("未发送短信 扩展分镜 1")).toBeVisible();

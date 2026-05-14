@@ -222,26 +222,11 @@ describe("generation job API routes", () => {
     });
 
     expect(response.status).toBe(201);
-    const submittedInput = videoProvider.submitClipTask.mock.calls[0]?.[0];
-    expect(submittedInput).toMatchObject({
-      durationSeconds: 4.7,
-      generateAudio: true,
-      prompt: expect.stringContaining("Director nine-frame plan")
+    await expect(response.json()).resolves.toMatchObject({
+      providerName: "seedance_2_0",
+      status: "queued"
     });
-    expect(submittedInput.prompt).toContain("Native audio plan");
-    expect(submittedInput.prompt).toContain("雨声");
-    expect(submittedInput.prompt).toContain("门铃");
-    expect(submittedInput.prompt).toContain("脚步");
-    expect(submittedInput.prompt).toContain("环境音乐");
-    expect(submittedInput.prompt).toContain("对白");
-    expect(submittedInput.prompt).toContain("图片9=F09 expanded");
-    expect(submittedInput.referenceImageUrls).toHaveLength(9);
-    expect(submittedInput.referenceImageUrls).toContain(
-      "https://storycam.test/storage/storycam-generated/users/user-1/sessions/session-1/generated/media-core-1.png"
-    );
-    expect(submittedInput.referenceImageUrls).toContain(
-      "https://storycam.test/storage/storycam-generated/users/user-1/sessions/session-1/generated/media-expanded-8.png"
-    );
+    expect(videoProvider.submitClipTask).not.toHaveBeenCalled();
     expect(client.signedUrls).toHaveLength(9);
     expect(client.signedUrls).toEqual(
       expect.arrayContaining([
@@ -265,8 +250,8 @@ describe("generation job API routes", () => {
     ).toMatchObject({
       generation_mode: "real",
       provider_name: "seedance_2_0",
-      provider_request_id: "seedance-task-1",
-      status: "running",
+      provider_request_id: null,
+      status: "queued",
       type: "video_clip"
     });
   });
@@ -302,9 +287,9 @@ describe("generation job API routes", () => {
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
       providerName: "seedance_2_0_fast",
-      status: "running"
+      status: "queued"
     });
-    expect(fastProvider.submitClipTask).toHaveBeenCalledWith(expect.objectContaining({ ratio: "16:9", resolution: "720p" }));
+    expect(fastProvider.submitClipTask).not.toHaveBeenCalled();
     expect(
       client.queries
         .filter((query) => query.table === "generation_jobs")
@@ -315,7 +300,7 @@ describe("generation job API routes", () => {
     });
   });
 
-  it("keeps Seedance Fast failures on the selected provider instead of silently falling back", async () => {
+  it("queues Seedance Fast on the selected provider instead of silently falling back", async () => {
     const { POST } = await import("@/app/api/storyboard-groups/[id]/generate-clip/route");
     const client = new FakeSupabaseClient({
       artifactRows: [coreGroupRow(), storyboardScriptRow(), ...expandedCardRows()],
@@ -365,13 +350,10 @@ describe("generation job API routes", () => {
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
-      providerErrorCategory: "request_rejected",
-      providerHttpStatus: 404,
       providerName: "seedance_2_0_fast",
-      redactedError: "Provider request failed.",
-      status: "failed"
+      status: "queued"
     });
-    expect(fastProvider.submitClipTask).toHaveBeenCalledTimes(1);
+    expect(fastProvider.submitClipTask).not.toHaveBeenCalled();
     expect(regularProvider.submitClipTask).not.toHaveBeenCalled();
     expect(
       client.queries
@@ -381,17 +363,7 @@ describe("generation job API routes", () => {
     ).toMatchObject({
       provider_name: "seedance_2_0_fast",
       provider_request_id: null,
-      status: "running"
-    });
-    expect(
-      client.queries
-        .filter((query) => query.table === "generation_jobs")
-        .flatMap((query) => query.calls)
-        .find((call) => call[0] === "update")?.[1]
-    ).toMatchObject({
-      provider_error_category: "request_rejected",
-      provider_http_status: 404,
-      status: "failed"
+      status: "queued"
     });
   });
 
@@ -847,6 +819,11 @@ class FakeQuery {
     return this;
   }
 
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
   order(column: string, options: Record<string, unknown>) {
     this.calls.push(["order", column, options]);
     return this;
@@ -885,6 +862,10 @@ class FakeQuery {
   }
 
   private maybeSingleRow() {
+    if (this.table === "generation_jobs" && (this.inserted || this.updated)) {
+      return this.singleRow();
+    }
+
     if (this.table === "generation_jobs" && this.calls.some((call) => call[0] === "eq" && call[1] === "idempotency_key_hash")) {
       return this.options.activeJob ?? null;
     }

@@ -6,7 +6,9 @@ This document captures the Inference.sh rules StoryCam agents should keep in min
 
 ## StoryCam Usage
 
-StoryCam image generation uses Inference.sh through server-side API routes only.
+StoryCam image generation uses Inference.sh through server-side code only. In production
+real mode, API routes create durable StoryCam jobs and the background worker submits and
+polls Inference.sh tasks.
 
 ```text
 STORYCAM_IMAGE_PROVIDER=inference_sh
@@ -14,7 +16,10 @@ INFERENCE_API_KEY=
 INFERENCE_IMAGE_APP=openai/gpt-image-2
 ```
 
-The browser must never call Inference.sh directly or receive `INFERENCE_API_KEY`. StoryCam submits tasks from Next.js server routes, stores the Inference.sh task id in `generation_jobs.provider_request_id`, and downloads completed image output server-side into the private `storycam-generated` Supabase bucket.
+The browser must never call Inference.sh directly or receive `INFERENCE_API_KEY`. StoryCam
+stores the Inference.sh task id in `generation_jobs.provider_request_id` only after the
+worker submits the provider task, then downloads completed image output server-side into
+the private `storycam-generated` Supabase bucket.
 
 ## SDK Rules
 
@@ -126,16 +131,19 @@ StoryCam maps these to redacted provider failures. Provider diagnostics can ment
 Image submission:
 
 1. API builds a provider input from a confirmed artifact.
-2. API calls `client.run(..., { wait:false })`.
-3. API creates a `generation_jobs` row with the Inference.sh task id.
-4. API returns `{ status: "generating", jobId }`.
+2. API creates a `generation_jobs` row without a provider task id.
+3. API returns `{ status: "generating", jobId }`.
+4. Worker claims the job and calls `client.run(..., { wait:false })`.
+5. Worker stores the Inference.sh task id in `generation_jobs.provider_request_id`.
 
 Image resolution:
 
-1. Client polls `GET /api/generation-jobs/:id`.
-2. Server calls `client.getTask(taskId)`.
-3. If still running, server returns `generating`.
-4. If completed, server downloads `output.images[0]`, stores it privately, marks the job succeeded, and returns a fresh signed URL.
-5. If failed, server marks the job failed and returns redacted placeholder state.
+1. Worker reclaims runnable jobs after `run_after`.
+2. Worker calls `client.getTask(taskId)`.
+3. If still running, worker releases the job with a future `run_after`.
+4. If completed, worker downloads `output.images[0]`, stores it privately, marks the job
+   succeeded, and the read-only job endpoint can return a fresh signed URL.
+5. If failed, worker marks the job failed and the read-only job endpoint returns redacted
+   placeholder state.
 
 This keeps multi-image flows concurrent: 1-3 character sheets plus one scene board, 1-3 core storyboard main images, and 8 expanded storyboard images can progress independently.

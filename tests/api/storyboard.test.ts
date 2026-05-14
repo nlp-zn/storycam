@@ -33,8 +33,22 @@ describe("POST /api/storyboard", () => {
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://storycam.test";
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
     process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+    process.env.STORYCAM_GENERATION_MODE = "mock";
     process.env.STORYCAM_TEXT_PROVIDER = "mock";
     process.env.STORYCAM_IMAGE_PROVIDER = "mock";
+    process.env.STORYCAM_MULTIMODAL_PROVIDER = "mock";
+    process.env.STORYCAM_VIDEO_PROVIDER = "mock";
+    process.env.STORYCAM_FINAL_WORK_PROVIDER = "mock";
+    delete process.env.STORYCAM_STORY_WORLD_TEXT_PROVIDER;
+    delete process.env.STORYCAM_STORYBOARD_TEXT_PROVIDER;
+    delete process.env.DEEPSEEK_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_TEXT_MODEL;
+    delete process.env.OPENROUTER_MULTIMODAL_MODEL;
+    delete process.env.INFERENCE_API_KEY;
+    delete process.env.INFERENCE_IMAGE_APP;
+    delete process.env.SEEDANCE_API_KEY;
+    delete process.env.SEEDANCE_MODEL;
   });
 
   it("requires a confirmed story world before generating storyboard artifacts", async () => {
@@ -178,6 +192,12 @@ describe("POST /api/storyboard", () => {
       expect.objectContaining({
         input_artifact_versions_json: expect.objectContaining({
           "character-artifact-1": 1,
+          __storycam_image_provider_input: expect.objectContaining({
+            referenceImages: [
+              expect.objectContaining({ assetArtifactId: "character-artifact-1", mediaId: "media-character-1" }),
+              expect.objectContaining({ assetArtifactId: "scene-artifact-1", mediaId: "media-scene-1" })
+            ]
+          }),
           "media:media-character-1": "media-character-1",
           "media:media-scene-1": "media-scene-1",
           "scene-artifact-1": 1,
@@ -186,14 +206,7 @@ describe("POST /api/storyboard", () => {
         type: "storyboard_image"
       })
     );
-    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        referenceImages: [
-          expect.objectContaining({ assetArtifactId: "character-artifact-1", mediaId: "media-character-1" }),
-          expect.objectContaining({ assetArtifactId: "scene-artifact-1", mediaId: "media-scene-1" })
-        ]
-      })
-    );
+    expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
   });
 
   it("can defer representative storyboard image submission so the script returns first", async () => {
@@ -235,6 +248,64 @@ describe("POST /api/storyboard", () => {
     });
     expect(generationJobInserts(client)).toHaveLength(0);
     expect(createConfiguredStoryboardImageProviderMock.mock.results[0]?.value.submitImageTask).not.toHaveBeenCalled();
+  });
+
+  it("creates a durable real storyboard job without waiting on OpenRouter", async () => {
+    const { POST } = await import("@/app/api/storyboard/route");
+    const client = new FakeSupabaseClient({ artifactRows: storyWorldRows(), mediaRows: assetImageRows() });
+
+    setRealGenerationEnv();
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        confirmedArtifactVersions: {
+          "character-artifact-1": 1,
+          "scene-artifact-1": 1,
+          "script-artifact-1": 1
+        },
+        deferRepresentativeImages: true,
+        sessionId: "session-1"
+      })
+    );
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("x-storycam-text-provider")).toBe("openrouter");
+    await expect(response.json()).resolves.toMatchObject({
+      job: {
+        jobId: "job-1",
+        providerName: "openrouter",
+        status: "queued"
+      },
+      ok: true,
+      providerName: "openrouter",
+      status: "queued"
+    });
+    expect(generationJobInserts(client)).toContainEqual(
+      expect.objectContaining({
+        input_artifact_versions_json: expect.objectContaining({
+          confirmedArtifactVersions: {
+            "character-artifact-1": 1,
+            "scene-artifact-1": 1,
+            "script-artifact-1": 1
+          },
+          deferRepresentativeImages: true,
+          sessionId: "session-1"
+        }),
+        provider_kind: "text",
+        provider_name: "openrouter",
+        status: "queued",
+        type: "storyboard"
+      })
+    );
+    expect(client.queries.some((query) => query.calls.some((call) => call[0] === "gte" && call[1] === "created_at"))).toBe(true);
+    expect(
+      client.queries
+        .filter((query) => query.table === "storycam_artifacts")
+        .flatMap((query) => query.calls)
+        .some((call) => call[0] === "insert")
+    ).toBe(false);
   });
 
   it("returns the storyboard script first when deferring images even if story-world asset images are still pending", async () => {
@@ -351,6 +422,24 @@ function jsonRequest(body: unknown) {
     headers: { "content-type": "application/json" },
     method: "POST"
   });
+}
+
+function setRealGenerationEnv() {
+  process.env.STORYCAM_GENERATION_MODE = "real";
+  process.env.STORYCAM_STORY_WORLD_TEXT_PROVIDER = "deepseek";
+  process.env.STORYCAM_STORYBOARD_TEXT_PROVIDER = "openrouter";
+  process.env.STORYCAM_MULTIMODAL_PROVIDER = "openrouter";
+  process.env.STORYCAM_IMAGE_PROVIDER = "inference_sh";
+  process.env.STORYCAM_VIDEO_PROVIDER = "seedance_2_0";
+  process.env.STORYCAM_FINAL_WORK_PROVIDER = "ffmpeg";
+  process.env.DEEPSEEK_API_KEY = "deepseek-secret";
+  process.env.OPENROUTER_API_KEY = "openrouter-secret";
+  process.env.OPENROUTER_TEXT_MODEL = "openrouter-text-model";
+  process.env.OPENROUTER_MULTIMODAL_MODEL = "openrouter-multimodal-model";
+  process.env.INFERENCE_API_KEY = "inference-secret";
+  process.env.INFERENCE_IMAGE_APP = "openai/gpt-image-2";
+  process.env.SEEDANCE_API_KEY = "seedance-secret";
+  process.env.SEEDANCE_MODEL = "doubao-seedance-2-0-260128";
 }
 
 function storyWorldRows() {
@@ -502,6 +591,16 @@ class FakeQuery {
     return this;
   }
 
+  gte(column: string, value: unknown) {
+    this.calls.push(["gte", column, value]);
+    return this;
+  }
+
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
   limit(value: number) {
     this.calls.push(["limit", value]);
     return this;
@@ -540,6 +639,7 @@ class FakeQuery {
 
   then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
     return Promise.resolve({
+      count: this.table === "generation_jobs" ? 0 : null,
       data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : [],
       error: null
     }).then(resolve, reject);

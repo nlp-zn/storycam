@@ -52,15 +52,26 @@ Restore responses and recent-project summaries may be cached client-side in `ses
 | Route | Purpose |
 | --- | --- |
 | `POST /api/uploads` | Uploads a user photo into private Storage and links it to a session. |
-| `POST /api/story-world` | Creates/updates the story-world script, character assets, and scene asset. |
+| `POST /api/story-world` | Creates/updates the story-world script, character assets, and scene asset. In production real mode, starts a durable `story_world` text job and returns `202`. |
 | `POST /api/story-world/assets/generate-image` | Starts or polls one story-world asset image job. |
 | `POST /api/story-world/assets/generate-images` | Starts or polls batch story-world asset image jobs. |
-| `POST /api/storyboard` | Creates the MVP storyboard script, one core group, and the main image prompt. |
+| `POST /api/storyboard` | Creates the MVP storyboard script, one core group, and the main image prompt. In production real mode, starts a durable `storyboard` text job and returns `202`. |
 | `POST /api/storyboard-groups/[id]/expand` | Creates expanded storyboard cards for the selected core group. |
 
 New MVP storyboard creation normalizes to one core group, 15 seconds, and one generated clip target. Older restored data may still contain historical duration/count fields and must be tolerated.
 
+Real text generation for story-world and storyboard is worker-owned after job creation.
+Real image and video generation also create a durable job before provider task submission;
+the worker owns provider task creation, polling, downloads, and artifact completion.
+The browser may poll `GET /api/generation-jobs/[id]` and then restore the session when the
+job succeeds, but browser polling is not the production progress engine.
+
 `POST /api/story-world` accepts optional `storyModeId` and `travelDestination`. For `storyModeId: "handdrawn-travel-vlog"`, the request must include exactly one `uploadedPhotoIds[]` entry and a non-empty `travelDestination`; validation failures return redacted `400` errors. The response script may include `storyModeId` so downstream server code can keep image and video prompts in the correct visual route.
+
+In real mode, `POST /api/story-world` also accepts a client-generated
+`idempotencyKey`. First-run requests without a `sessionId` must be able to reuse the
+same durable job before creating another session, so the key is hashed with the
+story-world request payload and provider name.
 
 ## Clip And Final Work Routes
 

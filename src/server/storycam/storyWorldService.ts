@@ -15,8 +15,11 @@ import {
   parseStoryModeId
 } from "@/features/storycam/domain/storyModes";
 import { createMockStoryWorldProvider } from "@/lib/providers/mock/storyWorldProvider";
+import { hashLogIdentifier } from "@/lib/privacy/redact";
 import type { Database, MediaAssetRow, StoryCamArtifactRow, StoryCamSessionRow } from "@/server/db/types";
+import type { GenerationJobRow, Json } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
+import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
 
@@ -24,6 +27,7 @@ export const storyWorldInputMaxLength = 2_000;
 
 export type StoryWorldRequestBody = {
   generationMode?: "mock" | "real";
+  idempotencyKey?: unknown;
   input?: unknown;
   lightweightChoices?: unknown;
   plannedDurationSeconds?: unknown;
@@ -54,6 +58,13 @@ export type StoryWorldServiceOutput = {
 
 export type PublicStoryWorldProviderOutput = Omit<StoryWorldProviderOutput, "script"> & {
   script: Omit<StoryWorldProviderOutput["script"], "directorBrief">;
+};
+
+export type StoryWorldJobOutput = {
+  jobId: string;
+  providerName: string;
+  sessionId: string;
+  status: GenerationJobRow["status"];
 };
 
 export class StoryWorldRequestError extends Error {
@@ -150,6 +161,131 @@ export async function createStoryWorld(
       videoAspectRatio: parseStoryCamVideoAspectRatio(session.video_aspect_ratio) ?? defaultStoryCamVideoAspectRatio
     }
   };
+}
+
+export async function createStoryWorldJob(
+  client: SupabaseClient<Database>,
+  userId: string,
+  body: StoryWorldRequestBody,
+  options: {
+    generationMode: GenerationJobRow["generation_mode"];
+    providerName: string;
+  }
+): Promise<StoryWorldJobOutput> {
+  const input = parseStoryWorldRequest(body);
+  const sessions = new StoryCamSessionRepository(client);
+  const artifacts = new StoryCamArtifactRepository(client);
+  const mediaAssets = new StoryCamMediaAssetRepository(client);
+  const jobs = new StoryCamGenerationJobRepository(client);
+  const idempotencyKeyHash = hashLogIdentifier(
+    stableStoryWorldJobHashInput({
+      input,
+      providerName: options.providerName
+    })
+  );
+  const existingJob = await jobs.findActiveByIdempotencyKey(userId, idempotencyKeyHash);
+
+  if (existingJob && !isFailedOrExpiredStoryWorldJob(existingJob)) {
+    return toStoryWorldJobOutput(existingJob);
+  }
+
+  const loadedSession = await loadOrCreateStoryWorldSession({ input, sessions, userId });
+
+  if (!loadedSession) {
+    throw new StoryWorldRequestError("session_not_found");
+  }
+
+  const session = await applyInitialVideoAspectRatio({
+    artifacts,
+    requestedAspectRatio: input.requestedVideoAspectRatio,
+    session: loadedSession,
+    sessions,
+    userId
+  });
+
+  await resolveUploadedPhotoRefs(mediaAssets, userId, session.id, input.uploadedPhotoIds);
+
+  const inputArtifact = requireArtifactRow(
+    await artifacts.createVersion(userId, {
+      dataJson: toStoryWorldInputArtifactJson(input, session.id),
+      sessionId: session.id,
+      state: "ready",
+      type: "input",
+      version: 1
+    })
+  );
+  const job = await jobs.create(userId, {
+    generationMode: options.generationMode,
+    idempotencyKeyHash,
+    inputArtifactVersionsJson: {
+      [inputArtifact.id]: inputArtifact.version,
+      storyWorldInputArtifactId: inputArtifact.id
+    },
+    maxAttempts: 1,
+    providerKind: "text",
+    providerName: options.providerName,
+    sessionId: session.id,
+    status: "queued",
+    type: "story_world"
+  });
+
+  if (!job) {
+    throw new Error("StoryCam story-world job creation failed.");
+  }
+
+  return toStoryWorldJobOutput(job);
+}
+
+export async function completeStoryWorldJob(
+  client: SupabaseClient<Database>,
+  job: GenerationJobRow,
+  provider?: TextGenerationProvider<StoryWorldProviderInput, StoryWorldProviderOutput>
+) {
+  const jobs = new StoryCamGenerationJobRepository(client);
+
+  if (job.status === "succeeded" || job.status === "failed" || job.status === "canceled" || job.status === "expired") {
+    return job;
+  }
+
+  if (job.status === "cancel_requested" || job.tombstoned_at) {
+    return (await jobs.markCanceled(job.user_id, job.id)) ?? job;
+  }
+
+  if (job.provider_name !== "mock" && !provider) {
+    return (
+      (await jobs.markFailed(job.user_id, job.id, {
+        errorCode: "STORY_WORLD_PROVIDER_UNAVAILABLE",
+        redactedError: "Story world generation failed."
+      })) ?? job
+    );
+  }
+
+  try {
+    const requestBody = await loadStoryWorldJobRequestBody(client, job);
+    const result = await createStoryWorld(client, job.user_id, requestBody, provider);
+
+    if (!result.ok) {
+      return (
+        (await jobs.markFailed(job.user_id, job.id, {
+          errorCode: result.errorCode,
+          providerErrorCategory: result.providerErrorCategory,
+          providerHttpStatus: result.providerHttpStatus,
+          redactedError: result.redactedError
+        })) ?? job
+      );
+    }
+
+    return (await jobs.markSucceeded(job.user_id, job.id, { outputArtifactId: result.value.artifacts.script.id })) ?? job;
+  } catch (error) {
+    const errorCode = error instanceof StoryWorldRequestError ? error.code : "STORY_WORLD_JOB_FAILED";
+
+    return (
+      (await jobs.markFailed(job.user_id, job.id, {
+        errorCode,
+        redactedError: "Story world generation failed."
+      })) ?? job
+    );
+  }
 }
 
 async function applyInitialVideoAspectRatio({
@@ -252,6 +388,7 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
 
   return {
     generationMode,
+    idempotencyKey: parseStoryWorldIdempotencyKey(body.idempotencyKey),
     input,
     lightweightChoices: parseStringArray(body.lightweightChoices),
     plannedDurationSeconds: parsePlannedDuration(body.plannedDurationSeconds),
@@ -262,6 +399,119 @@ export function parseStoryWorldRequest(body: StoryWorldRequestBody) {
     uploadedPhotoIds,
     videoAspectRatio: parseVideoAspectRatioWithDefault(body.videoAspectRatio)
   };
+}
+
+function toStoryWorldInputArtifactJson(input: ReturnType<typeof parseStoryWorldRequest>, sessionId: string): Json {
+  return {
+    generationMode: input.generationMode,
+    idempotencyKey: input.idempotencyKey ?? null,
+    input: input.input,
+    lightweightChoices: input.lightweightChoices,
+    plannedDurationSeconds: input.plannedDurationSeconds,
+    requestedVideoAspectRatio: input.requestedVideoAspectRatio ?? null,
+    sessionId,
+    storyModeId: input.storyModeId ?? null,
+    travelDestination: input.travelDestination ?? null,
+    uploadedPhotoIds: input.uploadedPhotoIds,
+    videoAspectRatio: input.videoAspectRatio
+  };
+}
+
+async function loadStoryWorldJobRequestBody(client: SupabaseClient<Database>, job: GenerationJobRow): Promise<StoryWorldRequestBody> {
+  const inputArtifactId = storyWorldInputArtifactId(job.input_artifact_versions_json);
+
+  if (!inputArtifactId) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  const rows = (await new StoryCamArtifactRepository(client).listBySession(job.user_id, {
+    sessionId: job.session_id,
+    type: "input"
+  })) ?? [];
+  const inputArtifact = rows.find((row) => row.id === inputArtifactId && row.state === "ready");
+
+  if (!inputArtifact || !isRecord(inputArtifact.data_json)) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return {
+    generationMode: inputArtifact.data_json.generationMode === "real" ? "real" : "mock",
+    idempotencyKey: nullToUndefined(inputArtifact.data_json.idempotencyKey),
+    input: inputArtifact.data_json.input,
+    lightweightChoices: inputArtifact.data_json.lightweightChoices,
+    plannedDurationSeconds: inputArtifact.data_json.plannedDurationSeconds,
+    sessionId: inputArtifact.data_json.sessionId,
+    storyModeId: nullToUndefined(inputArtifact.data_json.storyModeId),
+    travelDestination: nullToUndefined(inputArtifact.data_json.travelDestination),
+    uploadedPhotoIds: inputArtifact.data_json.uploadedPhotoIds,
+    videoAspectRatio: inputArtifact.data_json.videoAspectRatio
+  };
+}
+
+function storyWorldInputArtifactId(value: Json) {
+  if (!isRecord(value) || typeof value.storyWorldInputArtifactId !== "string") {
+    return null;
+  }
+
+  return value.storyWorldInputArtifactId;
+}
+
+function nullToUndefined(value: unknown) {
+  return value === null ? undefined : value;
+}
+
+function parseStoryWorldIdempotencyKey(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length > 200) {
+    throw new StoryWorldRequestError("invalid_input");
+  }
+
+  return trimmed;
+}
+
+function stableStoryWorldJobHashInput(input: {
+  input: ReturnType<typeof parseStoryWorldRequest>;
+  providerName: string;
+}) {
+  return JSON.stringify({
+    idempotencyKey: input.input.idempotencyKey ?? null,
+    input: input.input.input,
+    lightweightChoices: input.input.lightweightChoices,
+    plannedDurationSeconds: input.input.plannedDurationSeconds,
+    providerName: input.providerName,
+    sessionId: input.input.sessionId ?? null,
+    storyModeId: input.input.storyModeId ?? null,
+    travelDestination: input.input.travelDestination ?? null,
+    uploadedPhotoIds: input.input.uploadedPhotoIds,
+    type: "story_world",
+    videoAspectRatio: input.input.videoAspectRatio
+  });
+}
+
+function isFailedOrExpiredStoryWorldJob(job: GenerationJobRow) {
+  return job.status === "failed" || job.status === "expired";
+}
+
+function toStoryWorldJobOutput(job: GenerationJobRow): StoryWorldJobOutput {
+  return {
+    jobId: job.id,
+    providerName: job.provider_name,
+    sessionId: job.session_id,
+    status: job.status
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseRequestedVideoAspectRatio(value: unknown): StoryCamVideoAspectRatio | undefined {

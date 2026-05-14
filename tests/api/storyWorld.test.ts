@@ -166,6 +166,139 @@ describe("POST /api/story-world", () => {
     expect(JSON.stringify(body)).not.toContain("shotDensity");
   });
 
+  it("creates a durable real story-world job without waiting on the text provider", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const provider = {
+      generate: vi.fn(),
+      providerKind: "text" as const,
+      providerName: "deepseek"
+    };
+    const client = new FakeSupabaseClient();
+
+    loadStoryCamConfigMock.mockReturnValue(
+      mockTextConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textModel: "deepseek-v4-pro"
+        },
+        mode: "real",
+        textProvider: "deepseek"
+      })
+    );
+    createConfiguredStoryWorldProviderMock.mockReturnValue(provider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        idempotencyKey: "story-world-request-1",
+        input: "这是非常私密的一句话，不应该出现在响应里",
+        lightweightChoices: ["留白多一点"],
+        videoAspectRatio: "9:16"
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("x-storycam-text-provider")).toBe("deepseek");
+    expect(body).toMatchObject({
+      job: {
+        jobId: "job-1",
+        providerName: "deepseek",
+        sessionId: "session-1",
+        status: "queued"
+      },
+      ok: true,
+      providerName: "deepseek",
+      sessionId: "session-1",
+      status: "queued"
+    });
+    expect(provider.generate).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain("非常私密");
+    expect(JSON.stringify(body)).not.toContain("deepseek-key");
+    expect(client.insertedRows("storycam_artifacts")).toContainEqual(
+      expect.objectContaining({
+        data_json: expect.objectContaining({
+          input: "这是非常私密的一句话，不应该出现在响应里",
+          lightweightChoices: ["留白多一点"],
+          sessionId: "session-1",
+          videoAspectRatio: "9:16"
+        }),
+        type: "input"
+      })
+    );
+    expect(client.insertedRows("generation_jobs")).toContainEqual(
+      expect.objectContaining({
+        input_artifact_versions_json: expect.objectContaining({
+          storyWorldInputArtifactId: "input-artifact"
+        }),
+        provider_kind: "text",
+        provider_name: "deepseek",
+        status: "queued",
+        type: "story_world"
+      })
+    );
+  });
+
+  it("reuses an active first-run real story-world job before creating a new session", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const provider = {
+      generate: vi.fn(),
+      providerKind: "text" as const,
+      providerName: "deepseek"
+    };
+    const client = new FakeSupabaseClient({
+      existingGenerationJob: storyWorldGenerationJobRow({
+        id: "existing-story-world-job",
+        provider_name: "deepseek",
+        session_id: "existing-session"
+      })
+    });
+
+    loadStoryCamConfigMock.mockReturnValue(
+      mockTextConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textModel: "deepseek-v4-pro"
+        },
+        mode: "real",
+        textProvider: "deepseek"
+      })
+    );
+    createConfiguredStoryWorldProviderMock.mockReturnValue(provider);
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        idempotencyKey: "story-world-request-1",
+        input: "这是非常私密的一句话，不应该出现在响应里",
+        lightweightChoices: ["留白多一点"],
+        videoAspectRatio: "9:16"
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(202);
+    expect(body).toMatchObject({
+      job: {
+        jobId: "existing-story-world-job",
+        providerName: "deepseek",
+        sessionId: "existing-session",
+        status: "queued"
+      },
+      ok: true,
+      sessionId: "existing-session"
+    });
+    expect(provider.generate).not.toHaveBeenCalled();
+    expect(client.queries[0]?.table).toBe("generation_jobs");
+    expect(client.insertedRows("storycam_sessions")).toEqual([]);
+    expect(client.insertedRows("storycam_artifacts")).toEqual([]);
+    expect(client.insertedRows("generation_jobs")).toEqual([]);
+  });
+
   it("uses the OpenRouter story-world provider when text provider is configured for mixed mode", async () => {
     const { POST } = await import("@/app/api/story-world/route");
     const provider = {
@@ -360,6 +493,7 @@ function mockTextConfig(
   options: {
     openrouter?: { apiKey: string; textModel: string };
     deepseek?: { apiKey: string; textBaseUrl: string; textFallbackModels?: string[]; textModel: string };
+    mode?: "mock" | "real";
     textProvider?: "deepseek" | "mock" | "openrouter";
   } = {}
 ) {
@@ -367,7 +501,7 @@ function mockTextConfig(
     generation: {
       finalWorkProvider: "mock",
       imageProvider: "mock",
-      mode: "mock",
+      mode: options.mode ?? "mock",
       multimodalProvider: "mock",
       textProvider: options.textProvider ?? "mock",
       videoProvider: "mock"
@@ -460,31 +594,122 @@ function dynamicStoryWorld() {
   };
 }
 
+function storyWorldGenerationJobRow(overrides: Record<string, unknown> = {}) {
+  return {
+    attempts: 0,
+    created_at: "2026-04-26T00:00:00.000Z",
+    ended_at: null,
+    error_code: null,
+    generation_mode: "real",
+    id: "job-1",
+    idempotency_key_hash: "hash-1",
+    input_artifact_versions_json: {},
+    locked_at: null,
+    locked_by: null,
+    max_attempts: 1,
+    output_artifact_id: null,
+    provider_error_category: null,
+    provider_http_status: null,
+    provider_kind: "text",
+    provider_name: "deepseek",
+    provider_request_id: null,
+    redacted_error: null,
+    run_after: "2026-04-26T00:00:00.000Z",
+    session_id: "session-1",
+    started_at: null,
+    status: "queued",
+    tombstoned_at: null,
+    type: "story_world",
+    updated_at: "2026-04-26T00:00:00.000Z",
+    user_id: "user-1",
+    ...overrides
+  };
+}
+
+type FakeSupabaseClientOptions = {
+  existingGenerationJob?: Record<string, unknown>;
+};
+
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  private generationJobInsertCount = 0;
+
+  constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
 
   asSupabaseClient() {
     return this;
   }
 
+  existingGenerationJob() {
+    return this.options.existingGenerationJob ?? null;
+  }
+
+  insertedRows(table: string) {
+    return this.queries
+      .filter((query) => query.table === table)
+      .flatMap((query) => query.calls)
+      .filter((call) => call[0] === "insert")
+      .map((call) => call[1]);
+  }
+
+  nextGenerationJobId() {
+    this.generationJobInsertCount += 1;
+    return `job-${this.generationJobInsertCount}`;
+  }
+
   from(table: string) {
-    const query = new FakeQuery(table);
+    const query = new FakeQuery(table, this);
     this.queries.push(query);
     return query;
   }
 }
 
 class FakeQuery {
+  readonly calls: unknown[][] = [];
   private inserted: Record<string, unknown> | null = null;
+  private updated: Record<string, unknown> | null = null;
 
-  constructor(readonly table: string) {}
+  constructor(readonly table: string, private readonly client: FakeSupabaseClient) {}
 
   insert(value: Record<string, unknown>) {
     this.inserted = value;
+    this.calls.push(["insert", value]);
     return this;
   }
 
-  select() {
+  update(value: Record<string, unknown>) {
+    this.updated = value;
+    this.calls.push(["update", value]);
+    return this;
+  }
+
+  select(columns?: string) {
+    this.calls.push(["select", columns]);
+    return this;
+  }
+
+  eq(column: string, value: unknown) {
+    this.calls.push(["eq", column, value]);
+    return this;
+  }
+
+  is(column: string, value: unknown) {
+    this.calls.push(["is", column, value]);
+    return this;
+  }
+
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
+    return this;
+  }
+
+  order(column: string, options: Record<string, unknown>) {
+    this.calls.push(["order", column, options]);
+    return this;
+  }
+
+  limit(value: number) {
+    this.calls.push(["limit", value]);
     return this;
   }
 
@@ -495,19 +720,23 @@ class FakeQuery {
     });
   }
 
+  maybeSingle() {
+    return Promise.resolve({
+      data: this.table === "generation_jobs" ? this.client.existingGenerationJob() : this.table === "storycam_sessions" ? this.sessionRow() : null,
+      error: null
+    });
+  }
+
+  then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
+    return Promise.resolve({
+      data: [],
+      error: null
+    }).then(resolve, reject);
+  }
+
   private row() {
     if (this.table === "storycam_sessions") {
-      return {
-        core_group_target_count: 1,
-        created_at: "2026-04-26T00:00:00.000Z",
-        deleted_at: null,
-        generation_mode: "mock",
-        id: "session-1",
-        planned_duration_seconds: 12,
-        status: "draft",
-        updated_at: "2026-04-26T00:00:00.000Z",
-        user_id: "user-1"
-      };
+      return this.sessionRow();
     }
 
     if (this.table === "storycam_artifacts") {
@@ -521,7 +750,45 @@ class FakeQuery {
       };
     }
 
+    if (this.table === "generation_jobs") {
+      return {
+        attempts: 0,
+        created_at: "2026-04-26T00:00:00.000Z",
+        ended_at: null,
+        error_code: null,
+        id: this.client.nextGenerationJobId(),
+        locked_at: null,
+        locked_by: null,
+        max_attempts: 1,
+        output_artifact_id: null,
+        provider_error_category: null,
+        provider_http_status: null,
+        provider_request_id: null,
+        redacted_error: null,
+        run_after: "2026-04-26T00:00:00.000Z",
+        started_at: null,
+        tombstoned_at: null,
+        updated_at: "2026-04-26T00:00:00.000Z",
+        ...this.inserted
+      };
+    }
+
     return this.inserted;
+  }
+
+  private sessionRow() {
+    return {
+      core_group_target_count: 1,
+      created_at: "2026-04-26T00:00:00.000Z",
+      deleted_at: null,
+      generation_mode: "mock",
+      id: "session-1",
+      planned_duration_seconds: 12,
+      status: "draft",
+      updated_at: "2026-04-26T00:00:00.000Z",
+      user_id: "user-1",
+      video_aspect_ratio: this.updated?.video_aspect_ratio ?? "16:9"
+    };
   }
 }
 

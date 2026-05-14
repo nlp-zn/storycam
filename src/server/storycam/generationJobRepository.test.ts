@@ -48,6 +48,7 @@ describe("generation-job repository", () => {
     expect(result).toEqual(job);
     expect(client.queries).toHaveLength(1);
     expect(client.queries[0]?.calls).toContainEqual(["eq", "idempotency_key_hash", "hash-1"]);
+    expect(client.queries[0]?.calls).toContainEqual(["in", "status", ["queued", "running", "succeeded"]]);
     expect(client.queries[0]?.calls).toContainEqual(["is", "tombstoned_at", null]);
     expect(client.queries.some((query) => query.calls.some((call) => call[0] === "insert"))).toBe(false);
   });
@@ -171,6 +172,42 @@ describe("generation-job repository", () => {
       })
     ]);
   });
+
+  it("records provider task submission without completing the job", async () => {
+    const startedAt = new Date("2026-04-26T01:02:03.000Z");
+    const client = new FakeSupabaseClient([
+      { data: { ...job, provider_request_id: "provider-task-1", started_at: startedAt.toISOString(), status: "running" }, error: null }
+    ]);
+    const repository = new StoryCamGenerationJobRepository(client.asStoryCamDbClient());
+
+    await repository.markProviderRequestSubmitted("user-1", "job-1", {
+      providerRequestId: "provider-task-1",
+      startedAt
+    });
+
+    expect(client.queries[0]?.calls).toContainEqual([
+      "update",
+      expect.objectContaining({
+        provider_request_id: "provider-task-1",
+        started_at: "2026-04-26T01:02:03.000Z",
+        status: "running"
+      })
+    ]);
+    expect(client.queries[0]?.calls).toContainEqual(["is", "tombstoned_at", null]);
+    expect(client.queries[0]?.calls).toContainEqual(["in", "status", ["queued", "running"]]);
+  });
+
+  it("does not revive canceled jobs when provider submission finishes late", async () => {
+    const client = new FakeSupabaseClient([{ data: null, error: null }]);
+    const repository = new StoryCamGenerationJobRepository(client.asStoryCamDbClient());
+
+    const result = await repository.markProviderRequestSubmitted("user-1", "job-1", {
+      providerRequestId: "provider-task-1"
+    });
+
+    expect(result).toBeNull();
+    expect(client.queries[0]?.calls).toContainEqual(["in", "status", ["queued", "running"]]);
+  });
 });
 
 type FakeResponse = {
@@ -237,6 +274,11 @@ class FakeQuery {
 
   is(column: string, value: unknown) {
     this.calls.push(["is", column, value]);
+    return this;
+  }
+
+  in(column: string, values: unknown[]) {
+    this.calls.push(["in", column, values]);
     return this;
   }
 
