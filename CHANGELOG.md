@@ -2,6 +2,13 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.1.2] - 2026-05-14
+
+### Fixed
+
+- Fixed the Render background worker startup path by shimming Next's `server-only`
+  marker before loading worker modules under raw `tsx`.
+
 ## [0.1.1.1] - 2026-05-14
 
 ### Changed
