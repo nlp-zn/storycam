@@ -60,97 +60,145 @@ export const storyModeEntries = [
   }
 ] as const;
 
-type DiscoveryEntry = {
+type DiscoveryEntryBase = {
   category: string;
-  duration: string;
   format: "landscape" | "portrait";
-  imageSrc: string;
+  id: string;
+  slot: number;
   title: string;
-  videoSrc: string | null;
 };
+
+export type DiscoverySampleEntry = DiscoveryEntryBase & {
+  duration: string;
+  kind: "sample";
+};
+
+export type DiscoveryPlaceholderEntry = DiscoveryEntryBase & {
+  kind: "placeholder";
+  note: string;
+};
+
+export type DiscoveryEntry = DiscoverySampleEntry | DiscoveryPlaceholderEntry;
 
 export const discoveryEntries: readonly DiscoveryEntry[] = [
   {
     title: "雨夜未发送",
     category: "私人记忆",
-    duration: "00:32",
+    duration: "00:15",
     format: "landscape",
-    imageSrc: "/storycam/discovery/rainy-night-unsent.png",
-    videoSrc: "/storycam/discovery/videos/rainy-night-unsent.mp4"
+    id: "sample-03",
+    kind: "sample",
+    slot: 1
   },
   {
-    title: "宠物回家之前",
+    title: "罗马假日·手绘漫游",
+    category: "手绘旅行 VLOG",
+    duration: "00:15",
+    format: "portrait",
+    id: "sample-02",
+    kind: "sample",
+    slot: 2
+  },
+  {
+    title: "宠物醒来之前",
     category: "宠物小剧场",
-    duration: "00:41",
+    duration: "00:15",
     format: "landscape",
-    imageSrc: "/storycam/discovery/pet-before-home.png",
-    videoSrc: "/storycam/discovery/videos/pet-before-home.mp4"
+    id: "sample-08",
+    kind: "sample",
+    slot: 3
   },
   {
-    title: "小说角色初登场",
-    category: "小说角色",
-    duration: "00:28",
-    format: "landscape",
-    imageSrc: "/storycam/discovery/novel-character-arrival.png",
-    videoSrc: "/storycam/discovery/videos/novel-character-arrival.mp4"
-  },
-  {
-    title: "旧房间里的光",
-    category: "情绪短片",
-    duration: "00:36",
-    format: "portrait",
-    imageSrc: "/storycam/discovery/old-room-light.png",
-    videoSrc: "/storycam/discovery/videos/old-room-light-portrait.mp4"
-  },
-  {
-    title: "竹林里的背影",
-    category: "小说角色",
-    duration: "00:35",
-    format: "portrait",
-    imageSrc: "/storycam/discovery/sadness-in-wind.png",
-    videoSrc: "/storycam/discovery/videos/bamboo-shadow-portrait.mp4"
-  },
-  {
-    title: "只差一句话",
+    title: "雨面心事",
     category: "私人记忆",
-    duration: "00:25",
+    duration: "00:15",
     format: "landscape",
-    imageSrc: "/storycam/discovery/one-line-away.png",
-    videoSrc: "/storycam/discovery/videos/one-line-away.mp4"
+    id: "sample-05",
+    kind: "sample",
+    slot: 4
   },
   {
-    title: "把难过留在风里",
-    category: "情绪短片",
-    duration: "00:34",
+    title: "转角楼梯",
+    category: "手绘旅行 VLOG",
+    duration: "00:15",
     format: "landscape",
-    imageSrc: "/storycam/discovery/sadness-in-wind.png",
-    videoSrc: "/storycam/discovery/videos/sadness-in-wind.mp4"
+    id: "sample-01",
+    kind: "sample",
+    slot: 5
   },
   {
-    title: "玩具城市漫游",
-    category: "幻想日常",
-    duration: "00:30",
+    title: "街角慢走",
+    category: "手绘旅行 VLOG",
+    duration: "00:15",
     format: "landscape",
-    imageSrc: "/storycam/discovery/pet-before-home.png",
-    videoSrc: "/storycam/discovery/videos/toy-city.mp4"
+    id: "sample-07",
+    kind: "sample",
+    slot: 6
   },
   {
-    title: "清晨的秘密基地",
-    category: "私人记忆",
-    duration: "00:29",
-    format: "landscape",
-    imageSrc: "/storycam/discovery/old-room-light.png",
-    videoSrc: "/storycam/discovery/videos/morning-hideout.mp4"
-  },
-  {
-    title: "她在镜前停顿",
-    category: "情绪短片",
-    duration: "00:27",
+    title: "门口等你",
+    category: "宠物小剧场",
+    duration: "00:15",
     format: "portrait",
-    imageSrc: "/storycam/discovery/one-line-away.png",
-    videoSrc: "/storycam/discovery/videos/mirror-pause-portrait.mp4"
+    id: "sample-04",
+    kind: "sample",
+    slot: 7
+  },
+  {
+    title: "里斯本午后",
+    category: "手绘旅行 VLOG",
+    duration: "00:15",
+    format: "portrait",
+    id: "sample-06",
+    kind: "sample",
+    slot: 8
+  },
+  {
+    title: "私人记忆展位",
+    category: "即将补充",
+    format: "landscape",
+    id: "placeholder-memory",
+    kind: "placeholder",
+    note: "留给新的横版样片",
+    slot: 9
+  },
+  {
+    title: "情绪短片展位",
+    category: "即将补充",
+    format: "landscape",
+    id: "placeholder-emotion",
+    kind: "placeholder",
+    note: "留给新的竖版/横版组合",
+    slot: 10
   }
 ];
+
+export const discoveryLayoutPresets = [
+  [
+    "sample-03",
+    "sample-02",
+    "sample-08",
+    "sample-05",
+    "sample-01",
+    "sample-07",
+    "sample-04",
+    "sample-06",
+    "placeholder-memory",
+    "placeholder-emotion"
+  ],
+  [
+    "sample-08",
+    "sample-04",
+    "sample-03",
+    "sample-01",
+    "sample-07",
+    "sample-05",
+    "sample-06",
+    "sample-02",
+    "placeholder-emotion",
+    "placeholder-memory"
+  ]
+] as const;
 
 export const storyAssets = [
   {

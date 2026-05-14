@@ -40,6 +40,7 @@ Error bodies must not include raw private input, full prompts, full prompt packe
 | `GET /api/auth/me` | Returns anonymous/authenticated account state without leaking server internals. |
 | `POST /api/auth/sign-out` | Signs out and clears local auth bypass opt-out state. |
 | `GET /auth/callback` | Exchanges Supabase OAuth callback and returns to StoryCam. |
+| `GET /api/storycam-discovery-samples` | Returns short-lived signed URLs for fixed discovery sample posters and MP4s from the private `storycam-generated` bucket; it never returns raw bucket paths. |
 | `GET /api/storycam-sessions/current` | Returns current account-scoped active session summary. |
 | `GET /api/storycam-sessions/recent` | Returns a bounded list of recent account-scoped sessions for the input screen, capped at 20 restorable projects. |
 | `DELETE /api/storycam-sessions/[id]` | Tombstones a user-owned session and cleans associated storage where applicable. |

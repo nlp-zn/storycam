@@ -2,6 +2,24 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.3.0] - 2026-05-15
+
+### Added
+
+- The discovery wall now plays eight curated inspiration samples from private StoryCam storage, with signed preview URLs and two reserved placeholder slots for upcoming samples.
+- Added a discovery sample upload script that creates posters and uploads the canonical MP4/JPG assets to the private Supabase bucket.
+
+### Changed
+
+- Core storyboard frame badges now show only frame numbers, and the vertical 9:16 storyboard layout keeps the script and audio hint closer together.
+- Seedance smoke testing can target Seedance 2.0 Fast directly through the provider-specific smoke path.
+
+### Fixed
+
+- Seedance 2.0 Fast requests now stay within the provider's supported duration and resolution limits.
+- Unopened Seedance models now report a non-retryable configuration failure instead of looking like transient provider errors.
+- Discovery sample preview URLs refresh before expiry, and poster reloads retry without exposing raw storage paths.
+
 ## [0.1.2.0] - 2026-05-14
 
 ### Changed

@@ -3,10 +3,11 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, Clapperboard, Heart, MapPin, PawPrint, Plus, RefreshCw, Sparkles, Trash2, UserRound, X } from "lucide-react";
+import { ArrowUp, ChevronDown, Clapperboard, Heart, MapPin, PawPrint, Play, Plus, RefreshCw, Sparkles, Trash2, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   deleteStoryCamSession,
+  getDiscoverySampleAssets,
   getAuthStatus,
   isRecentStoryCamProjectsCacheStale,
   listRecentStoryCamProjects,
@@ -14,8 +15,15 @@ import {
   recentProjectsRefreshIntervalMs,
   readCachedRecentStoryCamProjects
 } from "@/features/storycam/client/storycamApi";
-import type { RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
-import { discoveryEntries, storyModeEntries } from "@/features/storycam/domain/shellContent";
+import type { DiscoverySampleSignedAsset, RecentStoryCamProject } from "@/features/storycam/client/storycamApi";
+import {
+  discoveryEntries,
+  discoveryLayoutPresets,
+  storyModeEntries,
+  type DiscoveryEntry,
+  type DiscoveryPlaceholderEntry,
+  type DiscoverySampleEntry
+} from "@/features/storycam/domain/shellContent";
 import {
   defaultStoryCamVideoAspectRatio,
   storyCamVideoAspectRatioLabel,
@@ -36,9 +44,11 @@ type RecentProjectThumbnail = NonNullable<RecentStoryCamProject["thumbnail"]>;
 type CachedRecentProjectThumbnail = RecentProjectThumbnail & {
   expiresAtMs: number;
 };
-
 const recentProjectsListLimit = 20;
+const discoveryAssetRefreshFallbackSeconds = 60;
+const discoveryAssetRefreshSafetyMarginSeconds = 30;
 const storyModeSampleIdeas = new Set<string>(storyModeEntries.map((entry) => entry.sampleIdea));
+const discoveryEntryById = new Map(discoveryEntries.map((entry) => [entry.id, entry]));
 
 type IdeaInputPanelProps = {
   initialChoices?: string[];
@@ -708,16 +718,105 @@ function RecentProjectsInline({
   );
 }
 
+function getDiscoveryLayoutEntries(layoutPresetIndex: number): DiscoveryEntry[] {
+  const preset = discoveryLayoutPresets[layoutPresetIndex % discoveryLayoutPresets.length] ?? discoveryLayoutPresets[0];
+
+  return preset
+    .map((entryId) => discoveryEntryById.get(entryId))
+    .filter((entry): entry is DiscoveryEntry => Boolean(entry));
+}
+
+function mapDiscoveryAssetsById(assets: DiscoverySampleSignedAsset[]): Record<string, DiscoverySampleSignedAsset> {
+  return Object.fromEntries(assets.map((asset) => [asset.id, asset]));
+}
+
+function discoveryAssetRefreshDelayMs(signedUrlExpiresIn: number): number {
+  return Math.max(discoveryAssetRefreshSafetyMarginSeconds, signedUrlExpiresIn - discoveryAssetRefreshSafetyMarginSeconds) * 1000;
+}
+
+function discoveryFormatDescription(entry: DiscoveryEntry): string {
+  return entry.format === "portrait" ? "竖版 9:16" : "横版 16:9";
+}
+
 function DiscoveryWall() {
-  const [featuredOffset, setFeaturedOffset] = useState(0);
-  const featuredEntries = Array.from({ length: Math.min(6, discoveryEntries.length) }, (_, index) => {
-    const entryIndex = (featuredOffset + index) % discoveryEntries.length;
+  const [layoutPresetIndex, setLayoutPresetIndex] = useState(0);
+  const [sampleAssetsById, setSampleAssetsById] = useState<Record<string, DiscoverySampleSignedAsset>>({});
+  const [failedPosterIds, setFailedPosterIds] = useState<Set<string>>(() => new Set());
+  const [activeSample, setActiveSample] = useState<DiscoverySampleEntry | null>(null);
+  const sampleAssetRefreshInFlightRef = useRef(false);
+  const featuredEntries = useMemo(() => getDiscoveryLayoutEntries(layoutPresetIndex), [layoutPresetIndex]);
+  const activeAsset = activeSample ? sampleAssetsById[activeSample.id] : undefined;
 
-    return discoveryEntries[entryIndex];
-  }).filter(Boolean);
+  const loadDiscoverySampleAssets = useCallback(async (signal?: AbortSignal): Promise<number> => {
+    try {
+      const result = await getDiscoverySampleAssets({ signal });
 
-  function rotateDiscoveryEntries() {
-    setFeaturedOffset((current) => (current + 3) % discoveryEntries.length);
+      if (signal?.aborted) {
+        return discoveryAssetRefreshFallbackSeconds;
+      }
+
+      if (!result.ok) {
+        setSampleAssetsById({});
+        return discoveryAssetRefreshFallbackSeconds;
+      }
+
+      setSampleAssetsById(mapDiscoveryAssetsById(result.assets));
+      setFailedPosterIds(new Set());
+
+      return result.signedUrlExpiresIn;
+    } catch {
+      if (!signal?.aborted) {
+        setSampleAssetsById({});
+      }
+    }
+
+    return discoveryAssetRefreshFallbackSeconds;
+  }, []);
+
+  useEffect(() => {
+    let controller: AbortController | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let isMounted = true;
+
+    async function loadAndSchedule(): Promise<void> {
+      controller = new AbortController();
+      const signedUrlExpiresIn = await loadDiscoverySampleAssets(controller.signal);
+
+      if (!isMounted) {
+        return;
+      }
+
+      refreshTimer = setTimeout(loadAndSchedule, discoveryAssetRefreshDelayMs(signedUrlExpiresIn));
+    }
+
+    void loadAndSchedule();
+
+    return () => {
+      isMounted = false;
+      controller?.abort();
+
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+    };
+  }, [loadDiscoverySampleAssets]);
+
+  function rotateDiscoveryEntries(): void {
+    setLayoutPresetIndex((current) => (current + 1) % discoveryLayoutPresets.length);
+    setActiveSample(null);
+  }
+
+  function handlePosterError(entryId: string): void {
+    setFailedPosterIds((current) => new Set(current).add(entryId));
+
+    if (sampleAssetRefreshInFlightRef.current) {
+      return;
+    }
+
+    sampleAssetRefreshInFlightRef.current = true;
+    void loadDiscoverySampleAssets().finally(() => {
+      sampleAssetRefreshInFlightRef.current = false;
+    });
   }
 
   return (
@@ -743,23 +842,32 @@ function DiscoveryWall() {
 
       <div className="storycam-discovery-grid">
         {featuredEntries.map((entry, index) => {
-          const formatDescription = entry.format === "portrait" ? "竖版 9:16" : "横版 16:9";
+          const formatDescription = discoveryFormatDescription(entry);
+          const sampleAsset = entry.kind === "sample" ? sampleAssetsById[entry.id] : undefined;
+          const posterUrl = sampleAsset?.posterUrl && !failedPosterIds.has(entry.id) ? sampleAsset.posterUrl : undefined;
+
+          if (entry.kind === "placeholder") {
+            return (
+              <DiscoveryPlaceholderCard
+                entry={entry}
+                formatDescription={formatDescription}
+                key={entry.id}
+                slotNumber={index + 1}
+              />
+            );
+          }
 
           return (
-            <article
-              aria-label={`${entry.title}，${formatDescription} 样片`}
-              className={`group storycam-discovery-card storycam-discovery-card--slot-${index + 1}`}
-              key={entry.title}
-            >
-              <img alt={`${entry.title} 样片画面`} className="size-full object-cover" src={entry.imageSrc} />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/[0.82] via-black/[0.12] to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-3 md:p-4">
-                <div className="min-w-0">
-                  <h3 className="truncate text-[15px] font-black leading-tight text-white md:text-[17px]">{entry.title}</h3>
-                </div>
-                <span className="shrink-0 text-[12px] font-bold leading-none text-[#e2e2e2]">{entry.duration}</span>
-              </div>
-            </article>
+            <DiscoverySampleCard
+              asset={sampleAsset}
+              entry={entry}
+              formatDescription={formatDescription}
+              key={entry.id}
+              onOpen={setActiveSample}
+              onPosterError={handlePosterError}
+              posterUrl={posterUrl}
+              slotNumber={index + 1}
+            />
           );
         })}
       </div>
@@ -767,7 +875,108 @@ function DiscoveryWall() {
       <p className="storycam-discovery-footnote">
         所有内容由 AI 生成，仅供个人创作参考，请勿用于任何公开传播或商业用途。
       </p>
+
+      {activeSample && activeAsset ? (
+        <DiscoveryPlayer activeAsset={activeAsset} activeSample={activeSample} onClose={() => setActiveSample(null)} />
+      ) : null}
     </section>
+  );
+}
+
+type DiscoveryPlaceholderCardProps = {
+  entry: DiscoveryPlaceholderEntry;
+  formatDescription: string;
+  slotNumber: number;
+};
+
+function DiscoveryPlaceholderCard({ entry, formatDescription, slotNumber }: DiscoveryPlaceholderCardProps): ReactNode {
+  return (
+    <article
+      aria-label={`${entry.title}，${formatDescription} 展位`}
+      className={`storycam-discovery-card storycam-discovery-card--placeholder storycam-discovery-card--slot-${slotNumber}`}
+    >
+      <div className="storycam-discovery-placeholder-visual" />
+      <div className="storycam-discovery-card-overlay storycam-discovery-card-overlay--placeholder">
+        <div className="storycam-discovery-card-copy">
+          <p className="storycam-discovery-card-kicker">{entry.category}</p>
+          <h3 className="storycam-discovery-card-title">{entry.title}</h3>
+          <span className="storycam-discovery-card-note">{entry.note}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+type DiscoverySampleCardProps = {
+  asset: DiscoverySampleSignedAsset | undefined;
+  entry: DiscoverySampleEntry;
+  formatDescription: string;
+  onOpen: (entry: DiscoverySampleEntry) => void;
+  onPosterError: (entryId: string) => void;
+  posterUrl: string | undefined;
+  slotNumber: number;
+};
+
+function DiscoverySampleCard({
+  asset,
+  entry,
+  formatDescription,
+  onOpen,
+  onPosterError,
+  posterUrl,
+  slotNumber
+}: DiscoverySampleCardProps): ReactNode {
+  return (
+    <button
+      aria-label={`播放 ${entry.title}，${formatDescription} 样片`}
+      className={`group storycam-discovery-card storycam-discovery-card--slot-${slotNumber}`}
+      disabled={!asset?.videoUrl}
+      onClick={() => onOpen(entry)}
+      type="button"
+    >
+      {posterUrl ? (
+        <img alt={`${entry.title} 样片画面`} onError={() => onPosterError(entry.id)} src={posterUrl} />
+      ) : (
+        <div className="storycam-discovery-placeholder-visual" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/[0.84] via-black/[0.12] to-transparent" />
+      <span className="storycam-discovery-play-badge">
+        <Play aria-hidden="true" className="size-3.5 fill-current" strokeWidth={2.4} />
+      </span>
+      <div className="storycam-discovery-card-overlay">
+        <div className="storycam-discovery-card-copy">
+          <p className="storycam-discovery-card-kicker">{entry.category}</p>
+          <h3 className="storycam-discovery-card-title">{entry.title}</h3>
+        </div>
+        <span className="storycam-discovery-duration">{entry.duration}</span>
+      </div>
+    </button>
+  );
+}
+
+type DiscoveryPlayerProps = {
+  activeAsset: DiscoverySampleSignedAsset;
+  activeSample: DiscoverySampleEntry;
+  onClose: () => void;
+};
+
+function DiscoveryPlayer({ activeAsset, activeSample, onClose }: DiscoveryPlayerProps): ReactNode {
+  return (
+    <div aria-label={`${activeSample.title} 样片播放器`} aria-modal="true" className="storycam-discovery-player" role="dialog">
+      <div className="storycam-discovery-player-card">
+        <div className="storycam-discovery-player-header">
+          <div>
+            <p>{activeSample.category}</p>
+            <h3>{activeSample.title}</h3>
+          </div>
+          <Button aria-label="关闭样片播放器" className="px-4 py-2 text-xs" onClick={onClose} size="sm" type="button" variant="secondaryGlass">
+            <X aria-hidden="true" data-icon="inline-start" strokeWidth={2.4} />
+            关闭
+          </Button>
+        </div>
+        <video autoPlay className="storycam-discovery-player-video" controls playsInline poster={activeAsset.posterUrl} src={activeAsset.videoUrl} />
+      </div>
+    </div>
   );
 }
 

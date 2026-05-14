@@ -125,10 +125,16 @@ test.describe("StoryCam story input", () => {
     const discovery = page.getByRole("region", { name: "发现更多" });
     const initialTitle = await discovery.locator(".storycam-discovery-card h3").first().innerText();
 
-    await expect(discovery.locator(".storycam-discovery-card")).toHaveCount(6);
+    await expect(discovery.locator(".storycam-discovery-card")).toHaveCount(10);
+    await expect(discovery.locator(".storycam-discovery-card--placeholder")).toHaveCount(2);
+    await discovery.getByRole("button", { name: /播放/ }).first().click();
+    const player = page.getByRole("dialog", { name: /样片播放器/ });
+    await expect(player).toBeVisible();
+    await expect(player.locator("video")).toHaveAttribute("src", /rainy-night-unsent\.mp4/);
+    await player.getByRole("button", { name: "关闭样片播放器" }).click();
     await page.getByRole("button", { name: "换一批发现样片" }).click();
 
-    await expect(discovery.locator(".storycam-discovery-card")).toHaveCount(6);
+    await expect(discovery.locator(".storycam-discovery-card")).toHaveCount(10);
     await expect(discovery.locator(".storycam-discovery-card h3").first()).not.toHaveText(initialTitle);
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

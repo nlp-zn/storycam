@@ -5,6 +5,7 @@ import { createSeedanceVideoProvider } from "../src/lib/providers/seedance/video
 
 const smokeOutputDir = ".temp/storycam-smoke";
 const defaultPrompt = "静物电影镜头：雨夜窗边一只旧台灯照亮手写明信片，镜头缓慢推近，温暖胶片质感。";
+const defaultSeedanceFastModel = "doubao-seedance-2-0-fast-260128";
 
 loadDotEnvFile(".env.local");
 loadDotEnvFile(".env");
@@ -16,11 +17,13 @@ async function main() {
   }
 
   const apiKey = requiredEnv("SEEDANCE_API_KEY");
-  const model = requiredEnv("SEEDANCE_MODEL");
+  const providerName = providerNameEnv();
+  const model = providerName === "seedance_2_0_fast" ? process.env.SEEDANCE_FAST_MODEL ?? defaultSeedanceFastModel : requiredEnv("SEEDANCE_MODEL");
   const provider = createSeedanceVideoProvider({
     apiKey,
     ...(process.env.SEEDANCE_BASE_URL ? { baseUrl: process.env.SEEDANCE_BASE_URL } : {}),
     model,
+    providerName,
     polling: {
       enabled: true,
       intervalMs: numberEnv("SEEDANCE_SMOKE_POLL_INTERVAL_MS", 10_000),
@@ -40,6 +43,7 @@ async function main() {
   }
 
   console.log("Seedance smoke succeeded.");
+  console.log(`provider_name=${providerName}`);
   console.log(`provider_request_id=${result.value.providerRequestId}`);
   console.log(`model=${result.value.model}`);
   console.log(`status=${result.value.status}`);
@@ -87,6 +91,20 @@ function ratioEnv() {
   }
 
   throw new Error("SEEDANCE_SMOKE_RATIO must be one of 16:9, 9:16, 1:1, 4:3, 3:4, adaptive.");
+}
+
+function providerNameEnv() {
+  const value = process.env.SEEDANCE_SMOKE_PROVIDER;
+
+  if (!value) {
+    return process.env.SEEDANCE_SMOKE_FAST === "1" ? "seedance_2_0_fast" : "seedance_2_0";
+  }
+
+  if (value === "seedance_2_0" || value === "seedance_2_0_fast") {
+    return value;
+  }
+
+  throw new Error("SEEDANCE_SMOKE_PROVIDER must be seedance_2_0 or seedance_2_0_fast.");
 }
 
 function numberEnv(key: string, fallback: number) {

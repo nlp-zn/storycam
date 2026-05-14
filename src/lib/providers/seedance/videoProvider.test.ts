@@ -95,6 +95,47 @@ describe("seedance video provider", () => {
     expect(fetch.mock.calls[0]?.[1]?.body).toContain('"resolution":"720p"');
   });
 
+  it("normalizes Seedance payloads to official duration and Fast resolution limits", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ id: "cgt-2026-fast-limits" }));
+    const provider = createSeedanceVideoProvider({
+      apiKey: "seedance-secret",
+      fetch,
+      model: "custom-fast-model-id",
+      providerName: "seedance_2_0_fast"
+    });
+
+    await provider.submitClipTask({
+      ...input,
+      durationSeconds: 1.5,
+      resolution: "1080p"
+    });
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+      duration: 4,
+      model: "custom-fast-model-id",
+      resolution: "720p"
+    });
+  });
+
+  it("caps Seedance task duration at the provider maximum", async () => {
+    const fetch = vi.fn().mockResolvedValue(jsonResponse({ id: "cgt-2026-duration-cap" }));
+    const provider = createSeedanceVideoProvider({
+      apiKey: "seedance-secret",
+      fetch,
+      model: "doubao-seedance-2-0-260128"
+    });
+
+    await provider.submitClipTask({
+      ...input,
+      durationSeconds: 18.2,
+      resolution: "1080p"
+    });
+
+    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toMatchObject({
+      duration: 15,
+      resolution: "1080p"
+    });
+  });
 
   it("polls until Seedance returns a succeeded task with content.video_url", async () => {
     const fetch = vi
@@ -292,6 +333,37 @@ describe("seedance video provider", () => {
       retryable: true
     });
     expect(JSON.stringify(result)).not.toContain("seedance-secret");
+  });
+
+  it("maps unopened Seedance models to non-retryable configuration failures", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: "ModelNotOpen",
+            message: "account has not activated this model"
+          }
+        },
+        404
+      )
+    );
+    const provider = createSeedanceVideoProvider({
+      apiKey: "seedance-secret",
+      fetch,
+      model: "doubao-seedance-2-0-fast-260128",
+      providerName: "seedance_2_0_fast"
+    });
+
+    const result = await provider.generateClip(input);
+
+    expect(result).toMatchObject({
+      errorCode: "SEEDANCE_MODEL_NOT_OPEN",
+      ok: false,
+      providerErrorCategory: "configuration",
+      providerHttpStatus: 404,
+      providerName: "seedance_2_0_fast",
+      retryable: false
+    });
   });
 });
 
