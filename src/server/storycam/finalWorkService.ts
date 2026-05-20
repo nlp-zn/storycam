@@ -228,7 +228,12 @@ export async function completeFinalWorkJob(
     }
 
     const completedJob = (await jobs.markSucceeded(job.user_id, job.id, { outputArtifactId: result.value.artifact.id })) ?? job;
-    await markPremiereTicketSpentForFinalWorkJob(client, job.user_id, completedJob.premiere_ticket_id);
+
+    try {
+      await markPremiereTicketSpentForFinalWorkJob(client, job.user_id, completedJob.premiere_ticket_id);
+    } catch {
+      return completedJob;
+    }
 
     return completedJob;
   } catch {

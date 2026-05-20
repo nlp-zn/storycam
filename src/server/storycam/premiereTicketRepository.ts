@@ -115,6 +115,23 @@ export class StoryCamPremiereTicketRepository {
 
     return unwrapRepositoryResult<PremiereTicketRow | null>("spend_premiere_ticket", data, error);
   }
+
+  async releaseForDeletedSession(userId: string, sessionId: string) {
+    const { error } = await this.client
+      .from("storycam_premiere_tickets")
+      .update({
+        reserved_at: null,
+        reserved_session_id: null,
+        status: "available"
+      })
+      .eq("user_id", userId)
+      .eq("reserved_session_id", sessionId)
+      .eq("status", "reserved");
+
+    if (error) {
+      throw new StoryCamRepositoryError("release_deleted_session_premiere_ticket", error.code);
+    }
+  }
 }
 
 export function isAvailablePremiereTicket(ticket: PremiereTicketRow, now = new Date()): boolean {
