@@ -62,6 +62,8 @@ Core tables:
 - `storycam_sessions`
 - `storycam_artifacts`
 - `generation_jobs`
+- `storycam_premiere_tickets`
+- `admin_audit_events`
 - `media_assets`
 - `provider_requests`
 
@@ -76,6 +78,10 @@ Storage access stays private across local, staging, and production. Browser prev
 Restore responses are account-scoped, `Cache-Control: no-store`, and may be cached in browser `sessionStorage` only for the current tab/user/session. Recent-project summaries may use the same current-tab, user-bound cache so the input screen can render immediately while a background refresh runs. The recent-project endpoint returns a bounded view, currently up to 20 restorable sessions; deleting from the drawer uses the same session deletion route and clears recent-project cache. These caches store JSON payloads and signed URLs, never media bytes, and must clear on sign-out, anonymous auth, user switch, restore 401, restore failure, session deletion, or new story creation.
 
 See `docs/generated/db-schema.md` and `docs/generated/api-contract.md` for implementation snapshots.
+
+Real beta access uses account-scoped `首映券` records. A ticket binds to one session,
+generation jobs created for that session store `premiere_ticket_id`, and admin manual
+issuance writes `admin_audit_events`.
 
 ## Provider Model
 

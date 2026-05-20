@@ -24,6 +24,7 @@ import {
 } from "./imageGenerationJobService";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import { ensurePremiereTicketBudgetForSession } from "./premiereTicketService";
 import {
   assertStoryCamPrivateBucket,
   createStoryCamSignedUrl,
@@ -175,6 +176,12 @@ export async function createGenerateClipJob(
     };
     const videoProvider = videoProviders?.[input.videoModel];
     const providerName = videoProvider?.providerName ?? "mock";
+    const premiereTicket = input.generationMode === "real"
+      ? await ensurePremiereTicketBudgetForSession(client, userId, {
+          family: "video",
+          sessionId: input.sessionId
+        })
+      : undefined;
 
     if (isAsyncVideoProvider(videoProvider)) {
       let videoInput: GenerationJobServiceVideoInput;
@@ -193,6 +200,7 @@ export async function createGenerateClipJob(
           generationMode: input.generationMode,
           idempotencyKeyHash,
           inputArtifactVersionsJson,
+          premiereTicketId: premiereTicket?.id,
           providerName,
           redactedError:
             "Storyboard reference images are only available on this local machine. Expose storage through public HTTPS before real Seedance image-reference testing.",
@@ -221,6 +229,7 @@ export async function createGenerateClipJob(
           generationMode: input.generationMode,
           idempotencyKeyHash,
           inputArtifactVersionsJson,
+          premiereTicketId: premiereTicket?.id,
           providerName,
           redactedError:
             "Storyboard reference images are only available on this local machine. Expose storage through public HTTPS before real Seedance image-reference testing.",
@@ -247,6 +256,7 @@ export async function createGenerateClipJob(
         generationMode: input.generationMode,
         idempotencyKeyHash,
         inputArtifactVersionsJson,
+        premiereTicketId: premiereTicket?.id,
         providerKind: "video",
         providerName,
         sessionId: input.sessionId,
@@ -313,6 +323,7 @@ async function createFailedVideoClipJob(
     generationMode: GenerationJobRow["generation_mode"];
     idempotencyKeyHash: string;
     inputArtifactVersionsJson: Record<string, number>;
+    premiereTicketId?: string | null;
     providerErrorCategory?: string | null;
     providerHttpStatus?: number | null;
     providerName: string;
@@ -326,6 +337,7 @@ async function createFailedVideoClipJob(
       generationMode: input.generationMode,
       idempotencyKeyHash: input.idempotencyKeyHash,
       inputArtifactVersionsJson: input.inputArtifactVersionsJson,
+      premiereTicketId: input.premiereTicketId,
       providerKind: "video",
       providerName: input.providerName,
       sessionId: input.sessionId,

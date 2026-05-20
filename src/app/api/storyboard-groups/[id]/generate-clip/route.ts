@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createGenerateClipJob, GenerationJobRequestError } from "@/server/storycam/generationJobService";
+import { premiereTicketErrorResponse, StoryCamPremiereTicketError } from "@/server/storycam/premiereTicketService";
 import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 import { createConfiguredVideoProviders } from "@/server/storycam/videoProviderFactory";
 
@@ -71,6 +72,10 @@ export async function POST(request: Request, context: GenerateClipRouteContext) 
 
     if (error instanceof StoryCamQuotaError) {
       return quotaErrorResponse(error);
+    }
+
+    if (error instanceof StoryCamPremiereTicketError) {
+      return premiereTicketErrorResponse(error);
     }
 
     return NextResponse.json(

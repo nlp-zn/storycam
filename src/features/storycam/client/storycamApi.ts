@@ -52,6 +52,10 @@ export type StoryboardImagePlaceholderReason =
 export type AuthStatusResponse =
   | {
       authenticated: true;
+      premiereTickets?: {
+        activeCount: number;
+        availableCount: number;
+      };
       user: {
         email?: string;
         id: string;

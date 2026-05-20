@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createConfiguredStoryWorldProvider } from "@/server/storycam/storyWorldProviderFactory";
+import { premiereTicketErrorResponse, StoryCamPremiereTicketError } from "@/server/storycam/premiereTicketService";
 import { createStoryWorld, createStoryWorldJob, StoryWorldRequestError } from "@/server/storycam/storyWorldService";
 
 export async function POST(request: Request) {
@@ -86,6 +87,10 @@ export async function POST(request: Request) {
         },
         { status: 500 }
       );
+    }
+
+    if (error instanceof StoryCamPremiereTicketError) {
+      return premiereTicketErrorResponse(error);
     }
 
     return NextResponse.json(

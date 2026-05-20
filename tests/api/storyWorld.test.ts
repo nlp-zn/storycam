@@ -241,6 +241,61 @@ describe("POST /api/story-world", () => {
     );
   });
 
+  it("returns a redacted ticket error when real story-world has no available premiere ticket", async () => {
+    const { POST } = await import("@/app/api/story-world/route");
+    const client = new FakeSupabaseClient({
+      tickets: [
+        {
+          created_at: "2026-04-26T00:00:00.000Z",
+          expires_at: null,
+          id: "spent-ticket",
+          issued_by_user_id: null,
+          note: null,
+          reserved_at: "2026-04-26T00:00:00.000Z",
+          reserved_session_id: "old-session",
+          source: "new_user_auto",
+          spent_at: "2026-04-26T00:10:00.000Z",
+          status: "spent",
+          updated_at: "2026-04-26T00:10:00.000Z",
+          user_id: "user-1"
+        }
+      ]
+    });
+
+    loadStoryCamConfigMock.mockReturnValue(
+      mockTextConfig({
+        deepseek: {
+          apiKey: "deepseek-key",
+          textBaseUrl: "https://api.deepseek.com/beta",
+          textModel: "deepseek-v4-pro"
+        },
+        mode: "real",
+        textProvider: "deepseek"
+      })
+    );
+    createConfiguredStoryWorldProviderMock.mockReturnValue({
+      generate: vi.fn(),
+      providerKind: "text" as const,
+      providerName: "deepseek"
+    });
+    requireUserMock.mockResolvedValue({ id: "user-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      jsonRequest({
+        idempotencyKey: "story-world-request-no-ticket",
+        input: "我想把暗恋拍成韩剧雨夜"
+      })
+    );
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      error: "premiere_ticket_required",
+      redactedError: "Premiere ticket limit reached.",
+      redactionApplied: true
+    });
+  });
+
   it("reuses an active first-run real story-world job before creating a new session", async () => {
     const { POST } = await import("@/app/api/story-world/route");
     const provider = {
@@ -608,6 +663,7 @@ function storyWorldGenerationJobRow(overrides: Record<string, unknown> = {}) {
     locked_by: null,
     max_attempts: 1,
     output_artifact_id: null,
+    premiere_ticket_id: null,
     provider_error_category: null,
     provider_http_status: null,
     provider_kind: "text",
@@ -628,13 +684,18 @@ function storyWorldGenerationJobRow(overrides: Record<string, unknown> = {}) {
 
 type FakeSupabaseClientOptions = {
   existingGenerationJob?: Record<string, unknown>;
+  tickets?: Record<string, unknown>[];
 };
 
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
+  readonly tickets: Record<string, unknown>[] = [];
   private generationJobInsertCount = 0;
+  private ticketInsertCount = 0;
 
-  constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
+  constructor(private readonly options: FakeSupabaseClientOptions = {}) {
+    this.tickets.push(...(options.tickets ?? []));
+  }
 
   asSupabaseClient() {
     return this;
@@ -655,6 +716,11 @@ class FakeSupabaseClient {
   nextGenerationJobId() {
     this.generationJobInsertCount += 1;
     return `job-${this.generationJobInsertCount}`;
+  }
+
+  nextTicketId() {
+    this.ticketInsertCount += 1;
+    return `ticket-${this.ticketInsertCount}`;
   }
 
   from(table: string) {
@@ -722,13 +788,28 @@ class FakeQuery {
 
   maybeSingle() {
     return Promise.resolve({
-      data: this.table === "generation_jobs" ? this.client.existingGenerationJob() : this.table === "storycam_sessions" ? this.sessionRow() : null,
+      data:
+        this.table === "generation_jobs"
+          ? this.client.existingGenerationJob()
+          : this.table === "storycam_sessions"
+            ? this.sessionRow()
+            : this.table === "storycam_premiere_tickets"
+              ? this.ticketRows()[0] ?? null
+              : null,
       error: null
     });
   }
 
-  then(resolve: (value: { data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
+  then(resolve: (value: { count?: number; data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
+    if (this.table === "storycam_premiere_tickets") {
+      return Promise.resolve({
+        data: this.ticketRows(),
+        error: null
+      }).then(resolve, reject);
+    }
+
     return Promise.resolve({
+      count: 0,
       data: [],
       error: null
     }).then(resolve, reject);
@@ -773,7 +854,50 @@ class FakeQuery {
       };
     }
 
+    if (this.table === "storycam_premiere_tickets") {
+      const row = {
+        created_at: "2026-04-26T00:00:00.000Z",
+        id: this.client.nextTicketId(),
+        reserved_at: null,
+        reserved_session_id: null,
+        spent_at: null,
+        status: "available",
+        updated_at: "2026-04-26T00:00:00.000Z",
+        ...this.inserted
+      };
+      this.client.tickets.push(row);
+      return row;
+    }
+
     return this.inserted;
+  }
+
+  private ticketRows() {
+    if (this.updated) {
+      const row = this.client.tickets.find((ticket) => this.matches(ticket));
+
+      if (row) {
+        Object.assign(row, this.updated);
+      }
+
+      return row ? [row] : [];
+    }
+
+    return this.client.tickets.filter((ticket) => this.matches(ticket));
+  }
+
+  private matches(row: Record<string, unknown>) {
+    return this.calls.every((call) => {
+      if (call[0] === "eq") {
+        return row[String(call[1])] === call[2];
+      }
+
+      if (call[0] === "in" && Array.isArray(call[2])) {
+        return call[2].includes(row[String(call[1])]);
+      }
+
+      return true;
+    });
   }
 
   private sessionRow() {

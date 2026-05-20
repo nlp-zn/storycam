@@ -12,7 +12,7 @@ Sources: `src/app/api/**/route.ts`, `src/features/storycam/client/storycamApi.ts
 - Route handlers must not expose prompt packets, raw provider payloads, provider secrets, signed provider-reference URLs, or Supabase service-role keys.
 - Media previews use short-lived signed URLs. Restore responses use `Cache-Control: no-store`.
 - Unsafe API methods are guarded by same-origin/allowed-origin checks before reaching route handlers.
-- Real generation mode enforces per-user daily server-side job quotas for image, video, and final-work job families.
+- Real generation mode enforces account-scoped `首映券` budgets before creating provider jobs. The older per-user daily image/video/final-work quotas remain high safety valves, not the ordinary-user trial boundary.
 
 ## Error Shape
 
@@ -37,7 +37,7 @@ Error bodies must not include raw private input, full prompts, full prompt packe
 | --- | --- |
 | `GET /api/health` | Public, no-store, lightweight web/config readiness check without secrets. |
 | `GET /api/health/deep` | Bearer-token protected deep check for Supabase DB and Storage reachability. |
-| `GET /api/auth/me` | Returns anonymous/authenticated account state without leaking server internals. |
+| `GET /api/auth/me` | Returns anonymous/authenticated account state and lazily issues one automatic 14-day premiere ticket for authenticated users. |
 | `POST /api/auth/sign-out` | Signs out and clears local auth bypass opt-out state. |
 | `GET /auth/callback` | Exchanges Supabase OAuth callback and returns to StoryCam. |
 | `GET /api/storycam-discovery-samples` | Returns short-lived signed URLs for fixed discovery sample posters and MP4s from the private `storycam-generated` bucket; it never returns raw bucket paths. |
@@ -45,6 +45,20 @@ Error bodies must not include raw private input, full prompts, full prompt packe
 | `GET /api/storycam-sessions/recent` | Returns a bounded list of recent account-scoped sessions for the input screen, capped at 20 restorable projects. |
 | `DELETE /api/storycam-sessions/[id]` | Tombstones a user-owned session and cleans associated storage where applicable. |
 | `GET /api/storycam-sessions/[id]/restore` | Restores a full account-scoped session snapshot with signed preview URLs. |
+
+Authenticated `/api/auth/me` responses include `premiereTickets: { availableCount,
+activeCount }`. The client may display this as a simple `首映券` state, but ticket
+reservation and budget enforcement stay server-side.
+
+## Admin Routes
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/admin/premiere-tickets?email=...` | `ADMIN_EMAILS`-protected lookup of a user's premiere-ticket balance. |
+| `POST /api/admin/premiere-tickets` | Same-origin, `ADMIN_EMAILS`-protected manual issuance of one or more premiere tickets by email; writes an admin audit event. |
+
+Admin ticket routes return only target user id/email and ticket counts. They do not expose
+private story text, artifacts, prompts, provider payloads, storage paths, or media URLs.
 
 Restore responses and recent-project summaries may be cached client-side in `sessionStorage` only for the current tab and authenticated user. Restore cache entries are additionally keyed by session id. These caches store JSON and signed URLs, never media bytes, and must preserve absolute URL expiry instead of extending old URLs. Deleting a session clears recent-project cache; selecting any recent project restores it to the story-world review step, regardless of its latest downstream progress.
 
@@ -68,6 +82,12 @@ The browser may poll `GET /api/generation-jobs/[id]` and then restore the sessio
 job succeeds, but browser polling is not the production progress engine.
 
 `POST /api/story-world` accepts optional `storyModeId` and `travelDestination`. For `storyModeId: "handdrawn-travel-vlog"`, the request must include exactly one `uploadedPhotoIds[]` entry and a non-empty `travelDestination`; validation failures return redacted `400` errors. The response script may include `storyModeId` so downstream server code can keep image and video prompts in the correct visual route.
+
+In real mode, the first story-world job for a session reserves the earliest available
+premiere ticket. Later storyboard, image, clip, and final-work jobs for the same session
+reuse that ticket. If no ticket is available or a per-ticket budget is exhausted, routes
+return redacted `429` errors with `premiere_ticket_required` or
+`premiere_ticket_budget_exceeded`.
 
 In real mode, `POST /api/story-world` also accepts a client-generated
 `idempotencyKey`. First-run requests without a `sessionId` must be able to reuse the

@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Info } from "lucide-react";
+import { Check, Info, Ticket } from "lucide-react";
 import { ClipGenerationWorkspace } from "@/components/storycam/ClipGenerationWorkspace";
 import { CoreFramesStage } from "@/components/storycam/CoreFramesStage";
 import { IdeaInputPanel } from "@/components/storycam/IdeaInputPanel";
@@ -74,6 +74,15 @@ function createStoryCamRequestId() {
 
 type StoryWorldAssetImage = NonNullable<GenerateStoryWorldAssetImageResponse["media"]>;
 type TopBarAuthStatus = "checking" | "authenticated" | "anonymous" | "error";
+type PremiereTicketStatus = {
+  activeCount: number;
+  availableCount: number;
+};
+type PremiereTicketDisplay = {
+  description: string;
+  label: string;
+  tone: "active" | "available" | "empty";
+};
 type StoryWorldGenerationRequest = StoryWorldDraft & {
   idempotencyKey: string;
   requestId: number;
@@ -799,6 +808,7 @@ export function StoryCamWorkspace() {
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
     setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
+    notifyPremiereTicketStateChanged();
     syncStepPath(1);
   }
 
@@ -873,14 +883,14 @@ export function StoryCamWorkspace() {
         idea: requestWithUploads.idea,
         selectedChoices: requestWithUploads.selectedChoices
       });
-    } catch {
+    } catch (error) {
       if (!isActiveStoryWorldRequest(request.requestId)) {
         return;
       }
 
       setStoryWorldGeneration({
         kind: "error",
-        message: "故事雏形生成失败，可以重试或返回修改。",
+        message: storyWorldErrorMessage(error),
         request: requestWithUploads
       });
     }
@@ -1569,6 +1579,7 @@ export function StoryCamWorkspace() {
       setFinalWorkSaveError(null);
       setSelectedStepIndex(null);
       setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
+      notifyPremiereTicketStateChanged();
       syncStepPath(3);
       return nextFinalWork;
     } catch {
@@ -2409,38 +2420,57 @@ function StoryCamTopBar({
 function StoryCamAccountButton() {
   const [authStatus, setAuthStatus] = useState<TopBarAuthStatus>("checking");
   const [email, setEmail] = useState<string | undefined>();
+  const [premiereTickets, setPremiereTickets] = useState<PremiereTicketStatus | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
+  const refreshAccountState = useCallback((isMounted: () => boolean = () => true): void => {
     void getAuthStatus()
       .then((response) => {
-        if (!isMounted) {
+        if (!isMounted()) {
           return;
         }
 
         setAuthStatus(response.authenticated ? "authenticated" : "anonymous");
         setEmail(response.authenticated ? response.user.email : undefined);
+        setPremiereTickets(response.authenticated ? response.premiereTickets ?? null : null);
         setIsMenuOpen(false);
       })
       .catch(() => {
-        if (!isMounted) {
+        if (!isMounted()) {
           return;
         }
 
         setAuthStatus("error");
         setEmail(undefined);
+        setPremiereTickets(null);
         setIsMenuOpen(false);
       });
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    refreshAccountState(() => isMounted);
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshAccountState]);
+
+  useEffect(() => {
+    function handlePremiereTicketChange(): void {
+      refreshAccountState();
+    }
+
+    window.addEventListener("storycam:premiere-ticket-changed", handlePremiereTicketChange);
+
+    return () => {
+      window.removeEventListener("storycam:premiere-ticket-changed", handlePremiereTicketChange);
+    };
+  }, [refreshAccountState]);
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -2509,6 +2539,7 @@ function StoryCamAccountButton() {
     setIsMenuOpen(false);
     setAuthStatus("anonymous");
     setEmail(undefined);
+    setPremiereTickets(null);
     setIsSubmitting(false);
     clearStoryCamRestoreCache();
     window.location.reload();
@@ -2527,9 +2558,22 @@ function StoryCamAccountButton() {
   const isAuthenticated = authStatus === "authenticated";
   const label = accountLabel(authStatus, isSubmitting);
   const initials = accountInitials(authStatus, email);
+  const ticketDisplay = premiereTicketDisplay(premiereTickets);
 
   return (
     <div className="storycam-account-entry" ref={accountMenuRef}>
+      {isAuthenticated && ticketDisplay ? (
+        <span
+          aria-label={ticketDisplay.description}
+          className={`storycam-ticket-status storycam-ticket-status--${ticketDisplay.tone}`}
+          data-tooltip={ticketDisplay.description}
+          tabIndex={0}
+          title={ticketDisplay.description}
+        >
+          <Ticket aria-hidden="true" size={14} strokeWidth={2.6} />
+          <span className="storycam-ticket-label">{ticketDisplay.label}</span>
+        </span>
+      ) : null}
       <button
         aria-expanded={isAuthenticated ? isMenuOpen : undefined}
         aria-haspopup={isAuthenticated ? "menu" : undefined}
@@ -2547,6 +2591,12 @@ function StoryCamAccountButton() {
       {isAuthenticated && isMenuOpen ? (
         <div className="storycam-account-menu" role="menu">
           <p className="storycam-account-menu-email">{email ?? "已登录"}</p>
+          {ticketDisplay ? (
+            <div className={`storycam-account-menu-ticket storycam-account-menu-ticket--${ticketDisplay.tone}`}>
+              <strong>{ticketDisplay.label}</strong>
+              <span>{ticketDisplay.description}</span>
+            </div>
+          ) : null}
           <button className="storycam-account-menu-item" disabled={isSubmitting} onClick={signOut} role="menuitem" type="button">
             {isSubmitting ? "正在退出" : "退出"}
           </button>
@@ -2555,6 +2605,50 @@ function StoryCamAccountButton() {
       {errorMessage ? <span className="storycam-account-error">{errorMessage}</span> : null}
     </div>
   );
+}
+
+function premiereTicketDisplay(status: PremiereTicketStatus | null): PremiereTicketDisplay | null {
+  if (!status) {
+    return null;
+  }
+
+  if (status.availableCount > 0) {
+    return {
+      description: `你还有 ${status.availableCount} 张可用首映券，可用于开启完整小剧场制作。`,
+      label: `首映券 ${status.availableCount}`,
+      tone: "available"
+    };
+  }
+
+  if (status.activeCount > 0) {
+    return {
+      description: "首映券已绑定正在制作的作品，可继续完成当前小剧场。",
+      label: "首映制作中",
+      tone: "active"
+    };
+  }
+
+  return {
+    description: "当前没有可用首映券，请等待下一轮开放或联系管理员补发。",
+    label: "名额已用完",
+    tone: "empty"
+  };
+}
+
+function storyWorldErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message === "premiere_ticket_required") {
+    return "体验名额已用完。请等待下一轮开放或联系管理员补发首映券。";
+  }
+
+  if (error instanceof Error && error.message === "premiere_ticket_budget_exceeded") {
+    return "这张首映券的制作额度已用完，请联系管理员补发首映券。";
+  }
+
+  return "故事雏形生成失败，可以重试或返回修改。";
+}
+
+function notifyPremiereTicketStateChanged(): void {
+  window.dispatchEvent(new Event("storycam:premiere-ticket-changed"));
 }
 
 function accountLabel(authStatus: TopBarAuthStatus, isSubmitting: boolean) {
