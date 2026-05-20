@@ -142,6 +142,12 @@ ordinary users.
   writes `locked_by`/`locked_at`, advances `queued` jobs to `running`, increments
   `attempts`, and returns claimed `generation_jobs` rows. Execute permission is revoked
   from `public`, `anon`, and `authenticated`; the worker calls it with the service role.
+- `issue_storycam_premiere_tickets(actor_user_id, target_user_id, ticket_count,
+  ticket_source, ticket_expires_at, ticket_expires_in_days, ticket_note)`: atomically
+  inserts one manual premiere-ticket batch and the matching `admin_audit_events` row,
+  then returns created `storycam_premiere_tickets` rows. Execute permission is revoked
+  from `public`, `anon`, and `authenticated`; the admin API calls it with the service
+  role.
 
 ## Storage Buckets
 
@@ -157,7 +163,9 @@ ordinary users.
 - Follow-up migrations add account-scoped composite foreign keys so admin-client writes cannot attach artifacts, jobs, media, or provider requests to another user's session/job/artifact.
 - Premiere-ticket migrations add account-scoped foreign keys between tickets, sessions,
   and generation jobs. Ordinary users may select their own ticket metadata; inserts,
-  updates, manual issuance, and audit rows remain server-owned.
+  updates, manual issuance, and audit rows remain server-owned. Manual issuance and
+  audit logging happen inside `issue_storycam_premiere_tickets` so admin retries cannot
+  mint duplicate tickets after a partial audit failure.
 - Storage buckets are private and object policies scope access to `users/{auth.uid()}/...` paths.
 - `soft_delete_storycam_session` tombstones in-flight jobs and soft deletes related artifacts/media/session metadata inside one database function.
 

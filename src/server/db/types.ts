@@ -284,6 +284,18 @@ export type Database = {
         };
         Returns: GenerationJobRow[];
       };
+      issue_storycam_premiere_tickets: {
+        Args: {
+          actor_user_id: string;
+          target_user_id: string;
+          ticket_count: number;
+          ticket_expires_at?: string | null;
+          ticket_expires_in_days?: number | null;
+          ticket_note?: string | null;
+          ticket_source: Exclude<PremiereTicketRow["source"], "new_user_auto">;
+        };
+        Returns: PremiereTicketRow[];
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

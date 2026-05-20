@@ -106,6 +106,39 @@ describe("premiere ticket API surfaces", () => {
       })
     ]);
   });
+
+  it("finds admin ticket targets beyond the first auth user page", async () => {
+    const { POST } = await import("@/app/api/admin/premiere-tickets/route");
+    const users = [
+      ...Array.from({ length: 1000 }, (_, index) => ({
+        email: `filler-${index}@example.com`,
+        id: `filler-${index}`
+      })),
+      { email: "target@example.com", id: "target-1" }
+    ];
+    const client = new FakeSupabaseClient(users);
+
+    requireUserMock.mockResolvedValue({ email: "admin@example.com", id: "admin-1" });
+    createSupabaseAdminClientMock.mockReturnValue(client.asSupabaseClient());
+
+    const response = await POST(
+      new Request("https://storycam.test/api/admin/premiere-tickets", {
+        body: JSON.stringify({ count: 1, email: "target@example.com" }),
+        headers: { "content-type": "application/json", origin: "https://storycam.test" },
+        method: "POST"
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(client.listUsersCalls).toEqual([
+      { page: 1, perPage: 1000 },
+      { page: 2, perPage: 1000 }
+    ]);
+    await expect(response.json()).resolves.toMatchObject({
+      issuedCount: 1,
+      user: { email: "target@example.com", id: "target-1" }
+    });
+  });
 });
 
 type FakeAuthUser = {
@@ -115,19 +148,74 @@ type FakeAuthUser = {
 
 class FakeSupabaseClient {
   readonly auditEvents: Array<Record<string, unknown>> = [];
-  readonly auth: { admin: { listUsers: () => Promise<{ data: { users: FakeAuthUser[] }; error: null }> } };
+  readonly auth: {
+    admin: {
+      listUsers: (input?: { page?: number; perPage?: number }) => Promise<{ data: { users: FakeAuthUser[] }; error: null }>;
+    };
+  };
+  readonly listUsersCalls: Array<{ page: number; perPage: number }> = [];
   readonly tickets: PremiereTicketRow[] = [];
 
   constructor(users: FakeAuthUser[] = []) {
     this.auth = {
       admin: {
-        listUsers: async () => ({ data: { users }, error: null })
+        listUsers: async (input = {}) => {
+          const page = input.page ?? 1;
+          const perPage = input.perPage ?? 1000;
+          const start = (page - 1) * perPage;
+
+          this.listUsersCalls.push({ page, perPage });
+
+          return { data: { users: users.slice(start, start + perPage) }, error: null };
+        }
       }
     };
   }
 
   asSupabaseClient() {
     return this as unknown as SupabaseClient<Database>;
+  }
+
+  rpc(name: string, args: Database["public"]["Functions"]["issue_storycam_premiere_tickets"]["Args"]) {
+    if (name !== "issue_storycam_premiere_tickets") {
+      return Promise.resolve({ data: null, error: { code: "42883" } });
+    }
+
+    const created = Array.from({ length: args.ticket_count }, () => {
+      const row = {
+        created_at: "2026-05-19T00:00:00.000Z",
+        expires_at: args.ticket_expires_at ?? null,
+        id: `ticket-${this.tickets.length + 1}`,
+        issued_by_user_id: args.actor_user_id,
+        note: args.ticket_note ?? null,
+        reserved_at: null,
+        reserved_session_id: null,
+        source: args.ticket_source,
+        spent_at: null,
+        status: "available",
+        updated_at: "2026-05-19T00:00:00.000Z",
+        user_id: args.target_user_id
+      } as PremiereTicketRow;
+
+      this.tickets.push(row);
+      return row;
+    });
+
+    this.auditEvents.push({
+      action: "issue_premiere_tickets",
+      actor_user_id: args.actor_user_id,
+      created_at: "2026-05-19T00:00:00.000Z",
+      id: `audit-${this.auditEvents.length + 1}`,
+      metadata_json: {
+        count: created.length,
+        expiresInDays: args.ticket_expires_in_days ?? null,
+        note: args.ticket_note ? args.ticket_note.slice(0, 120) : null,
+        source: args.ticket_source
+      },
+      target_user_id: args.target_user_id
+    });
+
+    return Promise.resolve({ data: created, error: null });
   }
 
   from(table: string) {

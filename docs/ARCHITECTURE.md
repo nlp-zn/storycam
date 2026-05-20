@@ -81,7 +81,8 @@ See `docs/generated/db-schema.md` and `docs/generated/api-contract.md` for imple
 
 Real beta access uses account-scoped `首映券` records. A ticket binds to one session,
 generation jobs created for that session store `premiere_ticket_id`, and admin manual
-issuance writes `admin_audit_events`.
+issuance goes through `issue_storycam_premiere_tickets` so the ticket batch and
+`admin_audit_events` row commit atomically.
 
 ## Provider Model
 

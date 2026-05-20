@@ -288,7 +288,9 @@ Before staging:
 
 - Apply Supabase migrations to the staging project.
 - For the premiere-ticket rollout, apply `20260519120000_storycam_premiere_tickets.sql`
-  before deploying app code because `/api/auth/me` now reads the ticket table on login.
+  and `20260520093000_atomic_premiere_ticket_issuance.sql` before deploying app code
+  because `/api/auth/me` reads the ticket table on login and `/admin` uses the atomic
+  issuance RPC.
 - Verify generated DB snapshots and RLS expectations in `docs/generated/`.
 - Configure Google OAuth in Supabase Auth for staging and production domains.
 - Set Supabase Site URL and Redirect URLs for Cloudflare production and staging hosts.
@@ -299,8 +301,9 @@ Before staging:
 Before production:
 
 - Apply the same migrations to production through a controlled migration step.
-- Verify the premiere-ticket tables and `generation_jobs.premiere_ticket_id` exist before
-  switching production traffic to the new app build.
+- Verify the premiere-ticket tables, `generation_jobs.premiere_ticket_id`, and
+  `issue_storycam_premiere_tickets` RPC exist before switching production traffic to the
+  new app build.
 - Keep production backups enabled.
 - Confirm no policy exposes raw uploads, prompt packets, provider payloads, or signed URLs
   to other users.

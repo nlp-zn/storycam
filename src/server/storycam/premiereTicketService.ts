@@ -9,7 +9,6 @@ import {
   StoryCamPremiereTicketRepository,
   type PremiereTicketSource
 } from "./premiereTicketRepository";
-import { StoryCamAdminAuditRepository } from "./adminAuditRepository";
 import { StoryCamRepositoryError } from "./repositoryErrors";
 
 export type PremiereTicketSummary = {
@@ -155,35 +154,23 @@ export async function issuePremiereTickets(
     targetUserId: string;
   }
 ): Promise<PremiereTicketRow[]> {
-  const tickets = new StoryCamPremiereTicketRepository(client);
   const expiresAt = premiereTicketExpiresAt(input.expiresInDays);
-  const created: PremiereTicketRow[] = [];
 
-  for (let index = 0; index < input.count; index += 1) {
-    const ticket = await tickets.create(input.targetUserId, {
-      expiresAt,
-      issuedByUserId: input.actorUserId,
-      note: input.note ?? null,
-      source: input.source
-    });
-
-    if (ticket) {
-      created.push(ticket);
-    }
-  }
-
-  await new StoryCamAdminAuditRepository(client).recordTicketIssuance({
-    actorUserId: input.actorUserId,
-    metadataJson: {
-      count: created.length,
-      expiresInDays: input.expiresInDays ?? null,
-      note: input.note ? input.note.slice(0, 120) : null,
-      source: input.source
-    },
-    targetUserId: input.targetUserId
+  const { data, error } = await client.rpc("issue_storycam_premiere_tickets", {
+    actor_user_id: input.actorUserId,
+    target_user_id: input.targetUserId,
+    ticket_count: input.count,
+    ticket_expires_at: expiresAt ? expiresAt.toISOString() : null,
+    ticket_expires_in_days: input.expiresInDays ?? null,
+    ticket_note: input.note ?? null,
+    ticket_source: input.source
   });
 
-  return created;
+  if (error) {
+    throw new StoryCamRepositoryError("issue_premiere_tickets", error.code);
+  }
+
+  return data ?? [];
 }
 
 export function premiereTicketErrorResponse(error: StoryCamPremiereTicketError): Response {

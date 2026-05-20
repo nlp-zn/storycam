@@ -75,9 +75,32 @@ describe("premiere ticket service", () => {
       expect.objectContaining({
         action: "issue_premiere_tickets",
         actor_user_id: "admin-1",
+        metadata_json: expect.objectContaining({
+          count: 3,
+          expiresInDays: 30,
+          note: "seed user",
+          source: "manual_beta"
+        }),
         target_user_id: "user-1"
       })
     ]);
+  });
+
+  it("does not leave partial manual tickets when atomic issuance fails", async () => {
+    const client = new FakeSupabaseClient({ failIssueRpc: true });
+
+    await expect(
+      issuePremiereTickets(client.asSupabaseClient(), {
+        actorUserId: "admin-1",
+        count: 2,
+        expiresInDays: 30,
+        source: "manual_beta",
+        targetUserId: "user-1"
+      })
+    ).rejects.toThrow();
+
+    expect(client.tickets).toHaveLength(0);
+    expect(client.auditEvents).toHaveLength(0);
   });
 });
 
@@ -118,13 +141,63 @@ function fakeJob(
   };
 }
 
+type IssuePremiereTicketsArgs = Database["public"]["Functions"]["issue_storycam_premiere_tickets"]["Args"];
+
 class FakeSupabaseClient {
   readonly auditEvents: Array<Record<string, unknown>> = [];
   readonly jobs: GenerationJobRow[] = [];
   readonly tickets: PremiereTicketRow[] = [];
 
+  constructor(private readonly options: { failIssueRpc?: boolean } = {}) {}
+
   asSupabaseClient() {
     return this as unknown as SupabaseClient<Database>;
+  }
+
+  rpc(name: string, args: IssuePremiereTicketsArgs) {
+    if (name !== "issue_storycam_premiere_tickets") {
+      return Promise.resolve({ data: null, error: { code: "42883" } });
+    }
+
+    if (this.options.failIssueRpc) {
+      return Promise.resolve({ data: null, error: { code: "XX000" } });
+    }
+
+    const created = Array.from({ length: args.ticket_count }, () => {
+      const row = {
+        created_at: "2026-05-19T00:00:00.000Z",
+        expires_at: args.ticket_expires_at ?? null,
+        id: `ticket-${this.tickets.length + 1}`,
+        issued_by_user_id: args.actor_user_id,
+        note: args.ticket_note ?? null,
+        reserved_at: null,
+        reserved_session_id: null,
+        source: args.ticket_source,
+        spent_at: null,
+        status: "available",
+        updated_at: "2026-05-19T00:00:00.000Z",
+        user_id: args.target_user_id
+      } as PremiereTicketRow;
+
+      this.tickets.push(row);
+      return row;
+    });
+
+    this.auditEvents.push({
+      action: "issue_premiere_tickets",
+      actor_user_id: args.actor_user_id,
+      created_at: "2026-05-19T00:00:00.000Z",
+      id: `audit-${this.auditEvents.length + 1}`,
+      metadata_json: {
+        count: created.length,
+        expiresInDays: args.ticket_expires_in_days ?? null,
+        note: args.ticket_note ? args.ticket_note.slice(0, 120) : null,
+        source: args.ticket_source
+      },
+      target_user_id: args.target_user_id
+    });
+
+    return Promise.resolve({ data: created, error: null });
   }
 
   from(table: string) {

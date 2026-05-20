@@ -34,6 +34,7 @@ type ParsedAdminTicketRequest = {
 };
 
 const manualSources = ["manual_beta", "support_compensation", "internal_testing", "creator_seed"] as const satisfies readonly ManualPremiereTicketSource[];
+const adminUserLookupPageSize = 1000;
 
 export async function GET(request: Request): Promise<Response> {
   try {
@@ -106,15 +107,27 @@ async function findUserByEmail(
     return null;
   }
 
-  const users = await client.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  let page = 1;
 
-  if (users.error) {
-    throw new Error("Admin user lookup failed.");
+  while (true) {
+    const users = await client.auth.admin.listUsers({ page, perPage: adminUserLookupPageSize });
+
+    if (users.error) {
+      throw new Error("Admin user lookup failed.");
+    }
+
+    const user = users.data.users.find((candidate) => normalizeEmail(candidate.email ?? "") === email);
+
+    if (user?.email) {
+      return { email: user.email, id: user.id };
+    }
+
+    if (users.data.users.length < adminUserLookupPageSize) {
+      return null;
+    }
+
+    page += 1;
   }
-
-  const user = users.data.users.find((candidate) => normalizeEmail(candidate.email ?? "") === email);
-
-  return user?.email ? { email: user.email, id: user.id } : null;
 }
 
 function parseAdminTicketRequest(body: AdminTicketRequest): ParsedAdminTicketRequest {
