@@ -59,11 +59,11 @@ services:
       - key: SEEDANCE_FAST_MODEL
         value: doubao-seedance-2-0-fast-260128
       - key: STORYCAM_DAILY_IMAGE_JOB_LIMIT
-        value: "30"
+        value: "500"
       - key: STORYCAM_DAILY_VIDEO_JOB_LIMIT
-        value: "5"
+        value: "50"
       - key: STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT
-        value: "5"
+        value: "50"
       - key: SENTRY_DSN
         sync: false
       - key: NEXT_PUBLIC_SENTRY_DSN
@@ -128,11 +128,11 @@ services:
       - key: SEEDANCE_FAST_MODEL
         value: doubao-seedance-2-0-fast-260128
       - key: STORYCAM_DAILY_IMAGE_JOB_LIMIT
-        value: "30"
+        value: "500"
       - key: STORYCAM_DAILY_VIDEO_JOB_LIMIT
-        value: "5"
+        value: "50"
       - key: STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT
-        value: "5"
+        value: "50"
       - key: SENTRY_DSN
         sync: false
       - key: SENTRY_ENVIRONMENT
