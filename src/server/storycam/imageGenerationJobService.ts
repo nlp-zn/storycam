@@ -6,6 +6,7 @@ import { writeGeneratedStoryCamMedia, type GeneratedStoryCamImageMimeType } from
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
 import { createStoryCamSignedUrl, storyCamGeneratedBucket, storyCamSignedUrlTtlSeconds } from "./mediaStore";
+import { ensurePremiereTicketBudgetForSession } from "./premiereTicketService";
 import { StoryCamRepositoryError } from "./repositoryErrors";
 
 const queuedImageProviderInputKey = "__storycam_image_provider_input";
@@ -190,11 +191,16 @@ async function submitImageGenerationJobWithRepositories<Input>(
     }
   }
 
+  const premiereTicket = await ensurePremiereTicketBudgetForSession(client, userId, {
+    family: "image",
+    sessionId: input.sessionId
+  });
   const job = await jobs.create(userId, {
     generationMode: "real",
     idempotencyKeyHash,
     inputArtifactVersionsJson: withQueuedImageProviderInput(input.inputArtifactVersionsJson, input.imageInput),
     outputArtifactId: input.linkedArtifactId,
+    premiereTicketId: premiereTicket.id,
     providerKind: input.provider.providerKind,
     providerName: input.provider.providerName,
     sessionId: input.sessionId,

@@ -8,6 +8,7 @@ export type CreateGenerationJobInput = {
   inputArtifactVersionsJson?: Json;
   maxAttempts?: number;
   outputArtifactId?: string | null;
+  premiereTicketId?: string | null;
   providerKind: GenerationJobRow["provider_kind"];
   providerName: string;
   providerRequestId?: string | null;
@@ -43,7 +44,7 @@ export type TombstoneGenerationJobInput = {
 };
 
 const jobColumns =
-  "id,user_id,session_id,type,status,idempotency_key_hash,generation_mode,provider_kind,provider_name,provider_request_id,attempts,max_attempts,input_artifact_versions_json,output_artifact_id,error_code,provider_error_category,provider_http_status,redacted_error,started_at,ended_at,locked_by,locked_at,run_after,created_at,updated_at,tombstoned_at" as const;
+  "id,user_id,session_id,premiere_ticket_id,type,status,idempotency_key_hash,generation_mode,provider_kind,provider_name,provider_request_id,attempts,max_attempts,input_artifact_versions_json,output_artifact_id,error_code,provider_error_category,provider_http_status,redacted_error,started_at,ended_at,locked_by,locked_at,run_after,created_at,updated_at,tombstoned_at" as const;
 
 export class StoryCamGenerationJobRepository {
   constructor(private readonly client: StoryCamDbClient) {}
@@ -64,6 +65,7 @@ export class StoryCamGenerationJobRepository {
       .insert({
         user_id: userId,
         session_id: input.sessionId,
+        premiere_ticket_id: input.premiereTicketId ?? null,
         type: input.type,
         status: input.status ?? "queued",
         idempotency_key_hash: input.idempotencyKeyHash,
@@ -290,6 +292,22 @@ export class StoryCamGenerationJobRepository {
 
     if (error) {
       throw new StoryCamRepositoryError("count_generation_jobs", error.code);
+    }
+
+    return count ?? 0;
+  }
+
+  async countNonFailedByPremiereTicket(userId: string, input: { premiereTicketId: string; types: GenerationJobRow["type"][] }) {
+    const { count, error } = await this.client
+      .from("generation_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("premiere_ticket_id", input.premiereTicketId)
+      .in("type", input.types)
+      .in("status", ["queued", "running", "succeeded", "cancel_requested"]);
+
+    if (error) {
+      throw new StoryCamRepositoryError("count_premiere_ticket_generation_jobs", error.code);
     }
 
     return count ?? 0;

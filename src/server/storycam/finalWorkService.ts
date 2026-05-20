@@ -13,6 +13,7 @@ import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { writeGeneratedStoryCamMedia, type WriteGeneratedStoryCamMediaResult } from "./generatedMediaService";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import { ensurePremiereTicketBudgetForSession, markPremiereTicketSpentForFinalWorkJob } from "./premiereTicketService";
 import {
   assertStoryCamPrivateBucket,
   createStoryCamSignedUrl,
@@ -166,6 +167,13 @@ export async function createFinalWorkJobFromSuggestion(
     return toFinalWorkJobOutput(existingJob);
   }
 
+  const premiereTicket = generationMode === "real"
+    ? await ensurePremiereTicketBudgetForSession(client, userId, {
+        family: "final_work",
+        sessionId: session.id
+      })
+    : undefined;
+
   const job = await jobs.create(userId, {
     generationMode,
     idempotencyKeyHash,
@@ -174,6 +182,7 @@ export async function createFinalWorkJobFromSuggestion(
       ...generatedClipArtifacts.map((row) => [row.id, row.version] as const)
     ]),
     maxAttempts: 1,
+    premiereTicketId: premiereTicket?.id,
     providerKind: "stitch",
     providerName: "ffmpeg",
     sessionId: session.id,
@@ -218,7 +227,15 @@ export async function completeFinalWorkJob(
       );
     }
 
-    return (await jobs.markSucceeded(job.user_id, job.id, { outputArtifactId: result.value.artifact.id })) ?? job;
+    const completedJob = (await jobs.markSucceeded(job.user_id, job.id, { outputArtifactId: result.value.artifact.id })) ?? job;
+
+    try {
+      await markPremiereTicketSpentForFinalWorkJob(client, job.user_id, completedJob.premiere_ticket_id);
+    } catch {
+      return completedJob;
+    }
+
+    return completedJob;
   } catch {
     return (
       (await jobs.markFailed(job.user_id, job.id, {

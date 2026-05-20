@@ -191,9 +191,8 @@ button:disabled {
 .storycam-account-entry {
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
+  align-items: center;
+  gap: 8px;
 }
 
 .storycam-account-button {
@@ -325,6 +324,144 @@ button:disabled {
   white-space: nowrap;
 }
 
+.storycam-ticket-status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  max-width: min(180px, 36vw);
+  border: 1px solid rgba(255, 213, 94, 0.36);
+  border-radius: 9999px;
+  padding: 0 12px;
+  background: rgba(255, 213, 94, 0.08);
+  color: #ffe9a8;
+  cursor: help;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 0 18px rgba(255, 213, 94, 0.12);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.storycam-ticket-status:hover,
+.storycam-ticket-status:focus-visible {
+  border-color: rgba(255, 213, 94, 0.68);
+  background: rgba(255, 213, 94, 0.13);
+  color: #fff3c3;
+  transform: translateY(-1px);
+}
+
+.storycam-ticket-status::after {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 80;
+  width: min(240px, calc(100vw - 32px));
+  border: 1px solid rgba(255, 213, 94, 0.24);
+  border-radius: 12px;
+  background: rgba(9, 15, 17, 0.96);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.44), 0 0 22px rgba(255, 213, 94, 0.12);
+  color: rgba(255, 246, 210, 0.9);
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+  opacity: 0;
+  padding: 10px 12px;
+  pointer-events: none;
+  text-align: left;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  white-space: normal;
+}
+
+.storycam-ticket-status:hover::after,
+.storycam-ticket-status:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.storycam-ticket-status--active {
+  border-color: rgba(0, 240, 255, 0.34);
+  background: rgba(0, 240, 255, 0.07);
+  color: #b9fbff;
+  box-shadow: 0 0 18px rgba(0, 240, 255, 0.12);
+}
+
+.storycam-ticket-status--active:hover,
+.storycam-ticket-status--active:focus-visible {
+  border-color: rgba(0, 240, 255, 0.66);
+  background: rgba(0, 240, 255, 0.12);
+  color: #dbfcff;
+}
+
+.storycam-ticket-status--empty {
+  border-color: rgba(255, 75, 137, 0.28);
+  background: rgba(255, 75, 137, 0.07);
+  color: #ffd0dc;
+  box-shadow: 0 0 18px rgba(255, 75, 137, 0.1);
+}
+
+.storycam-ticket-status--empty:hover,
+.storycam-ticket-status--empty:focus-visible {
+  border-color: rgba(255, 75, 137, 0.58);
+  background: rgba(255, 75, 137, 0.12);
+  color: #ffe1e8;
+}
+
+.storycam-ticket-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.storycam-account-menu-ticket {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 5px;
+  padding: 10px 14px 12px;
+  color: #ffe9a8;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.storycam-account-menu-ticket strong {
+  color: #ffe9a8;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.storycam-account-menu-ticket span {
+  color: rgba(255, 246, 210, 0.68);
+  font-weight: 760;
+}
+
+.storycam-account-menu-ticket--active strong {
+  color: #b9fbff;
+}
+
+.storycam-account-menu-ticket--active span {
+  color: rgba(219, 252, 255, 0.68);
+}
+
+.storycam-account-menu-ticket--empty strong {
+  color: #ffd0dc;
+}
+
+.storycam-account-menu-ticket--empty span {
+  color: rgba(255, 224, 233, 0.68);
+}
+
 .storycam-account-menu-item {
   display: flex;
   width: 100%;
@@ -353,6 +490,124 @@ button:disabled {
 .storycam-account-menu-item:disabled {
   cursor: default;
   opacity: 0.64;
+}
+
+.storycam-admin-page {
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    #05090b;
+  background-size: 28px 28px;
+  color: #dbfcff;
+  padding: 48px 20px;
+}
+
+.storycam-admin-panel {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(9, 15, 17, 0.92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  padding: 28px;
+}
+
+.storycam-admin-heading {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.storycam-admin-heading p,
+.storycam-admin-heading span {
+  color: rgba(219, 252, 255, 0.62);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.storycam-admin-heading h1 {
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 950;
+}
+
+.storycam-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.storycam-admin-field {
+  display: grid;
+  gap: 8px;
+}
+
+.storycam-admin-field--wide {
+  grid-column: 1 / -1;
+}
+
+.storycam-admin-field span {
+  color: rgba(219, 252, 255, 0.76);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.storycam-admin-field input,
+.storycam-admin-field select,
+.storycam-admin-field textarea {
+  width: 100%;
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.34);
+  color: #ffffff;
+  font: inherit;
+  padding: 12px;
+}
+
+.storycam-admin-field textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.storycam-admin-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.storycam-admin-actions button {
+  border: 1px solid rgba(0, 240, 255, 0.38);
+  border-radius: 9999px;
+  background: rgba(0, 240, 255, 0.08);
+  color: var(--storycam-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 950;
+  padding: 11px 16px;
+}
+
+.storycam-admin-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.storycam-admin-message,
+.storycam-admin-result {
+  margin-top: 18px;
+  border: 1px solid rgba(255, 213, 94, 0.26);
+  border-radius: 8px;
+  background: rgba(255, 213, 94, 0.08);
+  color: #ffe9a8;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.storycam-admin-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .storycam-stepper {
@@ -3022,6 +3277,22 @@ button:disabled {
 
   .storycam-topbar-actions {
     gap: 8px;
+  }
+
+  .storycam-account-entry {
+    gap: 6px;
+  }
+
+  .storycam-ticket-status {
+    min-height: 32px;
+    max-width: min(132px, 44vw);
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .storycam-ticket-status::after {
+    right: -46px;
+    width: min(220px, calc(100vw - 24px));
   }
 
   .storycam-account-button {

@@ -1,6 +1,7 @@
 import type { MediaAssetRow } from "@/server/db/types";
 import { assertStoryCamPrivateBucket, type StoryCamPrivateBucket } from "./mediaStore";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import { StoryCamPremiereTicketRepository } from "./premiereTicketRepository";
 import { StoryCamSessionRepository } from "./sessionRepository";
 import type { StoryCamDbClient } from "./sessionRepository";
 
@@ -22,6 +23,10 @@ export type StorageCleanupRepository = {
 
 export type StorageCleanupSessionRepository = {
   softDelete(userId: string, sessionId: string): Promise<void>;
+};
+
+export type StorageCleanupPremiereTicketRepository = {
+  releaseForDeletedSession(userId: string, sessionId: string): Promise<void>;
 };
 
 export type StorageCleanupClient = {
@@ -92,13 +97,15 @@ export class StoryCamStorageCleanupService {
 export class StoryCamSessionDeletionService {
   constructor(
     private readonly storageCleanup: StoryCamStorageCleanupService,
-    private readonly sessions: StorageCleanupSessionRepository
+    private readonly sessions: StorageCleanupSessionRepository,
+    private readonly premiereTickets: StorageCleanupPremiereTicketRepository
   ) {}
 
   static fromSupabaseClient(client: StoryCamDbClient & StorageCleanupClient) {
     return new StoryCamSessionDeletionService(
       StoryCamStorageCleanupService.fromSupabaseClient(client),
-      new StoryCamSessionRepository(client)
+      new StoryCamSessionRepository(client),
+      new StoryCamPremiereTicketRepository(client)
     );
   }
 
@@ -106,6 +113,7 @@ export class StoryCamSessionDeletionService {
     const cleanupPlan = await this.storageCleanup.prepareSessionMediaRemoval(userId, sessionId);
 
     await this.sessions.softDelete(userId, sessionId);
+    await this.premiereTickets.releaseForDeletedSession(userId, sessionId);
 
     return this.storageCleanup.removePreparedSessionMedia(cleanupPlan);
   }

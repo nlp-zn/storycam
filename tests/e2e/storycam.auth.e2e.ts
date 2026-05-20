@@ -58,6 +58,29 @@ test.describe("auth foundation", () => {
     await expect(page.getByRole("menuitem", { name: "退出" })).toBeVisible();
   });
 
+  test("shows premiere ticket state beside the account button", async ({ page }) => {
+    await mockAuthenticated(page, { activeCount: 0, availableCount: 1 });
+    await page.goto("/");
+
+    const ticketBadge = page.locator(".storycam-ticket-status");
+    await expect(ticketBadge).toBeVisible();
+    await expect(ticketBadge).toHaveText("首映券 1");
+    await expect(ticketBadge).toHaveAttribute("title", "你还有 1 张可用首映券，可用于开启完整小剧场制作。");
+
+    await page.getByRole("button", { name: "账号 user@example.com" }).click();
+    await expect(page.getByText("你还有 1 张可用首映券，可用于开启完整小剧场制作。")).toBeVisible();
+  });
+
+  test("shows an exhausted premiere ticket state after quota is used", async ({ page }) => {
+    await mockAuthenticated(page, { activeCount: 0, availableCount: 0 });
+    await page.goto("/");
+
+    const ticketBadge = page.locator(".storycam-ticket-status");
+    await expect(ticketBadge).toBeVisible();
+    await expect(ticketBadge).toHaveText("名额已用完");
+    await expect(ticketBadge).toHaveAttribute("title", "当前没有可用首映券，请等待下一轮开放或联系管理员补发。");
+  });
+
   test("signs out from the account button", async ({ page }) => {
     let isAuthenticated = true;
     await mockAuthState(page, () => isAuthenticated);
@@ -111,8 +134,8 @@ async function mockAnonymous(page: Page) {
   await mockAuthState(page, () => false);
 }
 
-async function mockAuthenticated(page: Page) {
-  await mockAuthState(page, () => true);
+async function mockAuthenticated(page: Page, premiereTickets?: { activeCount: number; availableCount: number }) {
+  await mockAuthState(page, () => true, premiereTickets);
   await page.route("**/api/storycam-sessions/current", async (route) => {
     await route.fulfill({
       body: JSON.stringify({ ok: true, restored: false }),
@@ -136,14 +159,18 @@ async function mockAuthenticated(page: Page) {
   });
 }
 
-async function mockAuthState(page: Page, isAuthenticated: () => boolean) {
+async function mockAuthState(
+  page: Page,
+  isAuthenticated: () => boolean,
+  premiereTickets?: { activeCount: number; availableCount: number }
+) {
   await page.route("**/api/auth/me", async (route) => {
     const authenticated = isAuthenticated();
 
     await route.fulfill({
       body: JSON.stringify(
         authenticated
-          ? { authenticated: true, user: { email: "user@example.com", id: "user-1" } }
+          ? { authenticated: true, premiereTickets, user: { email: "user@example.com", id: "user-1" } }
           : { authenticated: false, user: null }
       ),
       contentType: "application/json",

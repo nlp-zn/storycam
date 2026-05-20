@@ -2,6 +2,20 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.4.0] - 2026-05-20
+
+### Added
+
+- Added the premiere ticket entitlement system: authenticated users lazily receive one 14-day premiere ticket, and real generation jobs bind to the ticket reserved for that StoryCam session.
+- Added server-side premiere ticket budgets for story-world, storyboard, image, video clip, and final-work job families, with failed/canceled/expired jobs excluded from final budget burn.
+- Added an admin-only `/admin` ticket issuance surface and `/api/admin/premiere-tickets` API for issuing one unified premiere ticket type by email with audit logging.
+- Added top-bar premiere ticket status states for available tickets, active productions, and exhausted trial access.
+
+### Changed
+
+- Raised the legacy daily job quota defaults so they act as a global safety valve while premiere tickets become the ordinary user cost-control mechanism.
+- Updated StoryCam product, security, deployment, API, and database docs to describe premiere tickets, admin issuance, audit events, and quota precedence.
+
 ## [0.1.3.0] - 2026-05-15
 
 ### Added

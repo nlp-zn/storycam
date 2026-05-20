@@ -45,7 +45,7 @@ function quotaForFamily(config: StoryCamConfig, family: "final_work" | "image" |
   if (family === "image") {
     return {
       errorCode: "daily_image_limit_exceeded" as const,
-      limit: config.quotas?.dailyImageJobLimit ?? 30,
+      limit: config.quotas?.dailyImageJobLimit ?? 500,
       type: ["story_world_asset_image", "storyboard_image", "expanded_storyboard_image"] as const
     };
   }
@@ -53,14 +53,14 @@ function quotaForFamily(config: StoryCamConfig, family: "final_work" | "image" |
   if (family === "video") {
     return {
       errorCode: "daily_video_limit_exceeded" as const,
-      limit: config.quotas?.dailyVideoJobLimit ?? 5,
+      limit: config.quotas?.dailyVideoJobLimit ?? 50,
       type: ["video_clip"] as const
     };
   }
 
   return {
     errorCode: "daily_final_work_limit_exceeded" as const,
-    limit: config.quotas?.dailyFinalWorkJobLimit ?? 5,
+    limit: config.quotas?.dailyFinalWorkJobLimit ?? 50,
     type: ["final_work"] as const
   };
 }

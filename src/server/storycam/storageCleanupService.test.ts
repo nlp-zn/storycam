@@ -5,6 +5,7 @@ import {
   StoryCamSessionDeletionService,
   StoryCamStorageCleanupError,
   StoryCamStorageCleanupService,
+  type StorageCleanupPremiereTicketRepository,
   type StorageCleanupRepository,
   type StorageCleanupSessionRepository
 } from "./storageCleanupService";
@@ -104,14 +105,16 @@ describe("StoryCamStorageCleanupService", () => {
     const storage = new FakeStorageClient(undefined, events);
     const cleanup = new StoryCamStorageCleanupService(storage, repository);
     const sessions = new FakeSessionRepository(events);
-    const service = new StoryCamSessionDeletionService(cleanup, sessions);
+    const premiereTickets = new FakePremiereTicketRepository(events);
+    const service = new StoryCamSessionDeletionService(cleanup, sessions, premiereTickets);
 
     const summary = await service.deleteSession("user-1", "session-1");
 
     expect(summary.removedObjectCount).toBe(1);
-    expect(events).toEqual(["soft-delete:session-1", "remove:storycam-generated"]);
+    expect(events).toEqual(["soft-delete:session-1", "release-ticket:session-1", "remove:storycam-generated"]);
     expect(storage.removals).toEqual([{ bucket: "storycam-generated", paths: ["generated/clip-1.mp4"] }]);
     expect(sessions.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+    expect(premiereTickets.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
   });
 
   it("does not remove storage when session metadata soft delete fails", async () => {
@@ -121,10 +124,28 @@ describe("StoryCamStorageCleanupService", () => {
     const storage = new FakeStorageClient();
     const cleanup = new StoryCamStorageCleanupService(storage, repository);
     const sessions = new FakeSessionRepository([], new Error("database unavailable"));
-    const service = new StoryCamSessionDeletionService(cleanup, sessions);
+    const premiereTickets = new FakePremiereTicketRepository();
+    const service = new StoryCamSessionDeletionService(cleanup, sessions, premiereTickets);
 
     await expect(service.deleteSession("user-1", "session-1")).rejects.toThrow("database unavailable");
     expect(storage.removals).toEqual([]);
+    expect(premiereTickets.calls).toEqual([]);
+  });
+
+  it("does not remove storage when reserved premiere ticket release fails", async () => {
+    const repository = new FakeMediaRepository([
+      media({ id: "media-1", storageBucket: "storycam-generated", storagePath: "generated/clip-1.mp4" })
+    ]);
+    const storage = new FakeStorageClient();
+    const cleanup = new StoryCamStorageCleanupService(storage, repository);
+    const sessions = new FakeSessionRepository();
+    const premiereTickets = new FakePremiereTicketRepository([], new Error("ticket unavailable"));
+    const service = new StoryCamSessionDeletionService(cleanup, sessions, premiereTickets);
+
+    await expect(service.deleteSession("user-1", "session-1")).rejects.toThrow("ticket unavailable");
+    expect(storage.removals).toEqual([]);
+    expect(sessions.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
+    expect(premiereTickets.calls).toEqual([{ sessionId: "session-1", userId: "user-1" }]);
   });
 
   it("can retry storage cleanup after session metadata is already soft-deleted", async () => {
@@ -139,7 +160,8 @@ describe("StoryCamStorageCleanupService", () => {
     const storage = new FakeStorageClient();
     const cleanup = new StoryCamStorageCleanupService(storage, repository);
     const sessions = new FakeSessionRepository();
-    const service = new StoryCamSessionDeletionService(cleanup, sessions);
+    const premiereTickets = new FakePremiereTicketRepository();
+    const service = new StoryCamSessionDeletionService(cleanup, sessions, premiereTickets);
 
     const summary = await service.deleteSession("user-1", "session-1");
 
@@ -226,6 +248,26 @@ class FakeSessionRepository implements StorageCleanupSessionRepository {
 
     this.events.push(`soft-delete:${sessionId}`);
     this.calls.push({ sessionId, userId });
+    return Promise.resolve();
+  }
+}
+
+class FakePremiereTicketRepository implements StorageCleanupPremiereTicketRepository {
+  readonly calls: Array<{ sessionId: string; userId: string }> = [];
+
+  constructor(
+    private readonly events: string[] = [],
+    private readonly error?: Error
+  ) {}
+
+  releaseForDeletedSession(userId: string, sessionId: string) {
+    this.calls.push({ sessionId, userId });
+
+    if (this.error) {
+      throw this.error;
+    }
+
+    this.events.push(`release-ticket:${sessionId}`);
     return Promise.resolve();
   }
 }

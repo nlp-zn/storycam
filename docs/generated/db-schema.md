@@ -46,6 +46,7 @@ Current duration constraints:
 - `id`
 - `user_id`
 - `session_id`
+- `premiere_ticket_id`
 - `type`
 - `status`
 - `idempotency_key_hash`
@@ -69,6 +70,37 @@ Current duration constraints:
 - `created_at`
 - `updated_at`
 - `tombstoned_at`
+
+### `storycam_premiere_tickets`
+
+- `id`
+- `user_id`
+- `status`: `available`, `reserved`, `spent`, or `expired`
+- `reserved_session_id`
+- `source`: `new_user_auto`, `manual_beta`, `support_compensation`, `internal_testing`, or `creator_seed`
+- `issued_by_user_id`
+- `note`
+- `expires_at`
+- `reserved_at`
+- `spent_at`
+- `created_at`
+- `updated_at`
+
+`new_user_auto` has a partial unique index so each user receives at most one automatic
+ticket. Tickets include account-scoped foreign keys so a reserved ticket cannot point at
+another user's session.
+
+### `admin_audit_events`
+
+- `id`
+- `actor_user_id`
+- `target_user_id`
+- `action`
+- `metadata_json`
+- `created_at`
+
+Admin audit rows are server-owned; no authenticated-user RLS select policy exposes them to
+ordinary users.
 
 ### `media_assets`
 
@@ -110,6 +142,12 @@ Current duration constraints:
   writes `locked_by`/`locked_at`, advances `queued` jobs to `running`, increments
   `attempts`, and returns claimed `generation_jobs` rows. Execute permission is revoked
   from `public`, `anon`, and `authenticated`; the worker calls it with the service role.
+- `issue_storycam_premiere_tickets(actor_user_id, target_user_id, ticket_count,
+  ticket_source, ticket_expires_at, ticket_expires_in_days, ticket_note)`: atomically
+  inserts one manual premiere-ticket batch and the matching `admin_audit_events` row,
+  then returns created `storycam_premiere_tickets` rows. Execute permission is revoked
+  from `public`, `anon`, and `authenticated`; the admin API calls it with the service
+  role.
 
 ## Storage Buckets
 
@@ -123,6 +161,11 @@ Current duration constraints:
 - Row-level security is enabled for every StoryCam metadata table.
 - Table policies scope select, insert, update, and delete to `auth.uid() = user_id`.
 - Follow-up migrations add account-scoped composite foreign keys so admin-client writes cannot attach artifacts, jobs, media, or provider requests to another user's session/job/artifact.
+- Premiere-ticket migrations add account-scoped foreign keys between tickets, sessions,
+  and generation jobs. Ordinary users may select their own ticket metadata; inserts,
+  updates, manual issuance, and audit rows remain server-owned. Manual issuance and
+  audit logging happen inside `issue_storycam_premiere_tickets` so admin retries cannot
+  mint duplicate tickets after a partial audit failure.
 - Storage buckets are private and object policies scope access to `users/{auth.uid()}/...` paths.
 - `soft_delete_storycam_session` tombstones in-flight jobs and soft deletes related artifacts/media/session metadata inside one database function.
 
