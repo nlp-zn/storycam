@@ -4,6 +4,7 @@ import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createFinalWorkJobFromSuggestion, FinalWorkRequestError } from "@/server/storycam/finalWorkService";
 import { StoryCamMediaStoreError } from "@/server/storycam/mediaStore";
+import { premiereTicketErrorResponse, StoryCamPremiereTicketError } from "@/server/storycam/premiereTicketService";
 import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 
 export async function POST(request: Request) {
@@ -54,6 +55,10 @@ export async function POST(request: Request) {
 
     if (error instanceof StoryCamQuotaError) {
       return quotaErrorResponse(error);
+    }
+
+    if (error instanceof StoryCamPremiereTicketError) {
+      return premiereTicketErrorResponse(error);
     }
 
     return NextResponse.json(

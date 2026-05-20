@@ -240,9 +240,9 @@ export function loadStoryCamConfig(env: Env = process.env): StoryCamConfig {
     3600,
     issues
   );
-  const dailyImageJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_IMAGE_JOB_LIMIT", 30, issues);
-  const dailyVideoJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_VIDEO_JOB_LIMIT", 5, issues);
-  const dailyFinalWorkJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT", 5, issues);
+  const dailyImageJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_IMAGE_JOB_LIMIT", 500, issues);
+  const dailyVideoJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_VIDEO_JOB_LIMIT", 50, issues);
+  const dailyFinalWorkJobLimit = optionalPositiveInteger(env, "STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT", 50, issues);
 
   if (issues.length > 0) {
     throw new StoryCamConfigError(issues);

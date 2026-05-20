@@ -24,6 +24,7 @@ Logs may include:
 - `retryable`
 - `redactionApplied`
 - `lockedBy`, only for worker ids
+- `premiereTicketId`, only as an opaque id for server-side budget diagnostics
 
 ## Forbidden Log Fields
 
@@ -42,6 +43,7 @@ Logs must not include:
 - provider raw response body,
 - storage paths,
 - unredacted provider errors.
+- admin ticket notes that contain raw private story text.
 
 ## Error Redaction
 

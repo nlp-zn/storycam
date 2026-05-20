@@ -566,8 +566,8 @@ function jobRow(overrides: Record<string, unknown> = {}) {
     created_at: "2026-04-26T00:00:00.000Z",
     ended_at: null,
     error_code: null,
-  provider_error_category: null,
-  provider_http_status: null,
+    provider_error_category: null,
+    provider_http_status: null,
     generation_mode: "mock",
     id: "job-1",
     idempotency_key_hash: "hash-1",
@@ -576,6 +576,7 @@ function jobRow(overrides: Record<string, unknown> = {}) {
     locked_by: null,
     max_attempts: 1,
     output_artifact_id: null,
+    premiere_ticket_id: null,
     provider_kind: "video",
     provider_name: "mock",
     provider_request_id: null,
@@ -731,6 +732,7 @@ type FakeSupabaseClientOptions = {
 class FakeSupabaseClient {
   readonly queries: FakeQuery[] = [];
   readonly signedUrls: Array<{ bucket: string; expiresIn: number; path: string }> = [];
+  readonly tickets: Record<string, unknown>[] = [];
   readonly uploads: Array<{ body: Uint8Array; bucket: string; contentType: string; path: string; upsert: false }> = [];
   latestGenerationJob: Record<string, unknown> | null = null;
   readonly storage = {
@@ -760,6 +762,7 @@ class FakeSupabaseClient {
     })
   };
   private artifactInsertCount = 0;
+  private ticketInsertCount = 0;
 
   constructor(private readonly options: FakeSupabaseClientOptions = {}) {}
 
@@ -770,6 +773,11 @@ class FakeSupabaseClient {
   nextArtifactId(type: unknown) {
     this.artifactInsertCount += 1;
     return `${type}-artifact-${this.artifactInsertCount}`;
+  }
+
+  nextTicketId() {
+    this.ticketInsertCount += 1;
+    return `ticket-${this.ticketInsertCount}`;
   }
 
   from(table: string) {
@@ -851,7 +859,14 @@ class FakeQuery {
   then(resolve: (value: { count?: number; data: unknown; error: null }) => void, reject?: (reason: unknown) => void) {
     return Promise.resolve({
       count: 0,
-      data: this.table === "storycam_artifacts" ? (this.options.artifactRows ?? []) : this.table === "media_assets" ? this.findMediaRows() : [],
+      data:
+        this.table === "storycam_artifacts"
+          ? (this.options.artifactRows ?? [])
+          : this.table === "media_assets"
+            ? this.findMediaRows()
+            : this.table === "storycam_premiere_tickets"
+              ? this.ticketRows()
+              : [],
       error: null
     }).then(resolve, reject);
   }
@@ -872,6 +887,10 @@ class FakeQuery {
 
     if (this.table === "generation_jobs") {
       return this.options.job ?? this.options.activeJob ?? this.client.latestGenerationJob;
+    }
+
+    if (this.table === "storycam_premiere_tickets") {
+      return this.ticketRows()[0] ?? null;
     }
 
     if (this.table === "storycam_sessions") {
@@ -930,7 +949,54 @@ class FakeQuery {
       };
     }
 
+    if (this.table === "storycam_premiere_tickets") {
+      const row = {
+        created_at: "2026-04-26T00:00:00.000Z",
+        expires_at: null,
+        id: this.client.nextTicketId(),
+        issued_by_user_id: null,
+        note: null,
+        reserved_at: null,
+        reserved_session_id: null,
+        spent_at: null,
+        status: "available",
+        updated_at: "2026-04-26T00:00:00.000Z",
+        ...this.inserted,
+        ...this.updated
+      };
+      this.client.tickets.push(row);
+      return row;
+    }
+
     return this.inserted;
+  }
+
+  private ticketRows() {
+    if (this.updated) {
+      const row = this.client.tickets.find((ticket) => this.matches(ticket));
+
+      if (row) {
+        Object.assign(row, this.updated);
+      }
+
+      return row ? [row] : [];
+    }
+
+    return this.client.tickets.filter((ticket) => this.matches(ticket));
+  }
+
+  private matches(row: Record<string, unknown>) {
+    return this.calls.every((call) => {
+      if (call[0] === "eq") {
+        return row[String(call[1])] === call[2];
+      }
+
+      if (call[0] === "in" && Array.isArray(call[2])) {
+        return call[2].includes(row[String(call[1])]);
+      }
+
+      return true;
+    });
   }
 
   private findMediaRows() {

@@ -75,6 +75,7 @@ export type GenerationJobRow = {
   id: string;
   user_id: string;
   session_id: string;
+  premiere_ticket_id: string | null;
   type:
     | "story_world"
     | "story_world_asset_image"
@@ -111,6 +112,7 @@ export type GenerationJobInsert = {
   id?: string;
   user_id: string;
   session_id: string;
+  premiere_ticket_id?: string | null;
   type: GenerationJobRow["type"];
   status?: GenerationJobRow["status"];
   idempotency_key_hash: string;
@@ -137,6 +139,58 @@ export type GenerationJobInsert = {
 };
 
 export type GenerationJobUpdate = Partial<Omit<GenerationJobInsert, "id" | "user_id" | "session_id" | "type" | "created_at">>;
+
+export type PremiereTicketRow = {
+  id: string;
+  user_id: string;
+  status: "available" | "reserved" | "spent" | "expired";
+  reserved_session_id: string | null;
+  source: "new_user_auto" | "manual_beta" | "support_compensation" | "internal_testing" | "creator_seed";
+  issued_by_user_id: string | null;
+  note: string | null;
+  expires_at: string | null;
+  reserved_at: string | null;
+  spent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PremiereTicketInsert = {
+  id?: string;
+  user_id: string;
+  status?: PremiereTicketRow["status"];
+  reserved_session_id?: string | null;
+  source: PremiereTicketRow["source"];
+  issued_by_user_id?: string | null;
+  note?: string | null;
+  expires_at?: string | null;
+  reserved_at?: string | null;
+  spent_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PremiereTicketUpdate = Partial<Omit<PremiereTicketInsert, "id" | "user_id" | "source" | "created_at">>;
+
+export type AdminAuditEventRow = {
+  id: string;
+  actor_user_id: string | null;
+  target_user_id: string | null;
+  action: "issue_premiere_tickets";
+  metadata_json: Json;
+  created_at: string;
+};
+
+export type AdminAuditEventInsert = {
+  id?: string;
+  actor_user_id?: string | null;
+  target_user_id?: string | null;
+  action: AdminAuditEventRow["action"];
+  metadata_json?: Json;
+  created_at?: string;
+};
+
+export type AdminAuditEventUpdate = Partial<Omit<AdminAuditEventInsert, "id" | "created_at">>;
 
 export type MediaAssetRow = {
   id: string;
@@ -206,6 +260,8 @@ export type Database = {
       storycam_sessions: TableDefinition<StoryCamSessionRow, StoryCamSessionInsert, StoryCamSessionUpdate>;
       storycam_artifacts: TableDefinition<StoryCamArtifactRow, StoryCamArtifactInsert, StoryCamArtifactUpdate>;
       generation_jobs: TableDefinition<GenerationJobRow, GenerationJobInsert, GenerationJobUpdate>;
+      storycam_premiere_tickets: TableDefinition<PremiereTicketRow, PremiereTicketInsert, PremiereTicketUpdate>;
+      admin_audit_events: TableDefinition<AdminAuditEventRow, AdminAuditEventInsert, AdminAuditEventUpdate>;
       media_assets: TableDefinition<MediaAssetRow, MediaAssetInsert, MediaAssetUpdate>;
       provider_requests: TableDefinition<ProviderRequestRow, ProviderRequestInsert, ProviderRequestUpdate>;
     };
@@ -227,6 +283,18 @@ export type Database = {
           worker_id: string;
         };
         Returns: GenerationJobRow[];
+      };
+      issue_storycam_premiere_tickets: {
+        Args: {
+          actor_user_id: string;
+          target_user_id: string;
+          ticket_count: number;
+          ticket_expires_at?: string | null;
+          ticket_expires_in_days?: number | null;
+          ticket_note?: string | null;
+          ticket_source: Exclude<PremiereTicketRow["source"], "new_user_auto">;
+        };
+        Returns: PremiereTicketRow[];
       };
     };
     Enums: Record<string, never>;

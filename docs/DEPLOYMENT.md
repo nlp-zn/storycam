@@ -265,7 +265,9 @@ Exact values belong in Render and Supabase dashboards, not in this repository.
   methods in addition to the request origin and `NEXT_PUBLIC_APP_URL`.
 - `STORYCAM_DEEP_HEALTH_TOKEN`: bearer token for `/api/health/deep`.
 - `STORYCAM_DAILY_IMAGE_JOB_LIMIT`, `STORYCAM_DAILY_VIDEO_JOB_LIMIT`,
-  `STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT`: per-user daily server-side quota defaults.
+  `STORYCAM_DAILY_FINAL_WORK_JOB_LIMIT`: high global safety valves for real provider
+  spend. Ordinary-user cost control is the `首映券` budget; current code defaults these
+  daily safety valves to 500 image jobs, 50 video jobs, and 50 final-work jobs per user.
 - `ADMIN_EMAILS`: comma-separated Google account allowlist for the initial admin view.
 - `SENTRY_DSN`: server/worker Sentry DSN.
 - `SENTRY_ENVIRONMENT`: Sentry environment tag, normally `production` on Render
@@ -285,6 +287,10 @@ available for final MP4 composition.
 Before staging:
 
 - Apply Supabase migrations to the staging project.
+- For the premiere-ticket rollout, apply `20260519120000_storycam_premiere_tickets.sql`
+  and `20260520093000_atomic_premiere_ticket_issuance.sql` before deploying app code
+  because `/api/auth/me` reads the ticket table on login and `/admin` uses the atomic
+  issuance RPC.
 - Verify generated DB snapshots and RLS expectations in `docs/generated/`.
 - Configure Google OAuth in Supabase Auth for staging and production domains.
 - Set Supabase Site URL and Redirect URLs for Cloudflare production and staging hosts.
@@ -295,6 +301,9 @@ Before staging:
 Before production:
 
 - Apply the same migrations to production through a controlled migration step.
+- Verify the premiere-ticket tables, `generation_jobs.premiere_ticket_id`, and
+  `issue_storycam_premiere_tickets` RPC exist before switching production traffic to the
+  new app build.
 - Keep production backups enabled.
 - Confirm no policy exposes raw uploads, prompt packets, provider payloads, or signed URLs
   to other users.
@@ -414,12 +423,14 @@ media.
 
 Admin v1 should include:
 
+- Premiere ticket lookup and issuance by user email, backed by `ADMIN_EMAILS` and audit
+  events.
 - Job list filtered by status, provider, user, and time.
 - Session summary without raw private story text by default.
 - Provider request ids and redacted failure categories.
 - Artifact status and storage object health.
 - Retry, cancel, recompose final MP4, and tombstone actions.
-- Audit log for every admin action.
+- Audit log for every admin action, including manual premiere-ticket issuance.
 
 Initial access control can use `ADMIN_EMAILS` checked server-side against Google account
 email. A database-backed `admin_users` table or Supabase `raw_app_meta_data` role can

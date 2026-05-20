@@ -35,6 +35,9 @@
 - Real generation mode enforces server-side per-user daily quotas for image, video, and
   final-work job families. Cloudflare rate limits are defense-in-depth, not the only cost
   control.
+- Ordinary-user real generation also requires an account-scoped `首映券`. Tickets are
+  server-owned, bind to one session, and enforce per-ticket budgets before provider jobs
+  are created. Admin manual issuance must write an audit event.
 - Deep health checks require `Authorization: Bearer STORYCAM_DEEP_HEALTH_TOKEN` and must
   not reveal secrets or storage paths.
 
@@ -49,6 +52,7 @@ Never log:
 - signed URLs,
 - provider secrets,
 - unredacted provider error bodies.
+- admin ticket notes that include raw private story input.
 
 Sentry capture is allowed only with safe context such as job id, provider kind/name, status,
 attempt count, redacted error code, and hashed identifiers. Do not send raw input, prompt

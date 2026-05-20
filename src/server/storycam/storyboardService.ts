@@ -11,6 +11,7 @@ import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { submitImageGenerationJob } from "./imageGenerationJobService";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import { ensurePremiereTicketBudgetForSession } from "./premiereTicketService";
 import { StoryCamSessionRepository } from "./sessionRepository";
 import {
   placeholderStoryboardImage,
@@ -240,11 +241,19 @@ export async function createStoryboardJob(
     return toStoryboardJobOutput(existingJob);
   }
 
+  const premiereTicket = options.generationMode === "real"
+    ? await ensurePremiereTicketBudgetForSession(client, userId, {
+        family: "storyboard",
+        sessionId: session.id
+      })
+    : undefined;
+
   const job = await jobs.create(userId, {
     generationMode: options.generationMode,
     idempotencyKeyHash,
     inputArtifactVersionsJson: jobInput,
     maxAttempts: 1,
+    premiereTicketId: premiereTicket?.id,
     providerKind: "text",
     providerName: options.providerName,
     sessionId: session.id,

@@ -5,6 +5,7 @@ import { requireUser, UnauthorizedError } from "@/server/auth/requireUser";
 import { loadStoryCamConfig, redactConfigError, StoryCamConfigError } from "@/server/config";
 import { createConfiguredStoryboardImageProvider } from "@/server/storycam/storyboardImageProviderFactory";
 import { createConfiguredStoryboardProvider } from "@/server/storycam/storyboardProviderFactory";
+import { premiereTicketErrorResponse, StoryCamPremiereTicketError } from "@/server/storycam/premiereTicketService";
 import { createStoryboard, createStoryboardJob, StoryboardRequestError } from "@/server/storycam/storyboardService";
 import { assertStoryCamDailyJobQuota, quotaErrorResponse, StoryCamQuotaError } from "@/server/storycam/quotaService";
 
@@ -103,6 +104,10 @@ export async function POST(request: Request) {
 
     if (error instanceof StoryCamQuotaError) {
       return quotaErrorResponse(error);
+    }
+
+    if (error instanceof StoryCamPremiereTicketError) {
+      return premiereTicketErrorResponse(error);
     }
 
     console.error("storyboard route failed", redactForLog(error));

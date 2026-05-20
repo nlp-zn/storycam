@@ -7,6 +7,7 @@ const job = {
   id: "job-1",
   user_id: "user-1",
   session_id: "session-1",
+  premiere_ticket_id: null,
   type: "video_clip",
   status: "queued",
   idempotency_key_hash: "hash-1",

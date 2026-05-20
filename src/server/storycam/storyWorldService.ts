@@ -21,6 +21,7 @@ import type { GenerationJobRow, Json } from "@/server/db/types";
 import { StoryCamArtifactRepository } from "./artifactRepository";
 import { StoryCamGenerationJobRepository } from "./generationJobRepository";
 import { StoryCamMediaAssetRepository } from "./mediaAssetRepository";
+import { ensurePremiereTicketBudgetForSession } from "./premiereTicketService";
 import { StoryCamSessionRepository } from "./sessionRepository";
 
 export const storyWorldInputMaxLength = 2_000;
@@ -204,6 +205,12 @@ export async function createStoryWorldJob(
   });
 
   await resolveUploadedPhotoRefs(mediaAssets, userId, session.id, input.uploadedPhotoIds);
+  const premiereTicket = options.generationMode === "real"
+    ? await ensurePremiereTicketBudgetForSession(client, userId, {
+        family: "story_world",
+        sessionId: session.id
+      })
+    : undefined;
 
   const inputArtifact = requireArtifactRow(
     await artifacts.createVersion(userId, {
@@ -224,6 +231,7 @@ export async function createStoryWorldJob(
     maxAttempts: 1,
     providerKind: "text",
     providerName: options.providerName,
+    premiereTicketId: premiereTicket?.id,
     sessionId: session.id,
     status: "queued",
     type: "story_world"
