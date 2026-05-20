@@ -166,10 +166,16 @@ export async function processStoryCamWorkerJob(runtime: StoryCamWorkerRuntime, j
   } catch (error) {
     captureStoryCamWorkerException(error, job);
     runtime.logger.error("StoryCam worker job failed.", safeJobLog(job));
-    await jobs.markFailed(job.user_id, job.id, {
-      errorCode: "WORKER_JOB_FAILED",
-      redactedError: "StoryCam generation worker failed."
-    });
+
+    try {
+      await jobs.markFailed(job.user_id, job.id, {
+        errorCode: "WORKER_JOB_FAILED",
+        redactedError: "StoryCam generation worker failed."
+      });
+    } catch (markFailedError) {
+      captureStoryCamWorkerException(markFailedError, job);
+      runtime.logger.error("StoryCam worker could not mark failed job.", safeJobLog(job));
+    }
   }
 }
 

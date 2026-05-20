@@ -2,6 +2,12 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.4.1] - 2026-05-20
+
+### Fixed
+
+- Kept the StoryCam background worker alive when a job failure is followed by a repository failure while marking that job failed.
+
 ## [0.1.4.0] - 2026-05-20
 
 ### Added
