@@ -354,7 +354,10 @@ export function StoryCamWorkspace() {
     }
   }
 
-  function clearRestoredWorkspaceState() {
+  function clearRestoredWorkspaceState(options: { workspaceNotice?: string | null } = {}) {
+    const nextWorkspaceNotice =
+      options.workspaceNotice === undefined ? "上次项目已不可用，可以重新开始。" : options.workspaceNotice;
+
     storyWorldRequestIdRef.current += 1;
     storyboardRequestIdRef.current += 1;
     clipRequestIdRef.current += 1;
@@ -388,7 +391,7 @@ export function StoryCamWorkspace() {
     setVideoAspectRatio(defaultStoryCamVideoAspectRatio);
     setVideoModel(defaultStoryCamVideoModel);
     setSelectedStepIndex(0);
-    setWorkspaceNotice("上次项目已不可用，可以重新开始。");
+    setWorkspaceNotice(nextWorkspaceNotice);
     setStoryboardStatus("idle");
     syncStepPath(0);
   }
@@ -498,11 +501,9 @@ export function StoryCamWorkspace() {
         }
 
         if (!restored.restored) {
-          if (cachedRestore.restored) {
-            clearRestoredWorkspaceState();
-          } else {
-            setIsRestoringSession(false);
-          }
+          clearRestoredWorkspaceState({
+            workspaceNotice: cachedRestore.restored ? undefined : null
+          });
           return;
         }
 

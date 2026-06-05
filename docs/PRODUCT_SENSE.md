@@ -2,7 +2,7 @@
 
 ## Positioning
 
-StoryCam is an AI private story theater for ordinary users. It is not an industrial short-drama production backend.
+StoryCam is an AI personal story theater for ordinary users. It is not an industrial short-drama production backend.
 
 ## Product Taste
 

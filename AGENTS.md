@@ -50,7 +50,7 @@ current source-of-truth doc points there.
 
 ## Product North Star
 
-StoryCam is an AI private story-theater product for ordinary users. It is not an
+StoryCam is an AI personal story-theater product for ordinary users. It is not an
 industrial short-drama production backend, a professional shot-table tool, or a public
 content marketplace.
 

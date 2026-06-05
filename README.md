@@ -13,7 +13,7 @@
 [![Course](https://img.shields.io/badge/Course-long--form%20case%20study-f59e0b.svg)](https://portfolio.znbuild.com/tutorial/storycam/index.html)
 [![Docs](https://img.shields.io/badge/Docs-project%20map-64748b.svg)](docs/README.md)
 
-StoryCam is a web-first AI private story theater: it turns a personal idea and optional photos into a confirmed story world, a storyboard, a generated clip, and an account-scoped final work preview.
+StoryCam is a web-first AI personal story theater: it turns a personal idea and optional photos into a confirmed story world, a storyboard, a generated clip, and an account-scoped final work preview.
 
 It is not an industrial short-drama backend. The product is built for ordinary users who want to make a small story feel like their own memory, while the system keeps professional directing logic, prompt packets, provider payloads, signed URLs, and model parameters behind server-side boundaries.
 
@@ -42,7 +42,7 @@ _Representative cover from episode 10._
 
 | Episode | Title | Focus |
 | --- | --- | --- |
-| 01 | Do Not Start With Code: I Used an AI Agent for Product Design | Product positioning, private story-theater direction, and defining the problem before implementation. |
+| 01 | Do Not Start With Code: I Used an AI Agent for Product Design | Product positioning, personal story-theater direction, and defining the problem before implementation. |
 | 02 | Do Not Rush Into a PRD: I Used an AI Agent to Understand the Design | Design interpretation, product context extraction, and UI-to-spec handoff. |
 | 03 | Do Not Let AI Write Code First: Turn the PRD Into an Engineering Plan | PRD breakdown, engineering planning, and reviewing the path before implementation. |
 | 04 | Finally Letting the AI Agent Write Code: The First Local Product Run | App scaffold, local runtime, and the first working product path. |
@@ -60,7 +60,7 @@ For the full learning map, see `docs/learning/index.md`, `docs/learning/bilibili
 Most AI video tools expose either a blank prompt box or a professional production surface. StoryCam explores a narrower product loop:
 
 ```text
-private idea + optional photos
+personal idea + optional photos
   -> script + character assets + scene assets
   -> user confirms the story world
   -> one core storyboard group

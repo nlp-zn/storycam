@@ -399,63 +399,6 @@ test.describe("StoryCam session restore", () => {
     await expect(thumbnail).toHaveAttribute("src", imageDataUrl);
   });
 
-  test("shows cached recent projects immediately while a stale refresh is pending", async ({ page }) => {
-    let recentProjectCalls = 0;
-    let releaseRecentProjects!: () => void;
-    let markStaleRefreshStarted!: () => void;
-    const staleRefreshCanResolve = new Promise<void>((resolve) => {
-      releaseRecentProjects = resolve;
-    });
-    const staleRefreshStarted = new Promise<void>((resolve) => {
-      markStaleRefreshStarted = resolve;
-    });
-
-    await mockAuthenticated(page);
-    await page.route("**/api/storycam-sessions/current", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        status: 200,
-        body: JSON.stringify({ ok: true, restored: false })
-      });
-    });
-    await page.route("**/api/storycam-sessions/recent?*", async (route) => {
-      recentProjectCalls += 1;
-
-      if (recentProjectCalls > 1) {
-        markStaleRefreshStarted();
-        await staleRefreshCanResolve;
-      }
-
-      await route.fulfill({
-        contentType: "application/json",
-        status: 200,
-        body: JSON.stringify({
-          ok: true,
-          projects: [
-            recentProject({
-              sessionId: recentProjectCalls === 1 ? "cached-session" : "refreshed-session",
-              title: recentProjectCalls === 1 ? "缓存项目" : "刷新项目"
-            })
-          ]
-        })
-      });
-    });
-
-    await page.goto("/");
-    await expect(page.getByRole("button", { name: "继续创作 缓存项目" })).toBeVisible();
-    await staleRecentProjectsCache(page);
-
-    await page.reload();
-    await staleRefreshStarted;
-
-    await expect(page.getByRole("button", { name: "继续创作 缓存项目" })).toBeVisible();
-    await expect(page.getByText("正在载入最近项目。")).toBeHidden();
-
-    releaseRecentProjects();
-
-    await expect(page.getByRole("button", { name: "继续创作 刷新项目" })).toBeVisible();
-  });
-
   test("restores the latest story world on a direct downstream route without generating again", async ({ page }) => {
     let storyWorldCalls = 0;
     await mockAuthenticated(page);
@@ -504,7 +447,7 @@ test.describe("StoryCam session restore", () => {
     await expect(page).toHaveURL(/\/storycam\/core-storyboard$/);
   });
 
-  test("keeps restored media signed URLs from session storage across a page reload", async ({ page }) => {
+  test("refreshes restored media signed URLs from network across a page reload", async ({ page }) => {
     let currentRestoreCalls = 0;
     let selectedRestoreCalls = 0;
     await mockAuthenticated(page);
@@ -538,12 +481,14 @@ test.describe("StoryCam session restore", () => {
 
     await page.reload();
 
-    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", refreshedImageDataUrl);
     expect(currentRestoreCalls).toBe(1);
     await expect.poll(() => selectedRestoreCalls).toBe(1);
+    expect(await browserStorageValues(page)).not.toContain(imageDataUrl);
+    expect(await browserStorageValues(page)).not.toContain(refreshedImageDataUrl);
   });
 
-  test("renders cached core storyboard immediately while network restore is pending", async ({ page }) => {
+  test("waits for network restore after reload without showing stale cached storyboard media", async ({ page }) => {
     let releaseNetworkRestore!: () => void;
     let markNetworkRestoreStarted!: () => void;
     const networkRestoreCanResolve = new Promise<void>((resolve) => {
@@ -585,12 +530,15 @@ test.describe("StoryCam session restore", () => {
     await page.reload();
     await networkRestoreStarted;
 
-    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
-    await expect(page.getByText("正在恢复你上次生成的故事。")).toBeHidden();
+    await expect(page.getByText("正在恢复你上次生成的故事。")).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveCount(0);
     releaseNetworkRestore();
+
+    await expect(page.getByRole("heading", { name: "核心分镜" })).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", refreshedImageDataUrl);
   });
 
-  test("clears cached storyboard when network restore confirms there is no current project", async ({ page }) => {
+  test("does not show stale cached storyboard when network restore confirms there is no current project", async ({ page }) => {
     let currentRestoreCalls = 0;
     let selectedRestoreCalls = 0;
     let releaseSelectedRestore!: () => void;
@@ -631,19 +579,19 @@ test.describe("StoryCam session restore", () => {
 
     await page.reload();
     await selectedRestoreStarted;
-    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
+    await expect(page.getByText("正在恢复你上次生成的故事。")).toBeVisible();
+    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveCount(0);
 
     releaseSelectedRestore();
 
     await expect(page.getByRole("heading", { name: "私人小剧场相机" })).toBeVisible();
-    await expect(page.getByText("上次项目已不可用，可以重新开始。")).toBeVisible();
     await expect(page.getByAltText("未发送短信 主分镜图")).toHaveCount(0);
     await expect(page).toHaveURL(/\/storycam\/input$/);
     expect(currentRestoreCalls).toBe(2);
     expect(selectedRestoreCalls).toBe(1);
   });
 
-  test("does not extend reused signed URL cache expiry across a network restore", async ({ page }) => {
+  test("does not persist restored signed URLs in browser storage", async ({ page }) => {
     await mockAuthenticated(page);
     await page.route("**/api/storycam-sessions/current", async (route) => {
       await route.fulfill({
@@ -670,17 +618,14 @@ test.describe("StoryCam session restore", () => {
 
     await page.goto("/storycam/core-storyboard");
     await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
-    const originalExpiresAt = await restoreCacheExpiresAt(page, "session-restored-2");
+    const storageValues = await browserStorageValues(page);
 
-    await page.waitForTimeout(1_500);
-    await page.reload();
-
-    await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
-    const refreshedExpiresAt = await restoreCacheExpiresAt(page, "session-restored-2");
-    expect(refreshedExpiresAt).toBeLessThanOrEqual(originalExpiresAt);
+    expect(storageValues).toContain('"sessionId":"session-restored-2"');
+    expect(storageValues).not.toContain(imageDataUrl);
+    expect(storageValues).not.toContain(refreshedImageDataUrl);
   });
 
-  test("refreshes restored media signed URLs after the session storage cache expires", async ({ page }) => {
+  test("refreshes restored media signed URLs after a page reload", async ({ page }) => {
     let currentRestoreCalls = 0;
     let selectedRestoreCalls = 0;
     await mockAuthenticated(page);
@@ -711,7 +656,6 @@ test.describe("StoryCam session restore", () => {
 
     await page.goto("/storycam/core-storyboard");
     await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", imageDataUrl);
-    await expireRestoreCache(page);
     await page.reload();
 
     await expect(page.getByAltText("未发送短信 主分镜图")).toHaveAttribute("src", refreshedImageDataUrl);
@@ -936,51 +880,29 @@ function recentProjectShape() {
   };
 }
 
-async function expireRestoreCache(page: Page) {
-  await page.evaluate(() => {
+async function browserStorageValues(page: Page) {
+  return page.evaluate(() => {
+    const values: string[] = [];
+
     for (let index = 0; index < window.sessionStorage.length; index += 1) {
       const key = window.sessionStorage.key(index);
+      const value = key ? window.sessionStorage.getItem(key) : null;
 
-      if (!key?.startsWith("storycam:restore:v1:session:")) {
-        continue;
+      if (value) {
+        values.push(value);
       }
+    }
 
-      const raw = window.sessionStorage.getItem(key);
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      const value = key ? window.localStorage.getItem(key) : null;
 
-      if (!raw) {
-        continue;
+      if (value) {
+        values.push(value);
       }
-
-      const entry = JSON.parse(raw) as { expiresAtMs: number };
-      entry.expiresAtMs = Date.now() - 1000;
-      window.sessionStorage.setItem(key, JSON.stringify(entry));
-    }
-  });
-}
-
-async function restoreCacheExpiresAt(page: Page, sessionId: string) {
-  return page.evaluate((targetSessionId) => {
-    const raw = window.sessionStorage.getItem(`storycam:restore:v1:session:${targetSessionId}`);
-
-    if (!raw) {
-      throw new Error("restore_cache_missing");
     }
 
-    return (JSON.parse(raw) as { expiresAtMs: number }).expiresAtMs;
-  }, sessionId);
-}
-
-async function staleRecentProjectsCache(page: Page) {
-  await page.evaluate(() => {
-    const raw = window.sessionStorage.getItem("storycam:recent-projects:v1:projects");
-
-    if (!raw) {
-      throw new Error("recent_projects_cache_missing");
-    }
-
-    const entry = JSON.parse(raw) as { fetchedAtMs: number };
-    entry.fetchedAtMs = Date.now() - 46_000;
-    window.sessionStorage.setItem("storycam:recent-projects:v1:projects", JSON.stringify(entry));
+    return values.join("\n");
   });
 }
 
