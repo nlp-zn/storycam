@@ -1,26 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearStoryCamRestoreCache, listRecentStoryCamProjects, restoreStoryCamSession } from "./storycamApi";
+import { clearStoryCamRestoreCache, getAuthStatus, listRecentStoryCamProjects, restoreStoryCamSession } from "./storycamApi";
 
 describe("storycamApi browser cache privacy", () => {
   let storedItems: Array<[string, string]>;
   let removedKeys: string[];
+  let storage: Map<string, string>;
 
   beforeEach(() => {
     storedItems = [];
     removedKeys = [];
+    storage = new Map();
 
     vi.stubGlobal("window", {
       sessionStorage: {
-        getItem: vi.fn(() => null),
-        key: vi.fn(() => null),
+        getItem: vi.fn((key: string) => storage.get(key) ?? null),
+        key: vi.fn((index: number) => Array.from(storage.keys())[index] ?? null),
         get length() {
-          return 0;
+          return storage.size;
         },
         removeItem: vi.fn((key: string) => {
           removedKeys.push(key);
+          storage.delete(key);
         }),
         setItem: vi.fn((key: string, value: string) => {
           storedItems.push([key, value]);
+          storage.set(key, value);
         })
       }
     });
@@ -101,5 +105,53 @@ describe("storycamApi browser cache privacy", () => {
 
     expect(storedItems).toEqual([]);
     expect(removedKeys).toEqual([]);
+  });
+
+  it("purges legacy persisted restore payloads without removing the current restore target", async () => {
+    storage.set(
+      "storycam:restore:v1:session:session-1",
+      JSON.stringify({
+        expiresAtMs: Date.now() + 60_000,
+        value: {
+          ok: true,
+          restored: true,
+          storyWorld: {
+            assetImagesByArtifactId: {
+              "asset-1": {
+                signedUrl: "https://signed.example/legacy.png?token=secret"
+              }
+            }
+          }
+        }
+      })
+    );
+    storage.set(
+      "storycam:restore:v1:current-session-id",
+      JSON.stringify({
+        sessionId: "session-1",
+        userId: "user-1"
+      })
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          authenticated: true,
+          user: {
+            email: "user@example.test",
+            id: "user-1"
+          }
+        })
+      )
+    );
+
+    await getAuthStatus();
+
+    expect(removedKeys).toContain("storycam:restore:v1:session:session-1");
+    expect(storage.has("storycam:restore:v1:session:session-1")).toBe(false);
+    expect(storage.has("storycam:restore:v1:current-session-id")).toBe(true);
+    expect(JSON.stringify(Array.from(storage.values()))).not.toContain("https://signed.example");
+    expect(JSON.stringify(Array.from(storage.values()))).not.toContain("token=secret");
   });
 });

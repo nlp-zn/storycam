@@ -488,6 +488,7 @@ export async function getAuthStatus() {
   }
 
   restoreSessionUserId = authStatus.user.id;
+  clearPersistedRestoreSessionValues();
 
   return authStatus;
 }
@@ -772,6 +773,18 @@ function clearRestoreSessionCache() {
   }
 }
 
+function clearPersistedRestoreSessionValues() {
+  try {
+    const keys = Array.from({ length: window.sessionStorage.length }, (_, index) => window.sessionStorage.key(index)).filter(
+      (key): key is string => typeof key === "string" && key.startsWith(`${restoreSessionStoragePrefix()}:`)
+    );
+
+    keys.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
 function writeRecentStoryCamProjectsCache(projects: RecentStoryCamProject[], nowMs = Date.now()) {
   const userId = currentRestoreSessionUserId();
   const expiresAtMs = recentStoryCamProjectsExpiresAt(projects, nowMs);
@@ -873,7 +886,11 @@ function deleteCurrentRestoredSessionId(sessionId: string, userId: string) {
 }
 
 function restoreSessionStorageKey(sessionId: string) {
-  return `storycam:restore:${restoreSessionCacheVersion}:session:${sessionId}`;
+  return `${restoreSessionStoragePrefix()}:${sessionId}`;
+}
+
+function restoreSessionStoragePrefix() {
+  return `storycam:restore:${restoreSessionCacheVersion}:session`;
 }
 
 function restoreSessionMediaExpiresAtById(restored: RestoreStoryCamSessionResponse, nowMs = Date.now()) {
