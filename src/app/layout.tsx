@@ -9,7 +9,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
   title: "StoryCam",
-  description: "A private story-theater camera for personal video memories.",
+  description: "A personal story-theater camera for personal video memories.",
   icons: {
     apple: [{ url: "/storycam/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
     icon: [

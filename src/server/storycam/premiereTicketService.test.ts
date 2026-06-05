@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, GenerationJobRow, Json, PremiereTicketRow } from "@/server/db/types";
+import type { Database, GenerationJobRow, PremiereTicketRow } from "@/server/db/types";
 import {
   assertPremiereTicketBudget,
   ensureAutoPremiereTicket,
@@ -28,9 +28,10 @@ describe("premiere ticket service", () => {
 
   it("reserves the first available ticket for a session and rejects image budget overage", async () => {
     const client = new FakeSupabaseClient();
-    await ensureAutoPremiereTicket(client.asSupabaseClient(), "user-1", { now: new Date("2026-05-19T00:00:00.000Z") });
+    const now = new Date("2026-05-19T00:00:00.000Z");
+    await ensureAutoPremiereTicket(client.asSupabaseClient(), "user-1", { now });
 
-    const ticket = await ensurePremiereTicketForSession(client.asSupabaseClient(), "user-1", "session-1");
+    const ticket = await ensurePremiereTicketForSession(client.asSupabaseClient(), "user-1", "session-1", { now });
 
     expect(ticket).toMatchObject({
       reserved_session_id: "session-1",

@@ -5,16 +5,25 @@ Put durable project knowledge in `docs/`; put only navigation, principles, and h
 rules here. If a rule needs examples, tables, or versioned details, it probably belongs
 in `docs/` with a link from this file.
 
-## Start Here
+## Context Loading
 
-1. Read `docs/README.md` for the current source-of-truth map.
-2. Read `docs/ARCHITECTURE.md` before backend, data, provider, storage, or job work.
-3. Read `docs/product-specs/index.md` before product behavior changes.
+StoryCam uses Harness-style progressive disclosure: this file is the agent map,
+`docs/README.md` is the documentation map, and task-specific docs are loaded only
+when needed. See `docs/references/openai-harness-engineering.md` for the local
+reference.
+
+1. Start with `docs/README.md` to choose the smallest relevant source-of-truth set.
+2. Read `docs/product-specs/index.md` before product behavior changes.
+3. Read `docs/ARCHITECTURE.md` before backend, data, provider, storage, or job work.
 4. Read `docs/SECURITY.md` before auth, storage, provider keys, logs, uploads, restore, or sharing work.
 5. Read `docs/references/providers.md` and `docs/references/local-dev.md` before provider wiring, env behavior, smoke tests, or local auth changes.
 6. Read `docs/FRONTEND.md`, `docs/DESIGN.md`, and `docs/design-docs/index.md` before UI work.
 7. Read `docs/PR_REVIEW.md` before reviewing, shipping, or changing gates.
 8. Check `docs/exec-plans/active/` before large changes. If none exists, create a short plan first.
+
+Treat `docs/exec-plans/completed/`, `docs/learning/`, and large external snapshots
+under `docs/references/` as secondary context, not current product truth, unless a
+current source-of-truth doc points there.
 
 ## Constitution
 
@@ -41,7 +50,7 @@ in `docs/` with a link from this file.
 
 ## Product North Star
 
-StoryCam is an AI private story-theater product for ordinary users. It is not an
+StoryCam is an AI personal story-theater product for ordinary users. It is not an
 industrial short-drama production backend, a professional shot-table tool, or a public
 content marketplace.
 

@@ -7,6 +7,7 @@ References are local context for agents. They are not product specs unless linke
 - `openai-harness-engineering.md` — local summary of the OpenAI harness engineering article and how StoryCam applies it.
 - `local-dev.md` — local development commands, mock flow, and seed data notes.
 - `providers.md` — provider mode matrix; real provider smoke tests are opt-in and secret-gated.
+- `inference-sh.md` — Inference.sh SDK and StoryCam image-provider reference behavior.
 - `seedance/seedance-2-series-tutorial.md` — local Doubao Seedance 2.0 series reference snapshot.
 - `seedance/seedance-2-prompt-guide.md` — local Doubao Seedance 2.0 prompt reference snapshot.
 - `seedance/seedance-2-video-generation-tutorial.md` — local Doubao Seedance 2.0 video-generation reference snapshot.
@@ -17,5 +18,6 @@ References are local context for agents. They are not product specs unless linke
 
 - Keep references concise unless the source itself must be preserved.
 - Summaries should link to the original source.
+- External snapshots may contain upstream-root links such as `/docs/...`; treat those as source-site paths, not repository-relative StoryCam links.
 - Do not expose internal professional references directly in the user UI unless a product spec explicitly says so.
 - Prefer the source summary before opening large external snapshots.

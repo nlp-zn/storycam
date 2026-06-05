@@ -1,0 +1,20 @@
+StoryCam
+Copyright (c) 2026 StoryCam contributors
+
+StoryCam includes a local reference snapshot of Shanyin Director Master under:
+
+  docs/references/shanyin-director-master/
+
+That snapshot is retained as internal director-methodology reference material and carries
+its own MIT license:
+
+  docs/references/shanyin-director-master/LICENSE
+
+StoryCam's user-facing product should translate that methodology into ordinary creator
+language and must not expose professional shot tables, prompt packets, or provider payloads
+to ordinary users.
+
+Documentation screenshots and Bilibili cover images under `docs/design-docs/assets/` are
+included as project documentation assets for StoryCam. Do not treat third-party marks,
+platform UI, or public-channel artwork shown inside those images as separately licensed for
+reuse outside StoryCam documentation.

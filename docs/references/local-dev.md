@@ -39,7 +39,7 @@ Progressive gates:
 
 - `scripts/check-local.sh`: lint, typecheck, and unit tests. This is the local pre-push gate.
 - `scripts/check-pr.sh`: local gate plus production build. GitHub runs this for PRs.
-- `scripts/check-dev.sh`: PR gate plus Playwright E2E and visual QA. GitHub runs this after merge to `dev`.
+- `scripts/check-dev.sh`: PR gate plus Playwright E2E and visual QA. GitHub runs this after merge to `dev`. Local gate runs set `STORYCAM_E2E_REUSE_SERVER=0` so Playwright does not reuse an already-running dev server with stale environment variables.
 - `scripts/check-release.sh`: dev gate plus mock verification and dependency audit. GitHub runs this after promotion to `main`.
 - `scripts/pr-ready.sh`: compatibility alias for `check-pr.sh`; set `PR_READY_E2E=1` to run the dev gate.
 
@@ -275,7 +275,7 @@ Do not commit Google OAuth client secrets. Keep them in the Supabase dashboard f
    pnpm dev
    ```
 
-5. Open the app, sign in with Google, and run the private story flow:
+5. Open the app, sign in with Google, and run the personal story flow:
 
    ```text
    input idea/photo

@@ -114,8 +114,6 @@ ordinary users.
 - `storage_path`
 - `source`
 - `linked_artifact_id`
-- `source_media_asset_id`
-- `provider_reference_expires_at`
 - `created_at`
 - `deleted_at`
 

@@ -18,6 +18,7 @@
 - Use private Supabase Storage buckets.
 - Do not create public sharing links in Phase 1.
 - Preview media with short-lived signed URLs or an authenticated proxy.
+- The browser may render short-lived signed URLs, but client caches must keep them in memory only; do not persist signed URLs in `localStorage` or `sessionStorage`.
 - Provider reference media uses server-created signed URLs with a separate TTL; do not send localhost Storage URLs to external providers.
 - Delete session media from Storage when deleting a session.
 

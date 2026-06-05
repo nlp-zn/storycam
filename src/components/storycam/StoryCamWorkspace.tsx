@@ -147,7 +147,6 @@ export function StoryCamWorkspace() {
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const [storyboardStatus, setStoryboardStatus] = useState<StoryboardStatus>("idle");
-  const [storyboardMessage, setStoryboardMessage] = useState("确认故事世界后才能生成核心分镜。");
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(() =>
     typeof window === "undefined" ? null : stepIndexFromPath(window.location.pathname)
   );
@@ -158,7 +157,6 @@ export function StoryCamWorkspace() {
   const [storyboardGeneration, setStoryboardGeneration] = useState<StoryboardGenerationState>({ kind: "idle" });
   const [clipGeneration, setClipGeneration] = useState<ClipGenerationState>({ kind: "idle" });
   const [storyWorldAssetImageJobs, setStoryWorldAssetImageJobs] = useState<Record<string, string>>({});
-  const [coreGroupTargetCount, setCoreGroupTargetCount] = useState<1 | 2 | 3>(1);
   const imagePollAttemptsRef = useRef<Record<string, number>>({});
   const storyWorldAssetImagePollAttemptsRef = useRef<Record<string, number>>({});
   const videoPollAttemptsRef = useRef<Record<string, number>>({});
@@ -327,7 +325,6 @@ export function StoryCamWorkspace() {
     setStoryWorldAssetImageJobs({});
     setStoryWorldConfirmed(restored.storyWorldConfirmed);
     setStoryboard(restored.storyboard);
-    setCoreGroupTargetCount(restored.coreGroupTargetCount);
     setVideoAspectRatio(restored.videoAspectRatio ?? restored.storyWorld.videoAspectRatio ?? defaultStoryCamVideoAspectRatio);
     setVideoModel(parseStoryCamVideoModel(restored.clipJob?.providerName) ?? defaultStoryCamVideoModel);
     setSelectedCoreGroupIndex(restored.storyboard ? 0 : null);
@@ -343,11 +340,6 @@ export function StoryCamWorkspace() {
     setSelectedStepIndex(targetStepIndex === restoredStepIndex ? null : targetStepIndex);
     setWorkspaceNotice(null);
     setStoryboardStatus(restored.storyboard ? "ready" : "idle");
-    setStoryboardMessage(
-      restored.storyboard
-        ? "已恢复核心分镜：1 个 15 秒内核心分镜组。"
-        : "已恢复上次生成的故事世界，请确认后继续。"
-    );
     if (currentPathStepIndex !== targetStepIndex) {
       syncStepPath(targetStepIndex);
     }
@@ -362,7 +354,10 @@ export function StoryCamWorkspace() {
     }
   }
 
-  function clearRestoredWorkspaceState() {
+  function clearRestoredWorkspaceState(options: { workspaceNotice?: string | null } = {}) {
+    const nextWorkspaceNotice =
+      options.workspaceNotice === undefined ? "上次项目已不可用，可以重新开始。" : options.workspaceNotice;
+
     storyWorldRequestIdRef.current += 1;
     storyboardRequestIdRef.current += 1;
     clipRequestIdRef.current += 1;
@@ -393,13 +388,11 @@ export function StoryCamWorkspace() {
     setStoryWorldGeneration({ kind: "idle" });
     setStoryboardGeneration({ kind: "idle" });
     setClipGeneration({ kind: "idle" });
-    setCoreGroupTargetCount(1);
     setVideoAspectRatio(defaultStoryCamVideoAspectRatio);
     setVideoModel(defaultStoryCamVideoModel);
     setSelectedStepIndex(0);
-    setWorkspaceNotice("上次项目已不可用，可以重新开始。");
+    setWorkspaceNotice(nextWorkspaceNotice);
     setStoryboardStatus("idle");
-    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
     syncStepPath(0);
   }
 
@@ -508,11 +501,9 @@ export function StoryCamWorkspace() {
         }
 
         if (!restored.restored) {
-          if (cachedRestore.restored) {
-            clearRestoredWorkspaceState();
-          } else {
-            setIsRestoringSession(false);
-          }
+          clearRestoredWorkspaceState({
+            workspaceNotice: cachedRestore.restored ? undefined : null
+          });
           return;
         }
 
@@ -580,9 +571,7 @@ export function StoryCamWorkspace() {
           setClipJob((current) => (current?.id === response.job.id ? response.job : current));
         }
       } catch {
-        if (!canceled) {
-          setStoryboardMessage("片段已生成，但预览链接刷新失败。可以稍后再试。");
-        }
+        // Clip preview hydration is best-effort; keep the existing saved job state.
       }
     }
 
@@ -807,7 +796,6 @@ export function StoryCamWorkspace() {
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
-    setStoryboardMessage("故事雏形已准备好，请先确认剧本、人物和地点。");
     notifyPremiereTicketStateChanged();
     syncStepPath(1);
   }
@@ -837,7 +825,6 @@ export function StoryCamWorkspace() {
     setIsStoryWorldEditorOpen(false);
     setSelectedStepIndex(null);
     setStoryboardStatus("idle");
-    setStoryboardMessage("正在生成故事雏形。");
     setStoryboardGeneration({ kind: "idle" });
     setClipGeneration({ kind: "idle" });
     setStoryWorldGeneration({ kind: "pending", request });
@@ -963,7 +950,6 @@ export function StoryCamWorkspace() {
 
     setStoryWorldConfirmed(true);
     setIsStoryWorldEditorOpen(false);
-    setCoreGroupTargetCount(1);
     setStoryboard(null);
     setSelectedCoreGroupIndex(null);
     setExpansion(null);
@@ -974,7 +960,6 @@ export function StoryCamWorkspace() {
     setClipGeneration({ kind: "idle" });
     setSelectedStepIndex(null);
     setStoryboardStatus("generating");
-    setStoryboardMessage("正在生成核心分镜。");
     setStoryboardGeneration({ kind: "pending", request });
     syncStepPath(2);
     void runStoryboardGeneration(request);
@@ -993,7 +978,6 @@ export function StoryCamWorkspace() {
     abandonClipGeneration();
     setIsStoryWorldEditorOpen(false);
     setStoryboardStatus((current) => staleStoryboardAfterStoryWorldEdit(current));
-    setStoryboardMessage("分镜已过期，需要重新确认故事世界。");
     syncStepPath(1);
   }
 
@@ -1007,7 +991,6 @@ export function StoryCamWorkspace() {
 
     try {
       setIsDeletingStory(true);
-      setStoryboardMessage("正在删除这个故事。");
       abandonClipGeneration();
 
       if (runningClipJob?.status === "queued" || runningClipJob?.status === "running") {
@@ -1031,10 +1014,9 @@ export function StoryCamWorkspace() {
       setClipGeneration({ kind: "idle" });
       setSelectedStepIndex(null);
       setStoryboardStatus("idle");
-      setStoryboardMessage("这个故事已删除，可以重新开始。");
       setWorkspaceNotice("这个故事已删除，可以重新开始。");
     } catch {
-      setStoryboardMessage("删除失败，请稍后再试。");
+      setWorkspaceNotice("删除失败，请稍后再试。");
     } finally {
       setIsDeletingStory(false);
     }
@@ -1043,7 +1025,6 @@ export function StoryCamWorkspace() {
   async function runStoryboardGeneration(request: StoryboardGenerationRequest) {
     try {
       setStoryboardStatus("generating");
-      setStoryboardMessage("正在生成核心分镜。");
       void ensureStoryWorldAssetImages(request.storyWorld);
       const storyboard = await createStoryboard({
         confirmedArtifactVersions: confirmedArtifactVersionsFromStoryWorld(request.storyWorld),
@@ -1068,9 +1049,6 @@ export function StoryCamWorkspace() {
       setSelectedStepIndex(null);
       setStoryboardGeneration({ kind: "idle" });
       setStoryboardStatus("ready");
-      setStoryboardMessage(
-        `分镜已准备好：1 个核心分镜组，控制在 ${storyboard.durationPlan.plannedDurationSeconds} 秒内。`
-      );
       syncStepPath(2);
       void submitInitialStoryboardImage(storyboard, request.requestId);
     } catch {
@@ -1079,7 +1057,6 @@ export function StoryCamWorkspace() {
       }
 
       setStoryboardStatus("error");
-      setStoryboardMessage("核心分镜生成失败，可以重试或返回故事世界。");
       setStoryboardGeneration({
         kind: "error",
         message: "核心分镜生成失败，可以重试或返回故事世界。",
@@ -1117,7 +1094,7 @@ export function StoryCamWorkspace() {
         applyStoryWorldAssetImageResult(artifactId, item.image);
       }
     } catch {
-      setStoryboardMessage("分镜脚本会先生成，资产图稍后可回到故事世界重试。");
+      // Asset image generation can be retried from the story world when needed.
     } finally {
       inFlightKeys.forEach((key) => inFlight.delete(key));
     }
@@ -1136,7 +1113,6 @@ export function StoryCamWorkspace() {
 
     setStoryboardGeneration({ kind: "pending", request });
     setStoryboardStatus("generating");
-    setStoryboardMessage("正在生成核心分镜。");
     setSelectedStepIndex(null);
     syncStepPath(2);
     void runStoryboardGeneration(request);
@@ -1146,7 +1122,6 @@ export function StoryCamWorkspace() {
     abandonStoryboardGeneration();
     setSelectedStepIndex(1);
     setStoryboardStatus("idle");
-    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
     syncStepPath(1);
   }
 
@@ -1158,7 +1133,6 @@ export function StoryCamWorkspace() {
     storyboardRequestIdRef.current += 1;
     setStoryboardGeneration({ kind: "idle" });
     setStoryboardStatus("idle");
-    setStoryboardMessage("确认故事世界后才能生成核心分镜。");
   }
 
   function isActiveStoryboardRequest(requestId: number) {
@@ -1193,20 +1167,12 @@ export function StoryCamWorkspace() {
             reason: "provider_failed",
             status: "placeholder"
           });
-          setStoryboardMessage("资产图暂时没有准备好，第 01 帧主分镜图可稍后手动重试。");
           return;
         }
-
-        setStoryboardMessage("分镜脚本已准备好，等待角色/场景资产图完成后生成第 01 帧主分镜图。");
         return;
       }
 
       delete initialStoryboardImageRetryAttemptsRef.current[requestId];
-      setStoryboardMessage(
-        result.image.status === "ready"
-          ? "分镜脚本和第 01 帧主分镜图已准备好。"
-          : "分镜脚本已准备好，正在生成第 01 帧主分镜图。"
-      );
     } catch {
       if (!isActiveInitialStoryboardImageRequest(nextStoryboard, requestId)) {
         return;
@@ -1218,7 +1184,6 @@ export function StoryCamWorkspace() {
         reason: "provider_failed",
         status: "placeholder"
       });
-      setStoryboardMessage("分镜脚本已准备好，第 01 帧主分镜图生成失败，可稍后重试。");
     }
   }
 
@@ -1275,14 +1240,12 @@ export function StoryCamWorkspace() {
     }
 
     if (!canAttemptCoreGroupExpansion(storyboard, index)) {
-      setStoryboardMessage("第 01 帧主分镜图还在生成中，完成后再展开 8 张扩展分镜。");
       return;
     }
 
     try {
       setSelectedCoreGroupIndex(index);
       setIsExpansionLoading(true);
-      setStoryboardMessage("正在扩展当前核心分镜组。");
       const nextExpansion = await expandStoryboardGroup({
         coreStoryboardGroupId: coreArtifact.id,
         sessionId: storyboard.sessionId,
@@ -1314,9 +1277,8 @@ export function StoryCamWorkspace() {
       setClipJob(null);
       setFinalWork(null);
       setSelectedStepIndex(null);
-      setStoryboardMessage(`已提交 ${nextExpansion.expansionCards.length} 张扩展分镜图，全部完成后才能生成片段。`);
     } catch {
-      setStoryboardMessage("扩展分镜生成失败，生成片段前需要补齐 8 张扩展图。");
+      // Expansion errors leave the current storyboard unchanged.
     } finally {
       setIsExpansionLoading(false);
     }
@@ -1344,9 +1306,8 @@ export function StoryCamWorkspace() {
       });
 
       applyStoryboardFrameImage(index, frameNumber, result.image);
-      setStoryboardMessage(`已重新提交第 ${String(frameNumber).padStart(2, "0")} 帧生成。`);
     } catch {
-      setStoryboardMessage("这一帧重生成失败，请稍后再试。");
+      // Regeneration is optional; keep the existing frame image.
     } finally {
       setRegeneratingFrameKey(null);
     }
@@ -1383,7 +1344,6 @@ export function StoryCamWorkspace() {
     if (readyCount < requiredExpandedFrameCount) {
       setClipGeneration({ kind: "idle" });
       setClipConfirmationSummary(null);
-      setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
       return;
     }
 
@@ -1399,7 +1359,6 @@ export function StoryCamWorkspace() {
 
     setClipConfirmationSummary(null);
     setClipGeneration({ kind: "pending", request });
-    setStoryboardMessage("正在创建片段生成任务。");
     syncStepPath(3);
     void runClipGeneration(request);
   }
@@ -1420,7 +1379,6 @@ export function StoryCamWorkspace() {
 
     if (readyCount < requiredExpandedFrameCount) {
       setClipConfirmationSummary(null);
-      setStoryboardMessage(`需要先补齐 8 张扩展分镜图。当前已完成 ${readyCount} / 8。`);
       return;
     }
 
@@ -1455,14 +1413,11 @@ export function StoryCamWorkspace() {
       });
       setClipGeneration({ kind: "idle" });
       setSelectedStepIndex(null);
-      setStoryboardMessage("片段生成任务已创建。");
       syncStepPath(3);
     } catch {
       if (!isActiveClipRequest(request.requestId)) {
         return;
       }
-
-      setStoryboardMessage("片段生成任务创建失败，可以重试或返回核心分镜。");
       setClipGeneration({
         kind: "error",
         message: "片段生成任务创建失败，可以重试或返回核心分镜。",
@@ -1483,9 +1438,8 @@ export function StoryCamWorkspace() {
     try {
       const response = await cancelGenerationJob(clipJob.id);
       setClipJob((current) => (current ? { ...current, status: response.status } : current));
-      setStoryboardMessage("已取消片段生成任务。");
     } catch {
-      setStoryboardMessage("取消失败，请稍后再试。");
+      // Cancellation is best-effort once the job has been submitted.
     }
   }
 
@@ -1501,7 +1455,6 @@ export function StoryCamWorkspace() {
       setFinalWork(null);
       resetFinalWorkSaveState();
       setClipGeneration({ kind: "pending", request });
-      setStoryboardMessage("正在创建片段生成任务。");
       setSelectedStepIndex(null);
       syncStepPath(3);
       void runClipGeneration(request);
@@ -1578,7 +1531,6 @@ export function StoryCamWorkspace() {
       finalWorkSaveFailedKeyRef.current = null;
       setFinalWorkSaveError(null);
       setSelectedStepIndex(null);
-      setStoryboardMessage("最终作品已生成，并保存到账号内预览。");
       notifyPremiereTicketStateChanged();
       syncStepPath(3);
       return nextFinalWork;
@@ -1589,7 +1541,6 @@ export function StoryCamWorkspace() {
 
       finalWorkSaveFailedKeyRef.current = saveKey;
       setFinalWorkSaveError("最终作品保存失败，请重试。");
-      setStoryboardMessage("最终作品保存失败，请重试。");
       return null;
     } finally {
       if (finalWorkActiveSaveKeyRef.current === saveKey) {
@@ -1630,7 +1581,6 @@ export function StoryCamWorkspace() {
         storyboardRequestIdRef.current += 1;
         setStoryboardGeneration({ kind: "idle" });
         setStoryboardStatus("idle");
-        setStoryboardMessage("确认故事世界后才能生成核心分镜。");
       }
 
       if ((stepIndex === null || stepIndex <= 2) && clipGeneration.kind !== "idle") {
@@ -1824,7 +1774,6 @@ function StoryWorldPendingReviewShell({
   onBackToInput,
   onRetry
 }: StoryWorldPendingReviewShellProps) {
-  const { request } = generationState;
   const isPending = generationState.kind === "pending";
 
   return (

@@ -81,5 +81,6 @@ It must not include:
 - Store bucket/key in `media_assets`.
 - Generate short-lived signed URLs only when needed.
 - Do not log signed URLs.
+- Do not persist signed URLs in browser storage; client-side caches that include signed media URLs must stay in memory.
 - Do not store long-lived public URLs in metadata.
 - Provider reference URLs have a separate TTL and must not be returned to the client as UI preview URLs.

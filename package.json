@@ -1,7 +1,25 @@
 {
   "name": "storycam",
-  "version": "0.1.0",
+  "version": "0.1.5.0",
+  "description": "AI personal story-theater web app with server-side generation providers, durable jobs, and private media storage.",
+  "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nlp-zn/storycam.git"
+  },
+  "homepage": "https://storycam.znbuild.com",
+  "bugs": {
+    "url": "https://github.com/nlp-zn/storycam/issues"
+  },
+  "keywords": [
+    "ai-video",
+    "storytelling",
+    "nextjs",
+    "supabase",
+    "agentic-full-stack",
+    "storyboard"
+  ],
   "packageManager": "pnpm@10.22.0",
   "scripts": {
     "dev": "next dev",
@@ -20,7 +38,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:api": "vitest run tests/api --passWithNoTests",
-    "test:e2e": "playwright test tests/e2e/storycam.sanity.e2e.ts tests/e2e/storycam.auth.e2e.ts tests/e2e/storycam-input.e2e.ts tests/e2e/storycam-story-world.e2e.ts tests/e2e/storycam-storyboard.e2e.ts tests/e2e/storycam-expansion.e2e.ts tests/e2e/storycam-generate-clip.e2e.ts tests/e2e/storycam-final-work.e2e.ts",
+    "test:e2e": "playwright test tests/e2e/storycam.sanity.e2e.ts tests/e2e/storycam.auth.e2e.ts tests/e2e/storycam-input.e2e.ts tests/e2e/storycam-story-world.e2e.ts tests/e2e/storycam-storyboard.e2e.ts tests/e2e/storycam-expansion.e2e.ts tests/e2e/storycam-generate-clip.e2e.ts tests/e2e/storycam-final-work.e2e.ts tests/e2e/storycam-restore.e2e.ts",
     "qa:visual": "playwright test tests/e2e/storycam.visual.e2e.ts"
   },
   "dependencies": {
