@@ -1,10 +1,23 @@
 # StoryCam
 
-[简体中文](README.zh-CN.md)
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+[![CI](https://github.com/nlp-zn/storycam/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/nlp-zn/storycam/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-14b8a6.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-111827.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-auth%20%2B%20storage-3fcf8e.svg)](https://supabase.com/)
+
+[![Live App](https://img.shields.io/badge/Live%20App-storycam.znbuild.com-ff4b89.svg)](https://storycam.znbuild.com)
+[![Bilibili Series](https://img.shields.io/badge/Bilibili-StoryCam%20build%20series-00a7e0.svg)](https://space.bilibili.com/511795462)
+[![Course](https://img.shields.io/badge/Course-long--form%20case%20study-f59e0b.svg)](https://portfolio.znbuild.com/tutorial/storycam/index.html)
+[![Docs](https://img.shields.io/badge/Docs-project%20map-64748b.svg)](docs/README.md)
 
 StoryCam is a web-first AI private story theater: it turns a personal idea and optional photos into a confirmed story world, a storyboard, a generated clip, and an account-scoped final work preview.
 
 It is not an industrial short-drama backend. The product is built for ordinary users who want to make a small story feel like their own memory, while the system keeps professional directing logic, prompt packets, provider payloads, signed URLs, and model parameters behind server-side boundaries.
+
+**Tags:** `ai-video` `storytelling` `agentic-full-stack` `nextjs` `supabase` `storyboard`
 
 | Story Input | Discovery Samples |
 | --- | --- |

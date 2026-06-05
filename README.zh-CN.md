@@ -1,10 +1,23 @@
 # StoryCam
 
-[English](README.md)
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+[![CI](https://github.com/nlp-zn/storycam/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/nlp-zn/storycam/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-14b8a6.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-111827.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178c6.svg)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-auth%20%2B%20storage-3fcf8e.svg)](https://supabase.com/)
+
+[![线上应用](https://img.shields.io/badge/线上应用-storycam.znbuild.com-ff4b89.svg)](https://storycam.znbuild.com)
+[![B 站系列](https://img.shields.io/badge/B%20站-StoryCam%20实战系列-00a7e0.svg)](https://space.bilibili.com/511795462)
+[![长课件](https://img.shields.io/badge/长课件-完整案例复盘-f59e0b.svg)](https://portfolio.znbuild.com/tutorial/storycam/index.html)
+[![文档](https://img.shields.io/badge/文档-项目地图-64748b.svg)](docs/README.md)
 
 StoryCam 是一个 Web 优先的 AI 私人小剧场相机：用户输入一个私人想法和可选照片后，系统会生成并确认故事世界、核心分镜、视频片段，最后形成账号内可保存和预览的作品。
 
 它不是工业化短剧生产后台，也不是给专业导演使用的镜头表工具。StoryCam 面向普通用户，把复杂的导演逻辑、提示词包、provider payload、签名 URL 和模型参数都留在服务端边界内。
+
+**标签：** `ai-video` `storytelling` `agentic-full-stack` `nextjs` `supabase` `storyboard`
 
 | 输入故事 | 灵感样片 |
 | --- | --- |
