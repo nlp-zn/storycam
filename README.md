@@ -6,7 +6,9 @@ StoryCam is a web-first AI private story theater: it turns a personal idea and o
 
 It is not an industrial short-drama backend. The product is built for ordinary users who want to make a small story feel like their own memory, while the system keeps professional directing logic, prompt packets, provider payloads, signed URLs, and model parameters behind server-side boundaries.
 
-<img src="./docs/design-docs/assets/storycam-core-storyboard.png" alt="StoryCam core storyboard screenshot" width="100%">
+| Story Input | Discovery Samples |
+| --- | --- |
+| <img src="./docs/design-docs/assets/storycam-home-input-banner.png" alt="StoryCam story input workspace" width="100%"> | <img src="./docs/design-docs/assets/storycam-home-discovery-banner.png" alt="StoryCam discovery sample wall" width="100%"> |
 
 ## Learning Materials
 

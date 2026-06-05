@@ -6,7 +6,9 @@ StoryCam 是一个 Web 优先的 AI 私人小剧场相机：用户输入一个�
 
 它不是工业化短剧生产后台，也不是给专业导演使用的镜头表工具。StoryCam 面向普通用户，把复杂的导演逻辑、提示词包、provider payload、签名 URL 和模型参数都留在服务端边界内。
 
-<img src="./docs/design-docs/assets/storycam-core-storyboard.png" alt="StoryCam 核心分镜截图" width="100%">
+| 输入故事 | 灵感样片 |
+| --- | --- |
+| <img src="./docs/design-docs/assets/storycam-home-input-banner.png" alt="StoryCam 输入工作台" width="100%"> | <img src="./docs/design-docs/assets/storycam-home-discovery-banner.png" alt="StoryCam 灵感样片墙" width="100%"> |
 
 ## 实战学习资料
 
