@@ -1,6 +1,6 @@
 {
   "name": "storycam",
-  "version": "0.1.0",
+  "version": "0.1.4.1",
   "description": "AI private story-theater web app with server-side generation providers, durable jobs, and private media storage.",
   "license": "MIT",
   "private": true,

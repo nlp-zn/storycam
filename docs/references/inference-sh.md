@@ -72,7 +72,7 @@ For storyboard images, StoryCam uses Inference.sh's `openai/gpt-image-2` app wit
 ```
 
 The StoryCam server maps ready character and scene asset signed URLs into that `images` array, while the frame-specific storyboard instruction remains in `prompt`.
-When a reference URL is local or private-network scoped, such as `http://127.0.0.1:54321/...`, the StoryCam server downloads it first and sends a data URI to the Inference.sh SDK. Inference.sh automatically uploads data URIs, which keeps local Supabase development compatible with cloud workers.
+At the adapter level, local or private-network reference URLs can be downloaded server-side and sent to the Inference.sh SDK as data URIs. Current StoryCam storyboard-reference routes are stricter: provider reference URLs must be public HTTPS signed URLs from hosted storage. Local Supabase Storage URLs are valid for mock/local UI work, not real reference-image provider calls.
 
 ## Task Status And Output
 
