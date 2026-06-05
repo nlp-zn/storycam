@@ -31,6 +31,7 @@ Include:
 - Provider calls stay server-side.
 - Supabase service-role keys stay server-side.
 - Storage buckets are private by default.
+- Signed media URLs may be rendered by the browser, but must not be persisted in browser storage.
 - Public sharing links are not part of Phase 1.
 - Real generation is protected by auth, origin checks, quotas, and premiere-ticket budgets.
 

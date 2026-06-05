@@ -417,20 +417,13 @@ type RestoreSessionCacheEntry = {
   value?: RestoreStoryCamSessionResponse;
 };
 
-type StoredRestoreSessionCacheEntry = {
-  expiresAtMs: number;
-  mediaExpiresAtById: Record<string, number>;
-  userId: string;
-  value: RestoreStoryCamSessionResponse;
-};
-
 export type CachedRecentStoryCamProjects = {
   expiresAtMs: number;
   fetchedAtMs: number;
   projects: RecentStoryCamProject[];
 };
 
-type StoredRecentStoryCamProjectsCacheEntry = CachedRecentStoryCamProjects & {
+type RecentStoryCamProjectsCacheEntry = CachedRecentStoryCamProjects & {
   userId: string;
 };
 
@@ -454,7 +447,6 @@ type CacheableRestoreMedia = {
 type RestoreStoryCamSessionOptions = {
   forceNetwork?: boolean;
   markCurrent?: boolean;
-  persist?: boolean;
   stabilizeMediaUrls?: boolean;
 };
 
@@ -468,6 +460,7 @@ const recentProjectsStorageKey = `storycam:recent-projects:${recentProjectsCache
 const recentProjectsCacheTtlMs = 5 * 60_000;
 export const recentProjectsRefreshIntervalMs = 45_000;
 let restoreSessionUserId: string | null = null;
+let recentStoryCamProjectsCache: RecentStoryCamProjectsCacheEntry | null = null;
 
 export async function getAuthStatus() {
   const response = await fetch("/api/auth/me", { cache: "no-store" });
@@ -495,6 +488,7 @@ export async function getAuthStatus() {
   }
 
   restoreSessionUserId = authStatus.user.id;
+  clearPersistedRestoreSessionValues();
 
   return authStatus;
 }
@@ -512,8 +506,7 @@ export async function restoreCurrentStoryCamSession() {
     try {
       const restored = await restoreStoryCamSessionValue(currentSessionId, {
         forceNetwork: true,
-        markCurrent: true,
-        persist: true
+        markCurrent: true
       });
 
       if (!restored.restored) {
@@ -547,8 +540,7 @@ export async function restoreCurrentStoryCamSession() {
     const cachedEntry = readRestoreSessionValue(restored.sessionId);
     const stabilized = stabilizeRestoreSessionMediaUrls(restored, cachedEntry?.value, cachedEntry?.mediaExpiresAtById);
     writeRestoreSessionValue(restored.sessionId, stabilized, {
-      markCurrent: true,
-      persist: true
+      markCurrent: true
     });
     return stabilized;
   }
@@ -613,7 +605,7 @@ export async function getDiscoverySampleAssets(options: { signal?: AbortSignal }
 }
 
 export function readCachedRecentStoryCamProjects(nowMs = Date.now()): CachedRecentStoryCamProjects | null {
-  const stored = readStoredRecentStoryCamProjectsCache();
+  const stored = readRecentStoryCamProjectsMemoryCache();
 
   if (!stored) {
     return null;
@@ -635,8 +627,7 @@ export function isRecentStoryCamProjectsCacheStale(cached: CachedRecentStoryCamP
 
 export async function restoreStoryCamSession(sessionId: string) {
   return restoreStoryCamSessionValue(sessionId, {
-    markCurrent: true,
-    persist: true
+    markCurrent: true
   });
 }
 
@@ -644,7 +635,6 @@ export async function refreshStoryCamSessionRestore(sessionId: string) {
   return restoreStoryCamSessionValue(sessionId, {
     forceNetwork: true,
     markCurrent: true,
-    persist: true,
     stabilizeMediaUrls: false
   });
 }
@@ -654,7 +644,6 @@ async function restoreStoryCamSessionValue(
   options: RestoreStoryCamSessionOptions = {}
 ) {
   const markCurrent = options.markCurrent ?? true;
-  const persist = options.persist ?? true;
   const cached = restoreSessionCache.get(sessionId);
   const nowMs = Date.now();
 
@@ -663,36 +652,7 @@ async function restoreStoryCamSessionValue(
       writeCurrentRestoredSessionId(sessionId);
     }
 
-    if (persist && cached.value) {
-      writeStoredRestoreSessionValue(sessionId, {
-        expiresAtMs: cached.expiresAtMs,
-        mediaExpiresAtById: cached.mediaExpiresAtById ?? {},
-        userId: currentRestoreSessionUserId(),
-        value: cached.value
-      });
-    }
-
     return cached.promise;
-  }
-
-  const stored = persist && !options.forceNetwork ? readRestoreSessionValue(sessionId, nowMs) : null;
-
-  if (stored) {
-    const promise = Promise.resolve(stored.value);
-
-    restoreSessionCache.set(sessionId, {
-      expiresAtMs: stored.expiresAtMs,
-      mediaExpiresAtById: stored.mediaExpiresAtById,
-      promise,
-      userId: stored.userId,
-      value: stored.value
-    });
-
-    if (markCurrent) {
-      writeCurrentRestoredSessionId(sessionId);
-    }
-
-    return promise;
   }
 
   const cachedEntry = readRestoreSessionValue(sessionId);
@@ -705,7 +665,7 @@ async function restoreStoryCamSessionValue(
         options.stabilizeMediaUrls === false
           ? restored
           : stabilizeRestoreSessionMediaUrls(restored, cachedValue, mediaExpiresAtById);
-      writeRestoreSessionValue(sessionId, stabilized, { markCurrent, persist });
+      writeRestoreSessionValue(sessionId, stabilized, { markCurrent });
       return stabilized;
     })
     .catch((error) => {
@@ -724,8 +684,7 @@ async function restoreStoryCamSessionValue(
 
 export function prefetchStoryCamSessionRestore(sessionId: string) {
   void restoreStoryCamSessionValue(sessionId, {
-    markCurrent: false,
-    persist: false
+    markCurrent: false
   }).catch(() => {
     // Prefetch is opportunistic; the click path will surface restore failures.
   });
@@ -756,7 +715,7 @@ async function fetchRestoredStoryCamSession(sessionId: string) {
 function writeRestoreSessionValue(
   sessionId: string,
   restored: RestoreStoryCamSessionResponse,
-  options: { markCurrent?: boolean; persist?: boolean } = {}
+  options: { markCurrent?: boolean } = {}
 ) {
   const mediaExpiresAtById = restoreSessionMediaExpiresAtById(restored);
   const expiresAtMs = restoreSessionExpiresAt(restored, mediaExpiresAtById);
@@ -770,15 +729,6 @@ function writeRestoreSessionValue(
     userId,
     value: restored
   });
-
-  if (options.persist !== false) {
-    writeStoredRestoreSessionValue(sessionId, {
-      expiresAtMs,
-      mediaExpiresAtById,
-      userId,
-      value: restored
-    });
-  }
 
   if (options.markCurrent !== false && restored.restored) {
     writeCurrentRestoredSessionId(sessionId);
@@ -797,18 +747,7 @@ function readRestoreSessionValue(sessionId: string, nowMs = Date.now()) {
     };
   }
 
-  const stored = readStoredRestoreSessionValue(sessionId);
-
-  if (!stored) {
-    return null;
-  }
-
-  if (stored.expiresAtMs <= nowMs) {
-    deleteRestoreSessionValue(sessionId);
-    return null;
-  }
-
-  return stored;
+  return null;
 }
 
 function deleteRestoreSessionValue(sessionId: string) {
@@ -834,11 +773,23 @@ function clearRestoreSessionCache() {
   }
 }
 
+function clearPersistedRestoreSessionValues() {
+  try {
+    const keys = Array.from({ length: window.sessionStorage.length }, (_, index) => window.sessionStorage.key(index)).filter(
+      (key): key is string => typeof key === "string" && key.startsWith(`${restoreSessionStoragePrefix()}:`)
+    );
+
+    keys.forEach((key) => window.sessionStorage.removeItem(key));
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
 function writeRecentStoryCamProjectsCache(projects: RecentStoryCamProject[], nowMs = Date.now()) {
   const userId = currentRestoreSessionUserId();
   const expiresAtMs = recentStoryCamProjectsExpiresAt(projects, nowMs);
 
-  writeStoredRecentStoryCamProjectsCache({
+  writeRecentStoryCamProjectsMemoryCache({
     expiresAtMs,
     fetchedAtMs: nowMs,
     projects,
@@ -846,82 +797,35 @@ function writeRecentStoryCamProjectsCache(projects: RecentStoryCamProject[], now
   });
 }
 
-function readStoredRecentStoryCamProjectsCache(): StoredRecentStoryCamProjectsCacheEntry | null {
-  try {
-    const raw = window.sessionStorage.getItem(recentProjectsStorageKey);
+function readRecentStoryCamProjectsMemoryCache(): RecentStoryCamProjectsCacheEntry | null {
+  const cached = recentStoryCamProjectsCache;
 
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw) as StoredRecentStoryCamProjectsCacheEntry;
-
-    if (
-      !parsed ||
-      typeof parsed.expiresAtMs !== "number" ||
-      typeof parsed.fetchedAtMs !== "number" ||
-      typeof parsed.userId !== "string" ||
-      !cacheUserMatches(parsed.userId) ||
-      !Array.isArray(parsed.projects) ||
-      !parsed.projects.every(isRecentStoryCamProject)
-    ) {
-      return null;
-    }
-
-    return parsed;
-  } catch {
+  if (
+    !cached ||
+    typeof cached.expiresAtMs !== "number" ||
+    typeof cached.fetchedAtMs !== "number" ||
+    typeof cached.userId !== "string" ||
+    !cacheUserMatches(cached.userId) ||
+    !Array.isArray(cached.projects) ||
+    !cached.projects.every(isRecentStoryCamProject)
+  ) {
     return null;
   }
+
+  return cached;
 }
 
-function writeStoredRecentStoryCamProjectsCache(entry: StoredRecentStoryCamProjectsCacheEntry) {
-  try {
-    window.sessionStorage.setItem(recentProjectsStorageKey, JSON.stringify(entry));
-  } catch {
-    // Storage can be unavailable or full; recent projects will fall back to network.
-  }
+function writeRecentStoryCamProjectsMemoryCache(entry: RecentStoryCamProjectsCacheEntry) {
+  recentStoryCamProjectsCache = entry;
 }
 
 function clearRecentStoryCamProjectsCache() {
+  recentStoryCamProjectsCache = null;
+
   try {
     window.sessionStorage.removeItem(recentProjectsStorageKey);
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
-  }
-}
-
-function readStoredRestoreSessionValue(sessionId: string): StoredRestoreSessionCacheEntry | null {
-  try {
-    const raw = window.sessionStorage.getItem(restoreSessionStorageKey(sessionId));
-
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw) as StoredRestoreSessionCacheEntry;
-
-    if (
-      !parsed ||
-      typeof parsed.expiresAtMs !== "number" ||
-      !isRestoreSessionMediaExpiryMap(parsed.mediaExpiresAtById) ||
-      typeof parsed.userId !== "string" ||
-      !cacheUserMatches(parsed.userId) ||
-      !isRestoreStoryCamSessionResponse(parsed.value)
-    ) {
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredRestoreSessionValue(sessionId: string, entry: StoredRestoreSessionCacheEntry) {
-  try {
-    window.sessionStorage.setItem(restoreSessionStorageKey(sessionId), JSON.stringify(entry));
-  } catch {
-    // Storage can be unavailable or full; memory cache still covers this page session.
   }
 }
 
@@ -982,7 +886,11 @@ function deleteCurrentRestoredSessionId(sessionId: string, userId: string) {
 }
 
 function restoreSessionStorageKey(sessionId: string) {
-  return `storycam:restore:${restoreSessionCacheVersion}:session:${sessionId}`;
+  return `${restoreSessionStoragePrefix()}:${sessionId}`;
+}
+
+function restoreSessionStoragePrefix() {
+  return `storycam:restore:${restoreSessionCacheVersion}:session`;
 }
 
 function restoreSessionMediaExpiresAtById(restored: RestoreStoryCamSessionResponse, nowMs = Date.now()) {
@@ -1007,14 +915,6 @@ function restoreSessionExpiresAt(
   const mediaExpiresAtMs = Object.values(mediaExpiresAtById).map((expiresAtMs) => expiresAtMs - restoreSessionCacheSafetyWindowMs);
 
   return mediaExpiresAtMs.length > 0 ? Math.min(...mediaExpiresAtMs) : nowMs + restoreSessionCacheTtlMs;
-}
-
-function isRestoreSessionMediaExpiryMap(value: unknown): value is Record<string, number> {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      Object.values(value as Record<string, unknown>).every((expiresAtMs) => typeof expiresAtMs === "number")
-  );
 }
 
 function currentRestoreSessionUserId() {
@@ -1203,15 +1103,6 @@ function collectRestoreSessionMedia(restored: RestoreStoryCamSessionResponse): R
   }
 
   return media;
-}
-
-function isRestoreStoryCamSessionResponse(value: unknown): value is RestoreStoryCamSessionResponse {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as { ok?: unknown; restored?: unknown };
-  return candidate.ok === true && typeof candidate.restored === "boolean";
 }
 
 function recentStoryCamProjectsExpiresAt(projects: RecentStoryCamProject[], nowMs = Date.now()) {

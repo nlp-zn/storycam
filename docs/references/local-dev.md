@@ -275,7 +275,7 @@ Do not commit Google OAuth client secrets. Keep them in the Supabase dashboard f
    pnpm dev
    ```
 
-5. Open the app, sign in with Google, and run the private story flow:
+5. Open the app, sign in with Google, and run the personal story flow:
 
    ```text
    input idea/photo

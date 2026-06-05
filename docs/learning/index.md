@@ -2,13 +2,13 @@
 
 StoryCam's codebase is the product implementation. The learning material explains how the product was shaped, reviewed, built, deployed, and turned into a public case study.
 
-Keep this material separate from the product UI. Ordinary users should see StoryCam as a private story-theater tool; contributors can use these resources to understand how the project was made.
+Keep this material separate from the product UI. Ordinary users should see StoryCam as a personal story-theater tool; contributors can use these resources to understand how the project was made.
 
 ## Learning Paths
 
 ### Product And Design
 
-- Why StoryCam is a private story theater instead of an industrial short-drama backend.
+- Why StoryCam is a personal story theater instead of an industrial short-drama backend.
 - How the flow moved from a loose idea to story-world confirmation, storyboard groups, and generated clips.
 - How visual references were translated into a usable web workspace.
 

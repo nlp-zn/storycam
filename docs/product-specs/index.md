@@ -9,7 +9,7 @@ Product specs define what StoryCam should do and why. Engineering plans must poi
 
 ## Current Product Decisions
 
-- StoryCam is a Web-first AI private story theater for ordinary users.
+- StoryCam is a Web-first AI personal story theater for ordinary users.
 - The v1 visual route is a private comic-film / animated-storyboard experience, not photorealistic real-person short drama.
 - Phase 1 requires account login through Supabase Auth, preferably Google login.
 - Data uses Supabase Postgres; media uses Supabase Storage.

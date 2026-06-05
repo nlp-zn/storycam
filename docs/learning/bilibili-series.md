@@ -8,7 +8,7 @@ Channel: [StoryCam / 拜托了楠哥 Bilibili space](https://space.bilibili.com/
 
 | Episode | Title | Build Lesson | Related Repo Context |
 | --- | --- | --- | --- |
-| 01 | [别先写代码！我用 AI Agent 先做产品设计](https://www.bilibili.com/video/BV1FKGQ65EdG/) | Product positioning before code; StoryCam as a private story theater. | `docs/product-specs/product-vision.md` |
+| 01 | [别先写代码！我用 AI Agent 先做产品设计](https://www.bilibili.com/video/BV1FKGQ65EdG/) | Product positioning before code; StoryCam as a personal story theater. | `docs/product-specs/product-vision.md` |
 | 02 | [别急着写 PRD！我用 AI Agent 先看懂设计稿](https://www.bilibili.com/video/BV1wTG96HEEL/) | Turn early UI/design exploration into product and frontend context. | `docs/DESIGN.md`, `docs/design-docs/index.md` |
 | 03 | [别让 AI 直接写代码！先把 PRD 拆成研发计划](https://www.bilibili.com/video/BV1DCVp6EEL7/) | Spec-driven development and implementation planning before build. | `docs/product-specs/storycam-film-machine-design.md`, `docs/PLANS.md` |
 | 04 | [终于让 AI Agent 写代码了！第一版产品本地跑起来](https://www.bilibili.com/video/BV1gRVb6KEZc/) | Scaffold the app from the plan and get the local product running. | `docs/references/local-dev.md`, `docs/ARCHITECTURE.md` |
