@@ -7,7 +7,7 @@ import type { OpenRouterStructuredPrompt } from "./textProvider";
 
 export type OpenRouterMultimodalProviderOptions<Input, Output> = {
   apiKey: string;
-  buildPrompt: (input: Input) => OpenRouterStructuredPrompt<Input>;
+  buildPrompt: (input: Input) => OpenRouterStructuredPrompt;
   generateObject?: StoryCamGenerateObject;
   maxAttempts?: number;
   model: string;
@@ -52,7 +52,7 @@ async function generateValidatedObject<Output>(input: {
   maxAttempts: number;
   model: LanguageModel;
   outputSchema: z.ZodType<Output>;
-  prompt: OpenRouterStructuredPrompt<unknown>;
+  prompt: OpenRouterStructuredPrompt;
 }) {
   let lastError: unknown = new Error("OpenRouter returned no object.");
 

@@ -47,7 +47,7 @@ Current API route handlers:
 
 - Auth/session: `/api/auth/me`, `/api/auth/sign-out`, `/auth/callback`.
 - Story creation: `/api/uploads`, `/api/story-world`, `/api/storyboard`, `/api/storyboard-groups/[id]/expand`.
-- Media generation: `/api/story-world/assets/generate-image`, `/api/story-world/assets/generate-images`, `/api/storyboard-groups/[id]/generate-clip`.
+- Media generation: `/api/story-world/assets/generate-image`, `/api/story-world/assets/generate-images`, `/api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image`, `/api/storyboard-groups/[id]/generate-clip`.
 - Jobs and outputs: `/api/generation-jobs/[id]`, `/api/generation-jobs/[id]/cancel`, `/api/stitch-suggestion`, `/api/final-work`, `/api/storycam-media/[id]/download`.
 - Session restore and recent projects: `/api/storycam-sessions/current`, `/api/storycam-sessions/recent`, `/api/storycam-sessions/[id]`, `/api/storycam-sessions/[id]/restore`.
 

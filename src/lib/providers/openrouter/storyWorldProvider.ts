@@ -136,7 +136,7 @@ export function createOpenRouterStoryWorldProvider(
   };
 }
 
-export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput): OpenRouterStructuredPrompt<StoryWorldProviderInput> {
+export function buildOpenRouterStoryWorldPrompt(input: StoryWorldProviderInput): OpenRouterStructuredPrompt {
   const choices = input.lightweightChoices?.length ? input.lightweightChoices.join("、") : "留白多一点";
   const photoReferences = (input.uploadedPhotoRefs ?? []).map((ref) => ref.mediaAssetId);
   const handdrawnTravelRules = isHanddrawnTravelVlogMode(input.storyModeId)

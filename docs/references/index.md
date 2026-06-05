@@ -7,6 +7,7 @@ References are local context for agents. They are not product specs unless linke
 - `openai-harness-engineering.md` — local summary of the OpenAI harness engineering article and how StoryCam applies it.
 - `local-dev.md` — local development commands, mock flow, and seed data notes.
 - `providers.md` — provider mode matrix; real provider smoke tests are opt-in and secret-gated.
+- `inference-sh.md` — Inference.sh SDK and StoryCam image-provider reference behavior.
 - `seedance/seedance-2-series-tutorial.md` — local Doubao Seedance 2.0 series reference snapshot.
 - `seedance/seedance-2-prompt-guide.md` — local Doubao Seedance 2.0 prompt reference snapshot.
 - `seedance/seedance-2-video-generation-tutorial.md` — local Doubao Seedance 2.0 video-generation reference snapshot.

@@ -72,6 +72,7 @@ Restore responses and recent-project summaries may be cached client-side in `ses
 | `POST /api/story-world/assets/generate-images` | Starts or polls batch story-world asset image jobs. |
 | `POST /api/storyboard` | Creates the MVP storyboard script, one core group, and the main image prompt. In production real mode, starts a durable `storyboard` text job and returns `202`. |
 | `POST /api/storyboard-groups/[id]/expand` | Creates expanded storyboard cards for the selected core group. |
+| `POST /api/storyboard-groups/[id]/frames/[frameNumber]/regenerate-image` | Regenerates one storyboard or expanded storyboard frame image from the stored frame prompt without accepting a new user prompt. |
 
 New MVP storyboard creation normalizes to one core group, 15 seconds, and one generated clip target. Older restored data may still contain historical duration/count fields and must be tolerated.
 
@@ -116,9 +117,6 @@ type MediaRef = {
   id: string;
   kind:
     | "uploaded_photo"
-    | "story_world_asset"
-    | "storyboard_image"
-    | "expanded_storyboard_image"
     | "mock_clip"
     | "generated_clip"
     | "final_work"
@@ -130,7 +128,7 @@ type MediaRef = {
 };
 ```
 
-Storage bucket/key remain server-owned. API responses may include signed preview URLs only when needed for browser display.
+Storage bucket/key remain server-owned. API responses may include signed preview URLs only when needed for browser display. Generated image artifacts use `thumbnail` media assets linked to the owning artifact; the image job type remains on `generation_jobs.type`, not `media_assets.kind`.
 
 ## Compatibility Notes
 
