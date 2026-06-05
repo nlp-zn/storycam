@@ -7,7 +7,7 @@ cd "$ROOT"
 "$ROOT/scripts/check-pr.sh"
 
 echo "==> pnpm test:e2e"
-pnpm test:e2e
+STORYCAM_E2E_REUSE_SERVER=0 pnpm test:e2e
 
 echo "==> pnpm qa:visual"
-pnpm qa:visual
+STORYCAM_E2E_REUSE_SERVER=0 pnpm qa:visual
