@@ -1,7 +1,25 @@
 {
   "name": "storycam",
   "version": "0.1.0",
+  "description": "AI private story-theater web app with server-side generation providers, durable jobs, and private media storage.",
+  "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nlp-zn/storycam.git"
+  },
+  "homepage": "https://storycam.znbuild.com",
+  "bugs": {
+    "url": "https://github.com/nlp-zn/storycam/issues"
+  },
+  "keywords": [
+    "ai-video",
+    "storytelling",
+    "nextjs",
+    "supabase",
+    "agentic-full-stack",
+    "storyboard"
+  ],
   "packageManager": "pnpm@10.22.0",
   "scripts": {
     "dev": "next dev",
