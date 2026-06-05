@@ -1,6 +1,6 @@
 # Premiere Ticket Entitlements
 
-Status: active
+Status: completed
 Date: 2026-05-19
 
 ## Goal
@@ -33,3 +33,11 @@ real generation. Keep mock mode unchanged.
 - Add targeted unit/API coverage for auth lazy issuance, entitlement budget checks, and
   admin issuance.
 - Run targeted vitest, then `pnpm typecheck`, `pnpm lint`, and `pnpm test:api`.
+
+## Completion Notes
+
+- Implemented in `v0.1.4.0` and follow-up fixes.
+- Current source of truth is the code, migrations, generated snapshots, `docs/SECURITY.md`,
+  and `docs/generated/api-contract.md`.
+- `ADMIN_EMAILS` is declared in `render.yaml` with `sync: false`; actual admin values stay
+  in deployment configuration, not in git.

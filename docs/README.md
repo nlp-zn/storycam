@@ -11,7 +11,8 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 5. `DEPLOYMENT.md` and `OBSERVABILITY.md` before deployment, infrastructure, monitoring,
    or launch-readiness work.
 6. `PR_REVIEW.md` before reviewing, shipping, or changing gates.
-7. `exec-plans/active/` only when there is an active feature plan.
+7. `learning/index.md` when using StoryCam as an agentic full-stack case study.
+8. `exec-plans/active/` only when there is an active feature plan.
 
 ## Canonical Docs
 
@@ -27,7 +28,11 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 - `PR_REVIEW.md` — progressive deterministic gates, Codex PR Gate, Ship Gate.
 - `QUALITY_SCORE.md` — review rubric for major changes.
 - `PLANS.md` — execution plan lifecycle.
+- `learning/index.md` — public learning paths, Bilibili build series, and portfolio course links.
 - `../CHANGELOG.md` — release history.
+- `../CONTRIBUTING.md` — open-source contribution workflow.
+- `../README.zh-CN.md` — Simplified Chinese README and Bilibili series overview.
+- `../SECURITY.md` — vulnerability reporting policy.
 
 ## Directories
 
@@ -36,6 +41,7 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 - `exec-plans/active/` — current implementation plans; may be empty between features.
 - `exec-plans/completed/` — historical plans with completion notes.
 - `generated/` — hand-maintained implementation snapshots derived from code and migrations.
+- `learning/` — curated public case-study and course links; not the product source of truth.
 - `references/` — local development, provider, and external reference material for agents.
 - `pr-reviewers/` — fixed prompts for the three independent PR Gate reviewer perspectives.
 

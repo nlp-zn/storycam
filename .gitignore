@@ -5,6 +5,10 @@ node_modules/
 .next/
 out/
 outputs/
+session-chapters/
+docs/session-narratives/
+.codex-session-chapters/
+videos/
 coverage/
 test-results/
 playwright-report/
