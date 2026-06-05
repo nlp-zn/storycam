@@ -18,7 +18,6 @@ import {
   findReadyImageByArtifact,
   generatingImage,
   placeholderImage,
-  resolveImageGenerationJob,
   type AsyncImageProviderOutput,
   type ImageJobState
 } from "./imageGenerationJobService";

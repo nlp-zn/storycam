@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, GenerationJobRow, Json, PremiereTicketRow } from "@/server/db/types";
+import type { Database, GenerationJobRow, PremiereTicketRow } from "@/server/db/types";
 import {
   assertPremiereTicketBudget,
   ensureAutoPremiereTicket,

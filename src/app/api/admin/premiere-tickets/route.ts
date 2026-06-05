@@ -3,11 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { assertStoryCamAdmin, ForbiddenAdminError } from "@/server/auth/admin";
 import { requireUser, UnauthorizedError, type AuthenticatedUser } from "@/server/auth/requireUser";
 import { OriginGuardError, assertUnsafeRequestOrigin, originGuardResponse } from "@/server/security/originGuard";
-import {
-  getPremiereTicketSummary,
-  issuePremiereTickets,
-  type PremiereTicketSummary
-} from "@/server/storycam/premiereTicketService";
+import { getPremiereTicketSummary, issuePremiereTickets } from "@/server/storycam/premiereTicketService";
 import type { PremiereTicketSource } from "@/server/storycam/premiereTicketRepository";
 
 type AdminTicketRequest = {

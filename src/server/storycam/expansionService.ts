@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { coreStoryboardGroupSchema, expandedStoryboardCardSchema, storyboardScriptSchema } from "@/features/storycam/domain/artifactSchemas";
-import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardFrame, StoryboardScript } from "@/features/storycam/domain/artifacts";
+import type { CoreStoryboardGroup, ExpandedStoryboardCard, StoryboardFrame } from "@/features/storycam/domain/artifacts";
 import { defaultStoryCamVideoAspectRatio, parseStoryCamVideoAspectRatio } from "@/features/storycam/domain/videoSettings";
 import type { ImageGenerationProvider } from "@/lib/providers/types";
 import type { Database, Json, StoryCamArtifactRow } from "@/server/db/types";

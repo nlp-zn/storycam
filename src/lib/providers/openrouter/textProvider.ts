@@ -4,7 +4,7 @@ import { providerFailure, providerSuccess } from "@/lib/providers/providerErrors
 import type { ProviderResult, TextGenerationProvider } from "@/lib/providers/types";
 import { createOpenRouterChatModel, storyCamGenerateObject, type StoryCamGenerateObject } from "@/server/ai/vercelAiClient";
 
-export type OpenRouterStructuredPrompt<Input> = {
+export type OpenRouterStructuredPrompt = {
   prompt: string;
   system: string;
   temperature?: number;
@@ -12,7 +12,7 @@ export type OpenRouterStructuredPrompt<Input> = {
 
 export type OpenRouterTextProviderOptions<Input, Output> = {
   apiKey: string;
-  buildPrompt: (input: Input) => OpenRouterStructuredPrompt<Input>;
+  buildPrompt: (input: Input) => OpenRouterStructuredPrompt;
   fallbackModels?: string[];
   generateObject?: StoryCamGenerateObject;
   maxAttempts?: number;
@@ -64,7 +64,7 @@ async function generateValidatedObject<Output>(input: {
   maxAttempts: number;
   models: LanguageModel[];
   outputSchema: z.ZodType<Output>;
-  prompt: OpenRouterStructuredPrompt<unknown>;
+  prompt: OpenRouterStructuredPrompt;
   schemaDescription?: string;
   schemaName?: string;
 }) {

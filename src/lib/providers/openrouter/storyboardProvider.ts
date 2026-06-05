@@ -97,7 +97,7 @@ export function createOpenRouterStoryboardProvider(
   };
 }
 
-export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): OpenRouterStructuredPrompt<MockStoryboardInput> {
+export function buildOpenRouterStoryboardPrompt(input: MockStoryboardInput): OpenRouterStructuredPrompt {
   const durationPlan = createDurationPlan(input);
   const script = input.storyWorld.script;
   const isHanddrawnTravel = isHanddrawnTravelVlogMode(script.storyModeId);
