@@ -780,6 +780,7 @@ function clearPersistedRestoreSessionValues() {
     );
 
     keys.forEach((key) => window.sessionStorage.removeItem(key));
+    window.sessionStorage.removeItem(recentProjectsStorageKey);
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }

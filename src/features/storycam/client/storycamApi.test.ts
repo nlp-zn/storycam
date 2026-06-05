@@ -107,7 +107,7 @@ describe("storycamApi browser cache privacy", () => {
     expect(removedKeys).toEqual([]);
   });
 
-  it("purges legacy persisted restore payloads without removing the current restore target", async () => {
+  it("purges legacy persisted restore and recent-project payloads without removing the current restore target", async () => {
     storage.set(
       "storycam:restore:v1:session:session-1",
       JSON.stringify({
@@ -132,6 +132,21 @@ describe("storycamApi browser cache privacy", () => {
         userId: "user-1"
       })
     );
+    storage.set(
+      "storycam:recent-projects:v1:projects",
+      JSON.stringify({
+        expiresAtMs: Date.now() + 60_000,
+        projects: [
+          {
+            sessionId: "session-1",
+            thumbnail: {
+              signedUrl: "https://signed.example/thumb.png?token=secret"
+            }
+          }
+        ],
+        userId: "user-1"
+      })
+    );
 
     vi.stubGlobal(
       "fetch",
@@ -149,7 +164,9 @@ describe("storycamApi browser cache privacy", () => {
     await getAuthStatus();
 
     expect(removedKeys).toContain("storycam:restore:v1:session:session-1");
+    expect(removedKeys).toContain("storycam:recent-projects:v1:projects");
     expect(storage.has("storycam:restore:v1:session:session-1")).toBe(false);
+    expect(storage.has("storycam:recent-projects:v1:projects")).toBe(false);
     expect(storage.has("storycam:restore:v1:current-session-id")).toBe(true);
     expect(JSON.stringify(Array.from(storage.values()))).not.toContain("https://signed.example");
     expect(JSON.stringify(Array.from(storage.values()))).not.toContain("token=secret");
