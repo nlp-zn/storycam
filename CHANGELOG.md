@@ -2,6 +2,35 @@
 
 All notable StoryCam changes are recorded here.
 
+## [0.1.5.0] - 2026-06-05
+
+### Added
+
+- Added public open-source project materials: English and Simplified Chinese READMEs, MIT
+  license, notice, contribution guide, security policy, code of conduct, issue templates,
+  GitHub metadata, and learning links.
+- Added the StoryCam learning map, Bilibili build-series index, portfolio-course index,
+  and representative public screenshots/covers for the README entrypoint.
+
+### Changed
+
+- Reworked the docs map and agent context loading around current source-of-truth docs,
+  Harness-style progressive disclosure, learning materials, references, generated
+  snapshots, and historical execution plans.
+- Removed unused StoryCam UI/component artifacts and aligned package metadata with the
+  public `nlp-zn/storycam` repository.
+- Pinned Render production web and worker services to the `main` branch and configured
+  auto-deploys to wait for GitHub CI checks before deploying.
+
+### Fixed
+
+- Kept restored signed media URLs and recent-project thumbnail URLs out of persisted
+  browser storage; restored media now refreshes from the network across reloads.
+- Purged legacy `storycam:restore:v1:session:*` payloads for existing authenticated
+  sessions so stale signed URLs are removed from `sessionStorage`.
+- Moved the unsafe API origin guard into the Next proxy path while preserving Supabase
+  session refresh behavior.
+
 ## [0.1.4.1] - 2026-05-20
 
 ### Fixed
