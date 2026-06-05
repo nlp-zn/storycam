@@ -1,51 +1,42 @@
-# StoryCam Docs Index
+# StoryCam Docs Map
 
-This directory is the source of truth for StoryCam. Keep docs small, indexed, and explicit about whether they are product specs, architecture maps, generated snapshots, references, or historical plans.
+This directory is StoryCam's versioned context system. `../AGENTS.md` is the
+short constitution for agents; this file maps which docs are current source of
+truth, which are operating manuals, and which are references or history.
 
-## Read Order
+## Context Loading
 
-1. `../AGENTS.md` for the agent map.
-2. `ARCHITECTURE.md` for system boundaries and current implementation shape.
-3. `product-specs/index.md` before changing product behavior.
-4. `SECURITY.md`, `RELIABILITY.md`, `FRONTEND.md`, and `DESIGN.md` for domain rules.
-5. `DEPLOYMENT.md` and `OBSERVABILITY.md` before deployment, infrastructure, monitoring,
-   or launch-readiness work.
-6. `PR_REVIEW.md` before reviewing, shipping, or changing gates.
-7. `learning/index.md` when using StoryCam as an agentic full-stack case study.
-8. `exec-plans/active/` only when there is an active feature plan.
+Load the smallest set that matches the task:
 
-## Canonical Docs
+| Task | Read First |
+| --- | --- |
+| Product behavior, user flow, artifact boundaries | `product-specs/index.md`, then the relevant spec |
+| Backend, API, data, storage, providers, jobs | `ARCHITECTURE.md`, `SECURITY.md`, `RELIABILITY.md` |
+| Provider wiring, local smoke, real-generation diagnostics | `references/providers.md`, `references/local-dev.md` |
+| UI, interaction, visual direction | `FRONTEND.md`, `DESIGN.md`, `design-docs/index.md` |
+| Deployment, monitoring, production readiness | `DEPLOYMENT.md`, `OBSERVABILITY.md` |
+| PR review, ship gates, reviewer prompts | `PR_REVIEW.md`, `pr-reviewers/` |
+| Large feature or risky refactor | `PLANS.md`, `exec-plans/active/` |
+| Public learning or case-study context | `learning/index.md` |
+
+## Current Source Of Truth
 
 - `product-specs/storycam-film-machine-design.md` — current MVP product specification.
 - `product-specs/product-vision.md` — original positioning and user insight.
 - `ARCHITECTURE.md` — current system and code boundary map.
 - `SECURITY.md` — auth, RLS, storage, provider keys, logs, privacy.
 - `RELIABILITY.md` — async jobs, retries, cancellation, late results, provider failures.
-- `DEPLOYMENT.md` — production deployment topology, environment plan, monitoring, rollout, and launch gaps.
-- `OBSERVABILITY.md` — Sentry, Cloudflare, Render alerting, and uptime runbook.
 - `FRONTEND.md` — frontend implementation rules and current user-facing surfaces.
-- `DESIGN.md` — visual principles and current design references.
-- `PR_REVIEW.md` — progressive deterministic gates, Codex PR Gate, Ship Gate.
-- `QUALITY_SCORE.md` — review rubric for major changes.
+- `DESIGN.md` and `design-docs/index.md` — design principles and current visual sources.
+- `DEPLOYMENT.md` and `OBSERVABILITY.md` — production topology, monitoring, and runbooks.
+- `PR_REVIEW.md` — progressive deterministic gates, Codex PR Gate, and Ship Gate.
 - `PLANS.md` — execution plan lifecycle.
-- `learning/index.md` — public learning paths, Bilibili build series, and portfolio course links.
-- `../CHANGELOG.md` — release history.
-- `../CONTRIBUTING.md` — open-source contribution workflow.
-- `../README.zh-CN.md` — Simplified Chinese README and Bilibili series overview.
-- `../SECURITY.md` — vulnerability reporting policy.
 
-## Directories
+## Generated Snapshots
 
-- `product-specs/` — product specs and product index.
-- `design-docs/` — current UI references, design beliefs, and retained visual source images.
-- `exec-plans/active/` — current implementation plans; may be empty between features.
-- `exec-plans/completed/` — historical plans with completion notes.
-- `generated/` — hand-maintained implementation snapshots derived from code and migrations.
-- `learning/` — curated public case-study and course links; not the product source of truth.
-- `references/` — local development, provider, and external reference material for agents.
-- `pr-reviewers/` — fixed prompts for the three independent PR Gate reviewer perspectives.
-
-## Current Generated Snapshots
+Generated snapshots are hand-maintained summaries derived from code, migrations,
+and tests. They are current only when refreshed with the implementation change
+that affects them.
 
 - `generated/api-contract.md` — implemented API route and response contract snapshot.
 - `generated/db-schema.md` — Supabase migration summary.
@@ -53,21 +44,37 @@ This directory is the source of truth for StoryCam. Keep docs small, indexed, an
 - `generated/privacy-logging.md` — privacy and logging contract.
 - `generated/provider-contract.md` — provider boundary contract.
 
-## Reference Docs
+## References And History
 
-- `references/local-dev.md` — local mock-mode setup, commands, auth bypass, and verification gates.
-- `references/providers.md` — provider mode matrix and opt-in real smoke policy.
-- `references/inference-sh.md` — Inference.sh SDK, CLI, async task, and image-output rules.
-- `references/seedance/` — local Seedance reference material.
-- `references/shanyin-director-master-source.md` — Shanyin provenance and StoryCam translation notes.
-- `references/shanyin-director-master/` — retained local snapshot; read only when internal director-methodology context is explicitly needed.
-- `references/openai-harness-engineering.md` — agent-readable repo structure reference.
+- `references/index.md` — local development, provider, Harness, Seedance, and Shanyin reference map.
+- `learning/index.md` — public learning paths, Bilibili build series, and portfolio course links.
+- `exec-plans/active/` — current implementation plans; may be empty between features.
+- `exec-plans/completed/` — historical plans with completion notes. Do not treat them as current truth without checking current source-of-truth docs and code.
+- `exec-plans/tech-debt-tracker.md` — accepted debt that was not fixed immediately.
+
+## Open Source Project Docs
+
+- `../README.md` and `../README.zh-CN.md` — public project overview.
+- `../CONTRIBUTING.md` — open-source contribution workflow.
+- `../SECURITY.md` — vulnerability reporting policy.
+- `../CHANGELOG.md` — release history.
+
+## Directory Map
+
+- `product-specs/` — product specs and product index.
+- `design-docs/` — current UI references, design beliefs, and retained visual source images.
+- `generated/` — implementation snapshots derived from code and migrations.
+- `references/` — local development, provider, and external reference material for agents.
+- `learning/` — curated public case-study and course links; not product source of truth.
+- `exec-plans/` — active plans, completed plans, and tech debt.
+- `pr-reviewers/` — fixed prompts for the three independent PR Gate reviewer perspectives.
 
 ## Documentation Rules
 
 - Keep durable context in `docs/`.
 - Keep `AGENTS.md` short and navigational.
 - Update indexes when moving, deleting, or adding docs.
+- Do not duplicate source-of-truth maps inside product specs or historical plans.
 - Generated snapshots must name their source files and be refreshed when code contracts change.
 - Active plans live in `exec-plans/active/`; completed plans move to `exec-plans/completed/`.
 - Do not treat `~/.gstack/` output as canonical project documentation.

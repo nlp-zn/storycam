@@ -1,8 +1,8 @@
 # 规格：StoryCam Web 小剧场相机
 
 日期：2026-04-26
-状态：产品规格 v0.2，进入实现计划前待人工评审
-主模型假设：第一轮真实视频生成 spike 使用 Seedance 2.0
+状态：当前 MVP 产品规格；已实现路径的产品行为事实源
+主模型假设：真实视频生成路径优先 Seedance 2.0
 
 ## 当前规格假设
 
@@ -100,7 +100,7 @@ StoryCam 不是：
 
 ## MVP 产物结构
 
-进入实现计划前，以下 artifact 是 canonical 产品对象。
+本规格中，以下 artifact 是 canonical 产品对象。
 
 | Artifact | 用户可见 | 产品含义 |
 | --- | --- | --- |
@@ -1037,92 +1037,13 @@ Never：
 - Job：使用数据库 job 状态机 + 可替换 runner，真实 provider path 必须能轮询、取消、超时和丢弃晚到结果。
 - 媒体合成：通过 final-work provider/composer 边界实现；Phase 1 仍不暴露公开分享。
 
-工程实现需要保持技术栈、目录结构、依赖、API contract、job lifecycle、provider mode、测试命令和部署边界与 `docs/ARCHITECTURE.md`、`docs/generated/` 和 `docs/PR_REVIEW.md` 同步。
+工程实现需要保持技术栈、目录结构、依赖、API contract、job lifecycle、provider mode、测试命令和部署边界与当前实现文档同步：
 
-## 命令
-
-当前仓库已经包含 Web app、服务端 route handlers、Supabase repository/service 边界、provider adapters 和浏览器测试。常用命令：
-
-```bash
-pnpm install
-pnpm dev
-pnpm storycam:seed
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm test:api
-pnpm test:e2e
-pnpm qa:visual
-pnpm storycam:verify:mock
-scripts/check-local.sh
-scripts/check-pr.sh
-scripts/check-dev.sh
-scripts/check-release.sh
-```
-
-本地与 CI 使用渐进式 gate：local 轻量、PR fast、dev integration、main release。真实 provider smoke tests 仍然是 secret-gated opt-in。
-
-## 项目结构
-
-Canonical 文档必须放在 `docs/` 下。
-
-当前文档结构：
-
-```text
-AGENTS.md                                  智能体入口地图
-docs/ARCHITECTURE.md                       系统架构地图
-docs/
-  README.md                                  项目文档索引
-  product-specs/
-    index.md                                产品规格索引
-    product-vision.md                       原始定位和产品洞察
-    storycam-film-machine-design.md         本产品规格
-  design-docs/
-    index.md                                设计文档索引
-    core-beliefs.md                         设计核心信念
-    storycam-ui-design.md                   实用 UI 设计 brief
-    assets/                                 UI 图片和参考素材
-  exec-plans/
-    active/                                当前 feature plans，可为空
-    completed/
-      phase-1-web-mvp-plan.md              历史 MVP 实施计划
-      phase-1-mvp-tests.md             历史测试计划
-    tech-debt-tracker.md                    技术债追踪
-  generated/
-    api-contract.md                         API snapshot
-    db-schema.md                            数据库 schema 摘要
-    job-lifecycle.md                        job lifecycle snapshot
-    provider-contract.md                    provider boundary snapshot
-  references/
-    shanyin-director-master-source.md       参考来源和集成说明
-    shanyin-director-master/                本地导演脑方法论快照
-    openai-harness-engineering.md           agent-readable repo 结构参考
-  DESIGN.md
-  FRONTEND.md
-  PLANS.md
-  PRODUCT_SENSE.md
-  QUALITY_SCORE.md
-  RELIABILITY.md
-  SECURITY.md
-```
-
-当前 app 结构：
-
-```text
-src/
-  app/                                      Next.js App Router pages/routes
-  components/ui/                            shadcn-style primitives
-  components/storycam/                      StoryCam 用户可见 UI 和 composition wrappers
-  features/storycam/                        StoryCam client API/state/types
-  server/storycam/                          server-only services/repositories
-  server/ai/                                AI SDK/proxy helpers
-  lib/providers/                            provider result/error contracts
-  lib/privacy/                              脱敏和删除工具
-tests/
-  api/
-  e2e/
-  scripts/
-```
+- 文档地图：`docs/README.md`
+- 系统与代码边界：`docs/ARCHITECTURE.md`
+- 本地命令和 smoke gates：`docs/references/local-dev.md`
+- API、DB、job、privacy、provider snapshots：`docs/generated/`
+- PR/Ship gate：`docs/PR_REVIEW.md`
 
 ## 代码风格
 
@@ -1314,27 +1235,12 @@ Clip：
 12. 数据库使用 Supabase Postgres。
 13. 上传图片、生成视频片段和最终作品需要云端存储，使用 Supabase Storage。
 14. 后端 AI 服务编排使用 Vercel AI SDK。
-15. 文生和生图模型优先使用 OpenRouter 中的模型，通过 provider adapter 接入。
+15. 文本、图像、视频和最终合成通过 provider adapter 接入；当前 provider matrix 以 `docs/references/providers.md` 和 `docs/generated/provider-contract.md` 为准。
 
-## PLAN 待定问题
+## 维护规则
 
-以下问题不阻塞 SPECIFY，但必须在 PLAN 中明确。
-
-1. OpenRouter 模型选择：故事世界、照片理解、分镜脚本、核心分镜组、扩展分镜和图像生成分别使用哪些模型。
-2. 图像生成策略：核心分镜代表图和扩展卡图片是否在 Phase 1 都真实生成，还是先只生成核心分镜代表图。
-3. Seedance 2.0 具体调用方式：输入字段、参考图、时长参数、回调/轮询、错误码映射、重试上限。
-4. Final video 合成工具：FFmpeg、Remotion、云服务或其他方案。
-5. Supabase RLS policy、Storage bucket policy、signed URL 有效期和删除级联策略。
-6. 保存和预览的文件格式、Supabase Storage 路径、清理策略。
-
-## 下一道 Gate
-
-按照 spec-driven development，下一步是基于这份已更新的 SPECIFY 创建 PLAN 文档或章节，覆盖：
-
-1. 主要组件和依赖关系。
-2. 实现顺序。
-3. 风险和缓解方案。
-4. 可并行工作和必须串行的工作。
-5. 阶段间验证检查点。
-
-PLAN 被确认前，不进入实现任务拆分。
+- 本文件只定义产品行为、artifact 边界、用户确认点和不可破坏的产品约束。
+- 不在本文件维护仓库目录、命令清单、provider env、API route 全表或测试 gate；这些分别属于 `docs/README.md`、`docs/references/local-dev.md`、`docs/generated/` 和 `docs/PR_REVIEW.md`。
+- 如果产品行为变化，同步更新 `docs/product-specs/index.md` 和相关 active plan。
+- 如果实现行为变化但产品意图不变，同步更新 `docs/ARCHITECTURE.md`、`docs/generated/` 或对应 reference doc。
+- completed plans 只作为历史记录，不覆盖本文件和当前实现文档。

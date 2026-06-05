@@ -18,5 +18,6 @@ References are local context for agents. They are not product specs unless linke
 
 - Keep references concise unless the source itself must be preserved.
 - Summaries should link to the original source.
+- External snapshots may contain upstream-root links such as `/docs/...`; treat those as source-site paths, not repository-relative StoryCam links.
 - Do not expose internal professional references directly in the user UI unless a product spec explicitly says so.
 - Prefer the source summary before opening large external snapshots.
