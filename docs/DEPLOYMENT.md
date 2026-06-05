@@ -95,6 +95,10 @@ Render type: Web Service.
 
 Region: Singapore.
 
+Linked branch: `main`.
+
+Auto-deploy: after GitHub CI checks pass.
+
 Responsibilities:
 
 - Serve the Next.js UI.
@@ -117,6 +121,10 @@ pnpm start
 Render type: Background Worker.
 
 Region: Singapore.
+
+Linked branch: `main`.
+
+Auto-deploy: after GitHub CI checks pass.
 
 Responsibilities:
 
@@ -276,6 +284,15 @@ Exact values belong in Render and Supabase dashboards, not in this repository.
   git commit env values where available.
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`: only if source maps are uploaded in
   CI or build steps.
+
+Production branch policy:
+
+- The GitHub repository default branch can remain `dev` for public contribution and
+  integration ergonomics.
+- Render production services must stay pinned to `main` in `render.yaml` so production
+  deploys follow the reviewed `dev -> main` promotion path.
+- Render production auto-deploys should use `checksPass` so a merge waits for GitHub's
+  main release gate before deployment starts.
 
 Important current caveat: `next.config.ts` loads StoryCam config during `next build`.
 Provider mode and required env must therefore be present during Render builds, not only at
