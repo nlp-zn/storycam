@@ -8,3 +8,4 @@ Completed plans are historical implementation records. Do not use them as curren
 - `phase-1-mvp-tests.md` — Phase 1 MVP test plan, superseded by current test scripts, Playwright coverage, and `docs/PR_REVIEW.md`.
 - `observability-ops.md` — Beta launch Sentry, Cloudflare, Render, and uptime implementation slice.
 - `premiere-ticket-entitlements.md` — Account-scoped premiere ticket entitlement and admin issuance implementation slice.
+- `handdrawn-travel-vlog-mode.md` — Handdrawn travel VLOG mode implementation slice.
