@@ -1,7 +1,18 @@
 import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/proxy";
+import { assertUnsafeRequestOrigin, OriginGuardError, originGuardResponse } from "@/server/security/originGuard";
 
 export async function proxy(request: NextRequest) {
+  if (new URL(request.url).pathname.startsWith("/api/")) {
+    try {
+      assertUnsafeRequestOrigin(request);
+    } catch (error) {
+      if (error instanceof OriginGuardError) {
+        return originGuardResponse(error);
+      }
+    }
+  }
+
   return updateSession(request);
 }
 
